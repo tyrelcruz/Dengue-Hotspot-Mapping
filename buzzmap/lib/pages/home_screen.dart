@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:buzzmap/pages/location_details_screen.dart';
 import 'package:buzzmap/pages/post_screen.dart';
+import 'package:latlong2/latlong.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -15,6 +16,15 @@ class HomeScreen extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDarkMode ? Colors.white : colorScheme.primary;
+
+// Define a map for location coordinates
+    final locationData = {
+      'Baesa': LatLng(14.674376, 121.013138),
+      'Balombato': LatLng(14.6760, 121.0437),
+      'Bagbag': LatLng(14.7000, 121.0500),
+      'Fairview': LatLng(14.6300, 121.0400),
+      'Sangandaan': LatLng(14.6200, 121.0300),
+    };
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -79,7 +89,7 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _buildLocationSelector(context, colorScheme),
+                    _buildLocationSelector(context, colorScheme, locationData),
                   ],
                 ),
               ),
@@ -437,7 +447,8 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildLocationSelector(BuildContext context, ColorScheme colorScheme) {
+  Widget _buildLocationSelector(BuildContext context, ColorScheme colorScheme,
+      Map<String, LatLng> locationData) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 56.0),
       child: SizedBox(
@@ -465,13 +476,7 @@ class HomeScreen extends StatelessWidget {
               color: Colors.white,
               fontFamily: 'Inter',
             ),
-            items: <String>[
-              'Baesa',
-              'Balombato',
-              'Bagbag',
-              'Fairview',
-              'Sangandaan'
-            ].map((String value) {
+            items: locationData.keys.map((String value) {
               return DropdownMenuItem<String>(
                 value: value,
                 child: Text(value),
@@ -479,13 +484,19 @@ class HomeScreen extends StatelessWidget {
             }).toList(),
             onChanged: (selectedLocation) {
               if (selectedLocation != null) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        LocationDetailsScreen(location: selectedLocation),
-                  ),
-                );
+                final coordinates = locationData[selectedLocation];
+                if (coordinates != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => LocationDetailsScreen(
+                        location: selectedLocation,
+                        latitude: coordinates.latitude,
+                        longitude: coordinates.longitude,
+                      ),
+                    ),
+                  );
+                }
               }
             },
             hint: const Text(

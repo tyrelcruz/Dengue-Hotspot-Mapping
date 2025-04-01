@@ -4,11 +4,20 @@ import 'package:buzzmap/widgets/post_card.dart';
 import 'package:flutter/material.dart';
 import 'package:buzzmap/widgets/appbar/custom_app_bar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 class LocationDetailsScreen extends StatefulWidget {
   final String location;
+  final double latitude;
+  final double longitude;
 
-  const LocationDetailsScreen({super.key, required this.location});
+  const LocationDetailsScreen({
+    super.key,
+    required this.location,
+    required this.latitude,
+    required this.longitude,
+  });
 
   @override
   State<LocationDetailsScreen> createState() => _LocationDetailsScreenState();
@@ -97,10 +106,36 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   height: 230,
                   margin: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    image: const DecorationImage(
-                      image: AssetImage("assets/bgarts/locationdets.png"),
-                      fit: BoxFit.cover,
+                    borderRadius: BorderRadius.circular(60),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(15),
+                    child: FlutterMap(
+                      options: MapOptions(
+                        initialCenter:
+                            LatLng(widget.latitude, widget.longitude),
+                        initialZoom: 15.0,
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                        ),
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: LatLng(widget.latitude, widget.longitude),
+                              width: 40,
+                              height: 40,
+                              child: Icon(
+                                Icons.location_on,
+                                color: Colors.red,
+                                size: 40.0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
