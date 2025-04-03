@@ -1,6 +1,6 @@
 # buzzmap
 
-A new Flutter project.
+Capstone AI integrated Dengue Outbreak Prevention
 
 ## Getting Started
 
