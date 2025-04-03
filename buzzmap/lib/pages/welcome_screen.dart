@@ -1,3 +1,5 @@
+import 'package:buzzmap/pages/login_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -126,7 +128,14 @@ class WelcomeScreen extends StatelessWidget {
                                 ),
                                 elevation: 0,
                               ),
-                              onPressed: () {},
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          LoginScreen()), // Replace NextScreen with the name of your next screen
+                                );
+                              },
                               child: const Text(
                                 "Login",
                                 style: TextStyle(
