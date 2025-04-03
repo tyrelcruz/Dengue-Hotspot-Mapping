@@ -1,0 +1,2 @@
+C:/Users/tyrel/OneDrive/Documents/TYREL GITHUB/Dengue_Hotspot_Mapping/buzzmap/android/app/.cxx/Debug/v1y5i2b1/armeabi-v7a/CMakeFiles/edit_cache.dir
+C:/Users/tyrel/OneDrive/Documents/TYREL GITHUB/Dengue_Hotspot_Mapping/buzzmap/android/app/.cxx/Debug/v1y5i2b1/armeabi-v7a/CMakeFiles/rebuild_cache.dir
