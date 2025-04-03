@@ -1,4 +1,3 @@
-import 'package:buzzmap/pages/community_screen.dart';
 import 'package:buzzmap/widgets/floatingactionbutton/yellow_gradient_button.dart';
 import 'package:buzzmap/widgets/post_card.dart';
 import 'package:flutter/material.dart';
