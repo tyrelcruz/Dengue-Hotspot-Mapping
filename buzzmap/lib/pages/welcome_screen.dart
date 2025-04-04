@@ -1,5 +1,5 @@
 import 'package:buzzmap/pages/login_screen.dart';
-
+import 'package:buzzmap/pages/register_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -101,7 +101,7 @@ class WelcomeScreen extends StatelessWidget {
                           Container(
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [Color(0xFFF8A900), Color(0xFFFADD37)],
+                                colors: [Color(0xFF245261), Color(0xFF4AA8C7)],
                                 begin: Alignment.centerLeft,
                                 end: Alignment.centerRight,
                               ),
@@ -140,7 +140,7 @@ class WelcomeScreen extends StatelessWidget {
                                 "Login",
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: Color(0xFF1D4C5E),
+                                  color: Color.fromARGB(255, 255, 255, 255),
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -151,7 +151,7 @@ class WelcomeScreen extends StatelessWidget {
                           Container(
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [Color(0xFF245261), Color(0xFF4AA8C7)],
+                                colors: [Color(0xFFF8A900), Color(0xFFFADD37)],
                                 begin: Alignment.centerLeft,
                                 end: Alignment.centerRight,
                               ),
@@ -178,10 +178,18 @@ class WelcomeScreen extends StatelessWidget {
                                 ),
                                 elevation: 0,
                               ),
-                              onPressed: () {},
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          RegisterScreen()), // Replace NextScreen with the name of your next screen
+                                );
+                              },
                               child: const Text(
                                 "Sign Up",
                                 style: TextStyle(
+                                  color: Color(0xFF1D4C5E),
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                 ),

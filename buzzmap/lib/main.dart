@@ -1,6 +1,7 @@
 import 'package:buzzmap/pages/splash_screen.dart';
 import 'package:buzzmap/pages/welcome_screen.dart';
 import 'package:buzzmap/pages/login_screen.dart';
+import 'package:buzzmap/pages/register_screen.dart';
 import 'package:buzzmap/pages/home_screen.dart';
 import 'package:buzzmap/pages/mapping_screen.dart';
 import 'package:buzzmap/pages/community_screen.dart';
@@ -155,6 +156,7 @@ class MyApp extends StatelessWidget {
               '/': (context) => const SplashScreen(),
               '/welcome': (context) => const WelcomeScreen(),
               '/login': (context) => const LoginScreen(),
+              '/register': (context) => const RegisterScreen(),
               '/home': (context) => const HomeScreen(),
               '/mapping': (context) => const MappingScreen(),
               '/community': (context) => const CommunityScreen(),

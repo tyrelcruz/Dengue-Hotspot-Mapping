@@ -56,7 +56,7 @@ class HomeScreen extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Padding(
-                      padding: const EdgeInsets.only(top: 20.0),
+                      padding: const EdgeInsets.only(top: 10.0),
                       child: RichText(
                         textAlign: TextAlign.center,
                         text: TextSpan(
@@ -382,7 +382,7 @@ class HomeScreen extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: 'Koulen',
                     letterSpacing: 1.9,
-                    fontSize: 23.sp,
+                    fontSize: 20.sp,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                     height: 1,
@@ -393,7 +393,7 @@ class HomeScreen extends StatelessWidget {
                   subtitle,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 9.sp,
+                    fontSize: 7.sp,
                     color: Colors.white,
                     height: 1,
                   ),
