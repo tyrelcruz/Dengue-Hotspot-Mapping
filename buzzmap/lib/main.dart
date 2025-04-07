@@ -1,3 +1,4 @@
+import 'package:buzzmap/pages/otp_screen.dart';
 import 'package:buzzmap/pages/splash_screen.dart';
 import 'package:buzzmap/pages/welcome_screen.dart';
 import 'package:buzzmap/pages/login_screen.dart';
@@ -156,6 +157,7 @@ class MyApp extends StatelessWidget {
               '/': (context) => const SplashScreen(),
               '/welcome': (context) => const WelcomeScreen(),
               '/login': (context) => const LoginScreen(),
+              '/otp': (context) => const OTPScreen(),
               '/register': (context) => const RegisterScreen(),
               '/home': (context) => const HomeScreen(),
               '/mapping': (context) => const MappingScreen(),

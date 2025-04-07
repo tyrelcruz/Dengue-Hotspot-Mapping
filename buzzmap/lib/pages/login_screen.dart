@@ -1,3 +1,4 @@
+import 'package:buzzmap/pages/otp_screen.dart';
 import 'package:buzzmap/pages/welcome_screen.dart';
 import 'package:buzzmap/pages/home_screen.dart';
 import 'package:flutter/material.dart';
@@ -277,7 +278,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               side: const BorderSide(color: Colors.grey),
                             ),
                           ),
-                          onPressed: () {},
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => OTPScreen()),
+                            );
+                          },
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [

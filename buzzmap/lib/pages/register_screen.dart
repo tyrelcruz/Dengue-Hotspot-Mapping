@@ -24,7 +24,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           children: [
             const SizedBox(height: 30),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.only(
+                  top: 35, left: 20, right: 20, bottom: 0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -46,7 +47,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 0),
             const Text(
               "JOIN BUZZMAP!",
               style: TextStyle(
@@ -57,21 +58,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
+              padding:
+                  const EdgeInsets.only(top: 0, bottom: 0, left: 40, right: 40),
               child: Text(
                 "Sign Up to join us today and be part of the movement to track, report, and prevent dengue outbreaks.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
                   color: Color(0xFF1D4C5E),
                 ),
               ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 25),
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(25),
               decoration: const BoxDecoration(
                 color: Color(0xFF1D4C5E),
                 borderRadius: BorderRadius.only(
@@ -82,46 +84,64 @@ class _RegisterScreenState extends State<RegisterScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "First Name",
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Color(0xFFDBEBF3),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide.none,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "First Name",
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: Color(0xFF99C0D3),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "Last Name",
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Color(0xFFDBEBF3),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide.none,
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Last Name",
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: Color(0xFF99C0D3),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                   const SizedBox(height: 20),
                   const Text(
@@ -137,7 +157,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   TextField(
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: Color(0xFFDBEBF3),
+                      fillColor: Color(0xFF99C0D3),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
@@ -159,7 +179,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: Color(0xFFDBEBF3),
+                      fillColor: Color(0xFF99C0D3),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
@@ -183,8 +203,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Text(
                     "Password must be At least 8 characters long, contains both uppercase and lowercase letters, includes at least one number, and contains one special character (e.g., !, @, #, \$)",
                     style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
+                      fontFamily: 'Inter-Italic-VariableFont',
+                      fontStyle: FontStyle.italic,
+                      fontSize: 7,
+                      fontWeight: FontWeight.w700,
                       color: Colors.white70,
                     ),
                   ),
@@ -203,7 +225,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     obscureText: _obscureConfirmPassword,
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: Color(0xFFDBEBF3),
+                      fillColor: Color(0xFF99C0D3),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
@@ -232,6 +254,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         child: Checkbox(
                           value: _agreeToTerms,
                           shape: CircleBorder(),
+                          activeColor: Colors.white,
                           onChanged: (value) {
                             setState(() {
                               _agreeToTerms = value ?? false;
