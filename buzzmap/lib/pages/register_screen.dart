@@ -15,64 +15,68 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscureConfirmPassword = true;
   bool _agreeToTerms = false;
 
+  // Customizable text field properties
+  final double textFieldHeight = 45.0; // Adjust this value as needed
+  final double textFieldBorderRadius = 30.0;
+  final Color textFieldFillColor = const Color(0xFF99C0D3);
+  final EdgeInsets textFieldContentPadding =
+      const EdgeInsets.symmetric(horizontal: 20);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 30),
-            Padding(
-              padding: const EdgeInsets.only(
-                  top: 35, left: 20, right: 20, bottom: 0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(
-                    icon:
-                        const Icon(Icons.arrow_back, color: Color(0xFF1D4C5E)),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => WelcomeScreen()),
-                      );
-                    },
-                  ),
-                  SvgPicture.asset(
-                    'assets/icons/logo_ligthbg.svg',
-                    height: 30,
-                  ),
-                ],
-              ),
+      resizeToAvoidBottomInset: false,
+      body: Column(
+        children: [
+          const SizedBox(height: 30),
+          Padding(
+            padding:
+                const EdgeInsets.only(top: 5, left: 20, right: 20, bottom: 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Color(0xFF1D4C5E)),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => WelcomeScreen()),
+                    );
+                  },
+                ),
+                SvgPicture.asset(
+                  'assets/icons/logo_ligthbg.svg',
+                  height: 30,
+                ),
+              ],
             ),
-            const SizedBox(height: 0),
-            const Text(
-              "JOIN BUZZMAP!",
-              style: TextStyle(
+          ),
+          const SizedBox(height: 0),
+          const Text(
+            "JOIN BUZZMAP!",
+            style: TextStyle(
                 fontFamily: 'Koulen',
                 fontSize: 50,
                 fontWeight: FontWeight.w400,
-                color: Color(0xFF1D4C5E),
-              ),
-            ),
-            Padding(
-              padding:
-                  const EdgeInsets.only(top: 0, bottom: 0, left: 40, right: 40),
-              child: Text(
-                "Sign Up to join us today and be part of the movement to track, report, and prevent dengue outbreaks.",
-                textAlign: TextAlign.center,
-                style: TextStyle(
+                color: Color(0xFF1D4C5E)),
+          ),
+          Padding(
+            padding:
+                const EdgeInsets.only(top: 0, bottom: 0, left: 40, right: 40),
+            child: Text(
+              "Sign Up to join us today and be part of the movement to track, report, and prevent dengue outbreaks.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1D4C5E),
-                ),
-              ),
+                  color: Color(0xFF1D4C5E)),
             ),
-            const SizedBox(height: 25),
-            Container(
+          ),
+          const SizedBox(height: 25),
+          Expanded(
+            child: Container(
               padding: const EdgeInsets.all(25),
               decoration: const BoxDecoration(
                 color: Color(0xFF1D4C5E),
@@ -93,20 +97,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             const Text(
                               "First Name",
                               style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
+                                  fontFamily: 'Inter',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white),
                             ),
                             const SizedBox(height: 10),
-                            TextField(
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: Color(0xFF99C0D3),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                  borderSide: BorderSide.none,
+                            SizedBox(
+                              height: textFieldHeight,
+                              child: TextField(
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: textFieldFillColor,
+                                  contentPadding: textFieldContentPadding,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                        textFieldBorderRadius),
+                                    borderSide: BorderSide.none,
+                                  ),
                                 ),
                               ),
                             ),
@@ -121,20 +129,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             const Text(
                               "Last Name",
                               style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
+                                  fontFamily: 'Inter',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white),
                             ),
                             const SizedBox(height: 10),
-                            TextField(
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: Color(0xFF99C0D3),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                  borderSide: BorderSide.none,
+                            SizedBox(
+                              height: textFieldHeight,
+                              child: TextField(
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: textFieldFillColor,
+                                  contentPadding: textFieldContentPadding,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                        textFieldBorderRadius),
+                                    borderSide: BorderSide.none,
+                                  ),
                                 ),
                               ),
                             ),
@@ -147,20 +159,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const Text(
                     "Email",
                     style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
+                        fontFamily: 'Inter',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Color(0xFF99C0D3),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide.none,
+                  SizedBox(
+                    height: textFieldHeight,
+                    child: TextField(
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: textFieldFillColor,
+                        contentPadding: textFieldContentPadding,
+                        border: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(textFieldBorderRadius),
+                          borderSide: BorderSide.none,
+                        ),
                       ),
                     ),
                   ),
@@ -168,34 +184,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const Text(
                     "Password",
                     style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
+                        fontFamily: 'Inter',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Color(0xFF99C0D3),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide.none,
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          color: Colors.grey,
+                  SizedBox(
+                    height: textFieldHeight,
+                    child: TextField(
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: textFieldFillColor,
+                        contentPadding: textFieldContentPadding,
+                        border: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(textFieldBorderRadius),
+                          borderSide: BorderSide.none,
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -214,34 +234,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const Text(
                     "Confirm Password",
                     style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
+                        fontFamily: 'Inter',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    obscureText: _obscureConfirmPassword,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Color(0xFF99C0D3),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide.none,
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscureConfirmPassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          color: Colors.grey,
+                  SizedBox(
+                    height: textFieldHeight,
+                    child: TextField(
+                      obscureText: _obscureConfirmPassword,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: textFieldFillColor,
+                        contentPadding: textFieldContentPadding,
+                        border: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(textFieldBorderRadius),
+                          borderSide: BorderSide.none,
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _obscureConfirmPassword = !_obscureConfirmPassword;
-                          });
-                        },
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscureConfirmPassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscureConfirmPassword =
+                                  !_obscureConfirmPassword;
+                            });
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -266,10 +291,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Text(
                         "I agree to the Terms and Conditions",
                         style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 14,
-                          color: Colors.white,
-                        ),
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            color: Colors.white),
                       ),
                     ],
                   ),
@@ -291,10 +315,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         child: const Text(
                           "Sign Up",
                           style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white),
                         ),
                       ),
                     ),
@@ -330,30 +353,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Image.asset(
-                              'assets/icons/google_logo.png', // Make sure to add this asset
+                              'assets/icons/google_logo.png',
                               height: 24,
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Center(
-                    child: TextButton(
-                      onPressed: () {},
-                      child: RichText(
-                        text: TextSpan(
-                          style: TextStyle(
-                            fontSize: 14.0,
-                            color: Colors.white,
-                          ),
-                          children: const [
-                            TextSpan(text: "Already have an account? "),
-                            TextSpan(
-                              text: "Login",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
+                            const SizedBox(height: 20),
+                            Center(
+                              child: TextButton(
+                                onPressed: () {},
+                                child: RichText(
+                                  text: TextSpan(
+                                    style: TextStyle(
+                                        fontSize: 14.0, color: Colors.white),
+                                    children: const [
+                                      TextSpan(
+                                          text: "Already have an account? "),
+                                      TextSpan(
+                                        text: "Login",
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -364,8 +385,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
