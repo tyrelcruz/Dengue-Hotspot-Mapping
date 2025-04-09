@@ -29,10 +29,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       resizeToAvoidBottomInset: false,
       body: Column(
         children: [
-          const SizedBox(height: 30),
+          const SizedBox(height: 50),
           Padding(
             padding:
-                const EdgeInsets.only(top: 5, left: 20, right: 20, bottom: 0),
+                const EdgeInsets.only(top: 1, left: 20, right: 20, bottom: 0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -297,7 +297,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 10),
                   Center(
                     child: SizedBox(
                       width: 300,
@@ -322,7 +322,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
                   Row(
                     children: [
                       Expanded(child: Divider(color: Colors.white70)),
@@ -337,6 +337,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
+                  // Google Sign Up Button
                   Center(
                     child: SizedBox(
                       width: 300,
@@ -354,27 +355,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           children: [
                             Image.asset(
                               'assets/icons/google_logo.png',
-                              height: 24,
+                              height: 74,
                             ),
-                            const SizedBox(height: 20),
-                            Center(
-                              child: TextButton(
-                                onPressed: () {},
-                                child: RichText(
-                                  text: TextSpan(
-                                    style: TextStyle(
-                                        fontSize: 14.0, color: Colors.white),
-                                    children: const [
-                                      TextSpan(
-                                          text: "Already have an account? "),
-                                      TextSpan(
-                                        text: "Login",
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                            const SizedBox(width: 10),
+                            const Text(
+                              "",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1D4C5E),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 0),
+
+// "Already have an account?" Text
+                  Center(
+                    child: TextButton(
+                      onPressed: () {
+                        // Navigate to login screen
+                      },
+                      child: RichText(
+                        text: const TextSpan(
+                          style: TextStyle(
+                            fontSize: 14.0,
+                            color: Colors.white,
+                          ),
+                          children: [
+                            TextSpan(text: "Already have an account? "),
+                            TextSpan(
+                              text: "Login",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
                               ),
                             ),
                           ],

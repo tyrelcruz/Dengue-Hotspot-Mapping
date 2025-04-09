@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:buzzmap/pages/location_details_screen.dart';
 import 'package:buzzmap/pages/post_screen.dart';
+import 'package:buzzmap/tips/id_mosquito.dart';
 import 'package:latlong2/latlong.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -200,6 +201,7 @@ class HomeScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildCard(
+              context,
               colorScheme,
               'How to \nIdentify \nDengue \nMosquitoes?',
               'assets/bgarts/thinkman.png',
@@ -268,7 +270,8 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCard(ColorScheme colorScheme, String text, String imagePath,
+  Widget _buildCard(BuildContext context, ColorScheme colorScheme, String text,
+      String imagePath,
       {double width = 250, double height = 130}) {
     return SizedBox(
       width: width,
@@ -318,7 +321,13 @@ class HomeScreen extends StatelessWidget {
                           color: Colors.transparent,
                           child: InkWell(
                             borderRadius: BorderRadius.circular(30),
-                            onTap: () {},
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => const IdMosquito()),
+                              );
+                            },
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 15, vertical: 4),
@@ -366,7 +375,7 @@ class HomeScreen extends StatelessWidget {
       width: width,
       height: height,
       child: Container(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
           color: Color.fromRGBO(153, 192, 211, 1),
           borderRadius: BorderRadius.circular(5),
@@ -411,25 +420,6 @@ class HomeScreen extends StatelessWidget {
                   ],
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
-                ),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(30),
-                  onTap: () {},
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-                    child: Text(
-                      'Learn More',
-                      style: TextStyle(
-                        fontSize: 10.sp,
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.primary,
-                      ),
-                    ),
-                  ),
                 ),
               ),
             ),

@@ -9,9 +9,11 @@ import 'package:buzzmap/pages/community_screen.dart';
 import 'package:buzzmap/pages/prevention_screen.dart';
 import 'package:buzzmap/pages/about_screen.dart';
 import 'package:flutter/material.dart';
+
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 

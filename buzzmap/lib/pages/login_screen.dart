@@ -3,6 +3,9 @@ import 'package:buzzmap/pages/welcome_screen.dart';
 import 'package:buzzmap/pages/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +18,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>(); // Form key for validation
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+
+  bool _obscureText = true; // State variable to toggle password visibility
 
   // Adjustable button properties
   static const double buttonWidth = 200;
@@ -45,14 +50,47 @@ class _LoginScreenState extends State<LoginScreen> {
     return null;
   }
 
-  void _handleLogin() {
+  void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
-      // Navigate to home if validation passes
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => HomeScreen()),
-      );
+      final email = _emailController.text;
+      final password = _passwordController.text;
+
+      final url = Uri.parse(
+          'http://10.0.2.2:4000/api/v1/auth/login'); // change to your actual endpoint
+
+      try {
+        final response = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'email': email,
+            'password': password,
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data['_id'] != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => HomeScreen()),
+            );
+          } else {
+            _showError('Login failed');
+          }
+        } else {
+          _showError('Server error: ${response.statusCode}, ${response.body}');
+        }
+      } catch (e) {
+        _showError('Network error: $e');
+      }
     }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -157,11 +195,23 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _passwordController,
-                      obscureText: true,
+                      obscureText: _obscureText, // Control visibility
                       decoration: InputDecoration(
                         contentPadding:
                             EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                        suffixIcon: const Icon(Icons.visibility_off),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscureText
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: Color(0xFF1D4C5E),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscureText = !_obscureText; // Toggle visibility
+                            });
+                          },
+                        ),
                         filled: true,
                         fillColor: Color(0xFFDBEBF3),
                         border: OutlineInputBorder(
@@ -278,13 +328,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               side: const BorderSide(color: Colors.grey),
                             ),
                           ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => OTPScreen()),
-                            );
-                          },
+                          onPressed: () {},
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
