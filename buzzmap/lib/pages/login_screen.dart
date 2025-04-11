@@ -1,10 +1,12 @@
 import 'package:buzzmap/pages/otp_screen.dart';
+import 'package:buzzmap/pages/register_screen.dart';
 import 'package:buzzmap/pages/welcome_screen.dart';
 import 'package:buzzmap/pages/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:buzzmap/auth/config.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -15,13 +17,13 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>(); // Form key for validation
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  bool _obscureText = true; // State variable to toggle password visibility
+  bool _obscureText = true;
 
-  // Adjustable button properties
+  // Button Dimensions
   static const double buttonWidth = 200;
   static const double buttonHeight = 45;
   static const double buttonRadius = 30;
@@ -55,9 +57,8 @@ class _LoginScreenState extends State<LoginScreen> {
       final email = _emailController.text;
       final password = _passwordController.text;
 
-      final url = Uri.parse(
-          'http://10.0.2.2:4000/api/v1/auth/login'); // change to your actual endpoint
-
+      // Database Connection URI
+      final url = Uri.parse('${Config.baseUrl}/api/v1/auth/login');
       try {
         final response = await http.post(
           url,
@@ -67,7 +68,6 @@ class _LoginScreenState extends State<LoginScreen> {
             'password': password,
           }),
         );
-
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           if (data['_id'] != null) {
@@ -162,7 +162,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               child: Form(
-                key: _formKey, // Attach form key
+                key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -184,7 +184,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           borderSide: BorderSide.none,
                         ),
                       ),
-                      validator: _validateEmail, // Email validation
+                      validator: _validateEmail,
                     ),
                     const SizedBox(height: 20),
                     const Text("Password",
@@ -195,7 +195,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _passwordController,
-                      obscureText: _obscureText, // Control visibility
+                      obscureText: _obscureText,
                       decoration: InputDecoration(
                         contentPadding:
                             EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -264,8 +264,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Material(
                           // Wrap with Material
                           borderRadius: BorderRadius.circular(buttonRadius),
-                          color: Colors
-                              .transparent, // Ensure no solid color overrides the gradient
+                          color: Colors.transparent,
                           child: Ink(
                             decoration: BoxDecoration(
                                 gradient: const LinearGradient(
@@ -345,7 +344,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 20),
                     Center(
                       child: TextButton(
-                        onPressed: () {},
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => RegisterScreen()),
+                          );
+                        },
                         child: const Text(
                           "Don't have an account? Sign up",
                           style: TextStyle(

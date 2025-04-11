@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 
 class LocationDetailsScreen extends StatefulWidget {
   final String location;
+  final String? district;
   final double latitude;
   final double longitude;
 
@@ -16,6 +17,7 @@ class LocationDetailsScreen extends StatefulWidget {
     required this.location,
     required this.latitude,
     required this.longitude,
+    this.district,
   });
 
   @override
