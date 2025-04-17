@@ -1,7 +1,7 @@
 import 'package:buzzmap/pages/otp_screen.dart';
 import 'package:buzzmap/pages/splash_screen.dart';
 import 'package:buzzmap/pages/welcome_screen.dart';
-import 'package:buzzmap/pages/login_screen.dart';
+
 import 'package:buzzmap/pages/register_screen.dart';
 import 'package:buzzmap/pages/home_screen.dart';
 import 'package:buzzmap/pages/mapping_screen.dart';
@@ -11,9 +11,13 @@ import 'package:buzzmap/pages/about_screen.dart';
 import 'package:flutter/material.dart';
 
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:buzzmap/pages/login_screen.dart';
+//Firebase Imports
+import 'package:firebase_core/firebase_core.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 

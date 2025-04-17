@@ -7,7 +7,11 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
+
+//Firebase Imports
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/material.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,6 +26,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _obscureText = true;
+
+  // Google Sign-In instance
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // Button Dimensions
   static const double buttonWidth = 200;
@@ -50,6 +58,42 @@ class _LoginScreenState extends State<LoginScreen> {
       return "Password must be at least 8 characters";
     }
     return null;
+  }
+
+  // Handle Google Sign-In
+  Future<void> _signInWithGoogle() async {
+    try {
+      // Trigger the Google Sign-In flow
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+
+      if (googleUser == null) {
+        // The user canceled the sign-in process
+        return;
+      }
+
+      // Obtain the authentication details
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      // Create a new credential using the obtained GoogleAuth details
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Sign-in to Firebase with the Google credentials
+      final UserCredential userCredential =
+          await _auth.signInWithCredential(credential);
+
+      // Navigate to HomeScreen after successful login
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HomeScreen()),
+      );
+    } catch (e) {
+      print("Error signing in with Google: $e");
+      _showError('Google Sign-In failed. Please try again.');
+    }
   }
 
   void _handleLogin() async {
@@ -327,7 +371,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               side: const BorderSide(color: Colors.grey),
                             ),
                           ),
-                          onPressed: () {},
+                          onPressed: _signInWithGoogle,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
