@@ -11,7 +11,9 @@ import 'package:buzzmap/auth/config.dart';
 //Firebase Imports
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter/material.dart';
+
+//Share preferences for saving locan instances
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -26,6 +28,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _obscureText = true;
+
+  bool _rememberMe = false;
 
   // Google Sign-In instance
   final GoogleSignIn _googleSignIn = GoogleSignIn();
@@ -96,6 +100,23 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _loadCredentials();
+  }
+
+  void _loadCredentials() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _rememberMe = prefs.getBool('remember_me') ?? false;
+      if (_rememberMe) {
+        _emailController.text = prefs.getString('email') ?? '';
+        _passwordController.text = prefs.getString('password') ?? '';
+      }
+    });
+  }
+
   void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       final email = _emailController.text;
@@ -103,6 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Database Connection URI
       final url = Uri.parse('${Config.baseUrl}/api/v1/auth/login');
+
       try {
         final response = await http.post(
           url,
@@ -112,9 +134,22 @@ class _LoginScreenState extends State<LoginScreen> {
             'password': password,
           }),
         );
+
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           if (data['_id'] != null) {
+            // Save credentials if Remember Me is checked
+            final prefs = await SharedPreferences.getInstance();
+            if (_rememberMe) {
+              await prefs.setBool('remember_me', true);
+              await prefs.setString('email', email);
+              await prefs.setString('password', password);
+            } else {
+              await prefs.setBool('remember_me', false);
+              await prefs.remove('email');
+              await prefs.remove('password');
+            }
+
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => HomeScreen()),
@@ -273,8 +308,27 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             ClipOval(
                               child: Checkbox(
-                                value: false,
-                                onChanged: (value) {},
+                                value: _rememberMe,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _rememberMe = value ?? false;
+                                  });
+                                },
+                                fillColor:
+                                    MaterialStateProperty.resolveWith<Color>(
+                                        (Set<MaterialState> states) {
+                                  if (states.contains(MaterialState.selected)) {
+                                    return Colors
+                                        .blue; // Background color when checked
+                                  }
+                                  return const Color.fromARGB(0, 255, 255,
+                                      255); // Background color when unchecked
+                                }),
+                                checkColor:
+                                    Colors.white, // Color of the checkmark
+                                side: const BorderSide(
+                                    color: Color(0xFF1D4C5E),
+                                    width: 2), // Border color and width
                               ),
                             ),
                             const Text(

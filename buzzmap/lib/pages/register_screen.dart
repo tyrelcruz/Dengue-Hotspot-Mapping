@@ -6,6 +6,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 
+//Firebase Imports
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -52,6 +56,68 @@ class _RegisterScreenState extends State<RegisterScreen> {
         const SizedBox(height: 16),
       ],
     );
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+
+      if (googleUser == null) return; // User canceled
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+
+      final User? user = userCredential.user;
+
+      if (user != null) {
+        // Check if user already exists on your server
+        final baseUrl = Platform.isAndroid
+            ? 'http://10.0.2.2:4000'
+            : 'http://localhost:4000';
+
+        final checkEmailUrl = Uri.parse('$baseUrl/api/v1/auth/check-email');
+
+        final response = await http.post(
+          checkEmailUrl,
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({"email": user.email}),
+        );
+
+        if (response.statusCode == 200 && response.body == 'false') {
+          // Register the user if not yet registered in your backend
+          final registerUrl = Uri.parse('$baseUrl/api/v1/auth/register');
+
+          await http.post(
+            registerUrl,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "username": user.displayName ?? 'Google User',
+              "email": user.email,
+              "password":
+                  'google_oauth', // Placeholder or handle differently in backend
+            }),
+          );
+        }
+
+        // Navigate to login or home screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => LoginScreen()),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Google Sign-In failed. Try again.';
+      });
+    }
   }
 
   void _showTermsAndConditions() {
@@ -417,18 +483,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 20),
                   Row(
                     children: [
-                      SizedBox(
-                        height: 24,
-                        width: 24,
+                      ClipOval(
                         child: Checkbox(
                           value: _agreeToTerms,
-                          shape: CircleBorder(),
-                          activeColor: Colors.white,
                           onChanged: (value) {
                             setState(() {
                               _agreeToTerms = value ?? false;
                             });
                           },
+                          fillColor: MaterialStateProperty.resolveWith<Color>(
+                              (Set<MaterialState> states) {
+                            if (states.contains(MaterialState.selected)) {
+                              return Colors
+                                  .blue; // Background color when checked
+                            }
+                            return const Color.fromARGB(0, 255, 255,
+                                255); // Background color when unchecked
+                          }),
+                          checkColor: Colors.white, // Color of the checkmark
+                          side: const BorderSide(
+                              color: Color.fromARGB(255, 255, 255, 255),
+                              width: 2), // Border color and width
                         ),
                       ),
                       const SizedBox(width: 5),
@@ -618,7 +693,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             borderRadius: BorderRadius.circular(30),
                           ),
                         ),
-                        onPressed: () {},
+                        onPressed: _handleGoogleSignIn,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
