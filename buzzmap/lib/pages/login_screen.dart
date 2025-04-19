@@ -7,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
+import 'package:buzzmap/errors/flushbar.dart';
 
 //Firebase Imports
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,6 +15,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 //Share preferences for saving locan instances
 import 'package:shared_preferences/shared_preferences.dart';
+
+//Error handling:
+import 'package:buzzmap/services/api_service.dart'; // Adjust this path
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -96,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } catch (e) {
       print("Error signing in with Google: $e");
-      _showError('Google Sign-In failed. Please try again.');
+      _showError(context, 'Google sign-in failed. Please try again.');
     }
   }
 
@@ -122,7 +126,6 @@ class _LoginScreenState extends State<LoginScreen> {
       final email = _emailController.text;
       final password = _passwordController.text;
 
-      // Database Connection URI
       final url = Uri.parse('${Config.baseUrl}/api/v1/auth/login');
 
       try {
@@ -138,7 +141,6 @@ class _LoginScreenState extends State<LoginScreen> {
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           if (data['_id'] != null) {
-            // Save credentials if Remember Me is checked
             final prefs = await SharedPreferences.getInstance();
             if (_rememberMe) {
               await prefs.setBool('remember_me', true);
@@ -150,26 +152,24 @@ class _LoginScreenState extends State<LoginScreen> {
               await prefs.remove('password');
             }
 
-            Navigator.push(
+            Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => HomeScreen()),
             );
           } else {
-            _showError('Login failed');
+            _showError(context, 'Invalid login credentials.');
           }
         } else {
-          _showError('Server error: ${response.statusCode}, ${response.body}');
+          _showError(context, 'Login failed. Please check your credentials.');
         }
       } catch (e) {
-        _showError('Network error: $e');
+        _showError(context, 'Network error. Please try again.');
       }
     }
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+  void _showError(BuildContext context, String message) {
+    showCustomizeFlushbar(context, message);
   }
 
   @override

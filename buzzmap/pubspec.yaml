@@ -48,6 +48,7 @@ dependencies:
   latlong2: ^0.9.1
   firebase_core: ^3.13.0
   firebase_auth: ^5.5.2
+  another_flushbar: ^1.10.0
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1

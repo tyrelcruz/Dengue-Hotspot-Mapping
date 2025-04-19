@@ -5,6 +5,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:buzzmap/errors/flushbar.dart';
+import 'package:another_flushbar/flushbar.dart';
 
 //Firebase Imports
 import 'package:firebase_auth/firebase_auth.dart';
@@ -548,10 +550,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                         ),
                         onPressed: () async {
-                          setState(() {
-                            _errorMessage = '';
-                          });
-
                           final firstName = _firstNameController.text.trim();
                           final lastName = _lastNameController.text.trim();
                           final email = _emailController.text.trim();
@@ -559,42 +557,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           final confirmPassword =
                               _confirmPasswordController.text;
 
-                          // Basic validation
                           if (firstName.isEmpty ||
                               lastName.isEmpty ||
                               email.isEmpty ||
                               password.isEmpty ||
                               confirmPassword.isEmpty) {
-                            setState(() {
-                              _errorMessage = 'All fields are required!';
-                            });
+                            Flushbar(
+                              title: 'Error',
+                              message: 'All fields are required!',
+                              backgroundColor: Colors.red,
+                              duration: Duration(seconds: 3),
+                            ).show(context);
                             return;
                           }
 
                           if (!_isValidEmail(email)) {
-                            setState(() {
-                              _errorMessage =
-                                  'Please enter a valid email address.';
-                            });
+                            Flushbar(
+                              title: 'Invalid Email',
+                              message: 'Please enter a valid email address.',
+                              backgroundColor: Colors.orange,
+                              duration: Duration(seconds: 3),
+                            ).show(context);
                             return;
                           }
 
                           if (!_isValidPassword(password)) {
-                            setState(() {
-                              _errorMessage =
-                                  'Password must have at least 8 characters, uppercase, lowercase, number, and a special character.';
-                            });
+                            Flushbar(
+                              title: 'Weak Password',
+                              message:
+                                  'Password must have at least 8 characters, uppercase, lowercase, number, and a special character.',
+                              backgroundColor: Colors.orange,
+                              duration: Duration(seconds: 3),
+                            ).show(context);
                             return;
                           }
 
                           if (password != confirmPassword) {
-                            setState(() {
-                              _errorMessage = 'Passwords do not match.';
-                            });
+                            Flushbar(
+                              title: 'Mismatch',
+                              message: 'Passwords do not match.',
+                              backgroundColor: Colors.red,
+                              duration: Duration(seconds: 3),
+                            ).show(context);
                             return;
                           }
 
-                          // Proceed to check if email already exists
                           final baseUrl = Platform.isAndroid
                               ? 'http://10.0.2.2:4000'
                               : 'http://localhost:4000';
@@ -610,14 +617,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                             if (response.statusCode == 200 &&
                                 response.body == 'true') {
-                              setState(() {
-                                _errorMessage =
-                                    'An account with this email already exists.';
-                              });
+                              Flushbar(
+                                title: 'Account Exists',
+                                message:
+                                    'An account with this email already exists.',
+                                backgroundColor: Colors.red,
+                                duration: Duration(seconds: 3),
+                              ).show(context);
                               return;
                             }
 
-                            // Register new user
                             final registerUrl =
                                 Uri.parse('$baseUrl/api/v1/auth/register');
                             final registerResponse = await http.post(
@@ -632,29 +641,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                             if (registerResponse.statusCode == 200 ||
                                 registerResponse.statusCode == 201) {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) => LoginScreen()),
-                              );
-                            } else {
-                              setState(() {
-                                _errorMessage =
-                                    'Registration failed. Please try again.';
+                              Flushbar(
+                                title: 'Success',
+                                message: 'Account created successfully!',
+                                backgroundColor: Colors.green,
+                                duration: Duration(seconds: 3),
+                              ).show(context);
+
+                              Future.delayed(Duration(seconds: 2), () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) => LoginScreen()),
+                                );
                               });
+                            } else {
+                              Flushbar(
+                                title: 'Failed',
+                                message:
+                                    'Registration failed. Please try again.',
+                                backgroundColor: Colors.red,
+                                duration: Duration(seconds: 3),
+                              ).show(context);
                             }
                           } catch (e) {
-                            setState(() {
-                              _errorMessage =
-                                  'Something went wrong. Please check your connection.';
-                            });
+                            Flushbar(
+                              title: 'Network Error',
+                              message:
+                                  'Something went wrong. Please check your connection.',
+                              backgroundColor: Colors.red,
+                              duration: Duration(seconds: 3),
+                            ).show(context);
                           }
-
-                          const TextStyle errorTextStyle = TextStyle(
-                            fontSize: 16,
-                            color: Colors.red,
-                            fontWeight: FontWeight.w500,
-                          );
                         },
                         child: const Text(
                           "Sign Up",
