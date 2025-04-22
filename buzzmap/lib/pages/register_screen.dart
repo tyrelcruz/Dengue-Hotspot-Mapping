@@ -1,4 +1,5 @@
 import 'package:buzzmap/pages/login_screen.dart';
+import 'package:buzzmap/pages/otp_screen.dart';
 import 'package:buzzmap/pages/welcome_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -6,7 +7,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:buzzmap/errors/flushbar.dart';
-import 'package:another_flushbar/flushbar.dart';
 
 //Firebase Imports
 import 'package:firebase_auth/firebase_auth.dart';
@@ -29,6 +29,7 @@ final TextEditingController _confirmPasswordController =
 
 class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
+
   bool _obscureConfirmPassword = true;
   bool _agreeToTerms = false;
   String _firstNameError = ''; // Error message for first name
@@ -112,13 +113,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
         // Navigate to login or home screen
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => LoginScreen()),
+          MaterialPageRoute(
+              builder: (context) => OTPScreen(email: _emailController.text)),
         );
       }
     } catch (e) {
       setState(() {
         _errorMessage = 'Google Sign-In failed. Try again.';
       });
+      AppFlushBar.showError(
+        context,
+        title: 'Authentication Failed',
+        message: 'Google Sign-In failed. Please try again.',
+      );
     }
   }
 
@@ -529,10 +536,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: Text(
                         _errorMessage,
                         style: const TextStyle(
-                          fontSize: 11, // 👈 Set the desired font size here
+                          fontSize: 11,
                           color: Colors.red,
-                          fontWeight: FontWeight
-                              .w500, // Optional: You can change this based on your need
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -557,48 +563,57 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           final confirmPassword =
                               _confirmPasswordController.text;
 
+                          // Validation checks
                           if (firstName.isEmpty ||
                               lastName.isEmpty ||
                               email.isEmpty ||
                               password.isEmpty ||
                               confirmPassword.isEmpty) {
-                            Flushbar(
-                              title: 'Error',
+                            AppFlushBar.showError(
+                              context,
                               message: 'All fields are required!',
-                              backgroundColor: Colors.red,
-                              duration: Duration(seconds: 3),
-                            ).show(context);
+                            );
+                            return;
+                          }
+
+                          if (!_agreeToTerms) {
+                            AppFlushBar.showCustom(
+                              context,
+                              title: 'Terms Required',
+                              message:
+                                  'Please agree to the Terms and Conditions.',
+                              backgroundColor: Colors.orange,
+                            );
                             return;
                           }
 
                           if (!_isValidEmail(email)) {
-                            Flushbar(
+                            AppFlushBar.showCustom(
+                              context,
                               title: 'Invalid Email',
                               message: 'Please enter a valid email address.',
                               backgroundColor: Colors.orange,
-                              duration: Duration(seconds: 3),
-                            ).show(context);
+                            );
                             return;
                           }
 
                           if (!_isValidPassword(password)) {
-                            Flushbar(
+                            AppFlushBar.showCustom(
+                              context,
                               title: 'Weak Password',
                               message:
                                   'Password must have at least 8 characters, uppercase, lowercase, number, and a special character.',
                               backgroundColor: Colors.orange,
-                              duration: Duration(seconds: 3),
-                            ).show(context);
+                            );
                             return;
                           }
 
                           if (password != confirmPassword) {
-                            Flushbar(
+                            AppFlushBar.showError(
+                              context,
                               title: 'Mismatch',
                               message: 'Passwords do not match.',
-                              backgroundColor: Colors.red,
-                              duration: Duration(seconds: 3),
-                            ).show(context);
+                            );
                             return;
                           }
 
@@ -617,13 +632,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                             if (response.statusCode == 200 &&
                                 response.body == 'true') {
-                              Flushbar(
+                              AppFlushBar.showError(
+                                context,
                                 title: 'Account Exists',
                                 message:
                                     'An account with this email already exists.',
-                                backgroundColor: Colors.red,
-                                duration: Duration(seconds: 3),
-                              ).show(context);
+                              );
                               return;
                             }
 
@@ -641,37 +655,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                             if (registerResponse.statusCode == 200 ||
                                 registerResponse.statusCode == 201) {
-                              Flushbar(
-                                title: 'Success',
+                              AppFlushBar.showSuccess(
+                                context,
                                 message: 'Account created successfully!',
-                                backgroundColor: Colors.green,
-                                duration: Duration(seconds: 3),
-                              ).show(context);
+                              );
 
-                              Future.delayed(Duration(seconds: 2), () {
+                              Future.delayed(Duration(seconds: 1), () {
                                 Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(
-                                      builder: (context) => LoginScreen()),
+                                      builder: (context) => OTPScreen(
+                                          email: _emailController.text)),
                                 );
                               });
                             } else {
-                              Flushbar(
-                                title: 'Failed',
+                              AppFlushBar.showError(
+                                context,
                                 message:
                                     'Registration failed. Please try again.',
-                                backgroundColor: Colors.red,
-                                duration: Duration(seconds: 3),
-                              ).show(context);
+                              );
                             }
                           } catch (e) {
-                            Flushbar(
-                              title: 'Network Error',
-                              message:
-                                  'Something went wrong. Please check your connection.',
-                              backgroundColor: Colors.red,
-                              duration: Duration(seconds: 3),
-                            ).show(context);
+                            AppFlushBar.showNetworkError(context);
                           }
                         },
                         child: const Text(

@@ -45,27 +45,40 @@
     <true/>
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
+    
+    <!-- Google Maps API Key -->
+    <key>GMSApiKey</key>
+    <string>AIzaSyAjVcilPoaJHytTgyBnLiW2oH7NKCLOmvk</string>
+
+    <!-- For Firebase Auth -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>com.googleusercontent.apps.239152501184-jr1ip59gsla5dotgta5k0ibjlpce4o2o</string>
+            </array>
+        </dict>
+    </array>
+
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>This app needs access to your location for mapping</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>This app needs access to your location for mapping</string>
+
+
+    <!-- Optional: Required for Apple Sign-in permissions -->
+    <key>NSCameraUsageDescription</key>
+    <string>Camera access is needed for uploading your profile picture</string>
+
+    <!-- Optional: Transport Security settings -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
-    <!-- For Firebase Auth -->
-    <key>CFBundleURLTypes</key>
-    <array>
-    <dict>
-        <key>CFBundleTypeRole</key>
-        <string>Editor</string>
-        <key>CFBundleURLSchemes</key>
-        <array>
-        <string>com.googleusercontent.apps.239152501184-jr1ip59gsla5dotgta5k0ibjlpce4o2o</string>
-        </array>
-    </dict>
-    </array>
-
-    <!-- Optional: Required for Apple Sign-in permissions -->
-    <key>NSCameraUsageDescription</key>
-    <string>Camera access is needed for uploading your profile picture</string>
 
 </dict>
 </plist>

@@ -1,21 +1,126 @@
+import 'package:buzzmap/pages/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:pinput/pinput.dart';
+import 'package:buzzmap/auth/config.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:another_flushbar/flushbar.dart';
+import 'package:buzzmap/errors/flushbar.dart';
 
-void main() {
-  runApp(MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: OTPScreen(),
-  ));
+class OTPScreen extends StatefulWidget {
+  final String email;
+
+  const OTPScreen({super.key, required this.email});
+
+  @override
+  State<OTPScreen> createState() => _OTPScreenState();
 }
 
-class OTPScreen extends StatelessWidget {
-  const OTPScreen({super.key});
+class _OTPScreenState extends State<OTPScreen> {
+  String enteredOtp = '';
+  bool isLoading = false;
+
+  void showCustomizeFlushbar(String message) {
+    print("DEBUG: Showing flushbar with message: $message");
+    Flushbar(
+      message: message,
+      duration: Duration(seconds: 3),
+      backgroundColor: Colors.black87,
+      flushbarPosition: FlushbarPosition.BOTTOM,
+    )..show(context);
+  }
+
+  Future<void> verifyOtp() async {
+    if (enteredOtp.length != 4) {
+      showCustomizeFlushbar("Please enter a valid 4-digit OTP");
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final url = Uri.parse(Config.verifyOtpUrl);
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'email': widget.email,
+          'otp': enteredOtp,
+          'purpose': 'account-verification',
+        }),
+      );
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        FocusScope.of(context).unfocus();
+        showCustomizeFlushbar(data['message'] ?? 'Verification successful');
+
+        // Use rootNavigator to ensure navigation works
+        Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (Route<dynamic> route) => false,
+        );
+      } else {
+        showCustomizeFlushbar(data['message'] ?? 'Verification failed');
+      }
+    } catch (e) {
+      showCustomizeFlushbar('Error: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> resendOtp() async {
+    print("DEBUG: resendOtp method started");
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      print("DEBUG: Making HTTP request to resend OTP");
+      final url = Uri.parse(Config.resendOtpUrl);
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'email': widget.email,
+          'purpose': 'account-verification',
+        }),
+      );
+      print(
+          "DEBUG: Resend OTP response received - Status code: ${response.statusCode}");
+
+      final data = json.decode(response.body);
+      if (response.statusCode == 200 && data['success'] == true) {
+        print("DEBUG: OTP resent successfully");
+        showCustomizeFlushbar(data['message'] ?? 'OTP sent successfully!');
+      } else {
+        print("DEBUG: Failed to resend OTP");
+        showCustomizeFlushbar(data['message'] ?? 'Failed to resend OTP');
+      }
+    } catch (e) {
+      print("DEBUG: Exception in resendOtp: ${e.toString()}");
+      showCustomizeFlushbar('Error: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Adjust these values to change character sizes
-    const double character1Size = 420; // Left character size
-    const double character2Size = 420; // Right character size
+    const double character1Size = 420;
+    const double character2Size = 420;
 
     return Scaffold(
       backgroundColor: const Color(0xFF315867),
@@ -23,14 +128,12 @@ class OTPScreen extends StatelessWidget {
       body: SafeArea(
         child: Stack(
           children: [
-            // Main content (non-scrollable)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   SizedBox(height: 20),
-                  // Back Button
                   Align(
                     alignment: Alignment.centerLeft,
                     child: InkWell(
@@ -40,7 +143,6 @@ class OTPScreen extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: 30),
-                  // Title
                   Text(
                     "ALMOST THERE...",
                     style: TextStyle(
@@ -51,7 +153,6 @@ class OTPScreen extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: 15),
-                  // Subtitle
                   Text(
                     "We've sent a one-time password (OTP) to your email.\n"
                     "Enter the code to verify your account and continue.",
@@ -65,7 +166,6 @@ class OTPScreen extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: 30),
-                  // OTP Input
                   Pinput(
                     length: 4,
                     defaultPinTheme: PinTheme(
@@ -83,12 +183,16 @@ class OTPScreen extends StatelessWidget {
                       ),
                     ),
                     keyboardType: TextInputType.number,
-                    onCompleted: (pin) => print("Entered OTP: $pin"),
+                    onCompleted: (pin) {
+                      setState(() {
+                        enteredOtp = pin;
+                      });
+                      print("DEBUG: OTP entered: $pin");
+                    },
                   ),
                   SizedBox(height: 20),
-                  // Resend OTP
                   TextButton(
-                    onPressed: () {},
+                    onPressed: isLoading ? null : resendOtp,
                     child: const Text.rich(
                       TextSpan(
                         text: "Didn't receive an OTP? ",
@@ -111,7 +215,6 @@ class OTPScreen extends StatelessWidget {
                     ),
                   ),
                   SizedBox(height: 20),
-                  // Verify Button
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
@@ -122,22 +225,22 @@ class OTPScreen extends StatelessWidget {
                       ),
                       elevation: 5,
                     ),
-                    onPressed: () {},
-                    child: const Text(
-                      "Verify",
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF315867),
-                      ),
-                    ),
+                    onPressed: isLoading ? null : verifyOtp,
+                    child: isLoading
+                        ? CircularProgressIndicator(color: Color(0xFF315867))
+                        : const Text(
+                            "Verify",
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF315867),
+                            ),
+                          ),
                   ),
                 ],
               ),
             ),
-
-            // Bottom-left character (fixed position)
             Positioned(
               left: -120,
               bottom: -30,
@@ -152,8 +255,6 @@ class OTPScreen extends StatelessWidget {
                 ),
               ),
             ),
-
-            // Bottom-right character (fixed position)
             Positioned(
               right: -100,
               bottom: -30,
@@ -172,5 +273,11 @@ class OTPScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    print("DEBUG: OTPScreen widget disposed");
+    super.dispose();
   }
 }

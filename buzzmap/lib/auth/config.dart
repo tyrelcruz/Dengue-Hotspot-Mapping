@@ -6,9 +6,14 @@ import 'package:http/http.dart' as http;
 class Config {
   static final String baseUrl =
       Platform.isAndroid ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
+
+  // Add these URLs
+  static String get verifyOtpUrl => '$baseUrl/api/v1/auth/verify-otp';
+  static String get resendOtpUrl => '$baseUrl/api/v1/auth/resend-otp';
+  static String get googleLoginUrl => '$baseUrl/api/v1/auth/google-login';
 }
 
-//Register
+//AuthService
 class AuthService {
   static final String baseUrl =
       Platform.isAndroid ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
@@ -26,10 +31,27 @@ class AuthService {
     }
   }
 
-  static Future<bool> registerUser(
-      {required String fullName,
-      required String email,
-      required String password}) async {
+  static Future<bool> googleLogin({required String idToken}) async {
+    try {
+      final response = await http.post(
+        Uri.parse(Config.googleLoginUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'token': idToken, // Pass the actual Google ID token
+        }),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> registerUser({
+    required String fullName,
+    required String email,
+    required String password,
+  }) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/v1/auth/register'),
