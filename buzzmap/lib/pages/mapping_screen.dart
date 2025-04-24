@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'dart:math';
 import 'dart:async';
 import 'dart:convert';
+import 'package:buzzmap/data/dengue_data.dart';
 import 'package:buzzmap/pages/location_details_screen.dart';
 
 class MappingScreen extends StatefulWidget {
@@ -28,6 +29,7 @@ class _MappingScreenState extends State<MappingScreen> {
   bool _showHeatmap = true;
   bool _showBorders = true;
   bool _isLoading = true;
+  MapType _currentMapType = MapType.normal;
 
   final CameraPosition _initialCameraPosition = const CameraPosition(
     target: LatLng(14.6507, 121.0495),
@@ -89,95 +91,11 @@ class _MappingScreenState extends State<MappingScreen> {
     'Pasong Tamo': LatLng(14.6499, 121.0693),
   };
 
-  // Dengue case data for each barangay
-  final Map<String, Map<String, dynamic>> dengueData = {
-    'Baesa': {'cases': 25, 'severity': 'Severe'},
-    'Fairview': {'cases': 12, 'severity': 'Moderate'},
-    'Bahay Toro': {'cases': 18, 'severity': 'Moderate'},
-    'Balingasa': {'cases': 8, 'severity': 'Low'},
-    'Damar': {'cases': 15, 'severity': 'Moderate'},
-    'Katipunan': {'cases': 5, 'severity': 'Low'},
-    'Mariblo': {'cases': 22, 'severity': 'Severe'},
-    'Balumbato': {'cases': 10, 'severity': 'Moderate'},
-    'Sangandaan': {'cases': 19, 'severity': 'Moderate'},
-    'Unang Sigaw': {'cases': 7, 'severity': 'Low'},
-    'Amihan': {'cases': 14, 'severity': 'Moderate'},
-    'Bagbag': {'cases': 28, 'severity': 'Severe'},
-    'Claro': {'cases': 3, 'severity': 'Low'},
-    'Masambong': {'cases': 11, 'severity': 'Moderate'},
-    'San Isidro Labrador': {'cases': 16, 'severity': 'Moderate'},
-    'Bagong Lipunan': {'cases': 9, 'severity': 'Low'},
-    'Dona Josefa': {'cases': 13, 'severity': 'Moderate'},
-    'San Jose': {'cases': 6, 'severity': 'Low'},
-    'Bagong Silangan': {'cases': 21, 'severity': 'Severe'},
-    'Commonwealth': {'cases': 32, 'severity': 'Severe'},
-    'Payatas': {'cases': 24, 'severity': 'Severe'},
-    'Batasan Hills': {'cases': 27, 'severity': 'Severe'},
-    'Holy Spirit': {'cases': 17, 'severity': 'Moderate'},
-    'Matandang Balara': {'cases': 20, 'severity': 'Moderate'},
-    'Pasong Tamo': {'cases': 4, 'severity': 'Low'},
-  };
-
   // Barangay boundary data - coordinates for polygon borders
   final Map<String, List<LatLng>> barangayBoundaries = {
-    'Bahay Toro': [
-      LatLng(14.6572, 121.0214),
-      LatLng(14.6612, 121.0254),
-      LatLng(14.6592, 121.0314),
-      LatLng(14.6532, 121.0284),
-      LatLng(14.6532, 121.0214),
-    ],
-    'Balingasa': [
-      LatLng(14.6482, 120.9978),
-      LatLng(14.6522, 121.0018),
-      LatLng(14.6492, 121.0078),
-      LatLng(14.6452, 121.0048),
-      LatLng(14.6442, 120.9988),
-    ],
     // Other barangay boundaries remain unchanged
     // ... [For brevity, other boundaries are not repeated]
   };
-
-  Future<void> _loadGeoJsonPolygons() async {
-    try {
-      final String data =
-          await rootBundle.loadString('assets/geo/barangays.geojson');
-      final geo = json.decode(data);
-
-      Set<Polygon> loadedPolygons = {};
-
-      for (final feature in geo['features']) {
-        final String name = feature['properties']['name'];
-        final severity = dengueData[name]?['severity'] ?? 'Unknown';
-
-        final color = _getColorForSeverity(severity);
-
-        final coords = feature['geometry']['coordinates'][0]
-            .map<LatLng>(
-                (coord) => LatLng(coord[1].toDouble(), coord[0].toDouble()))
-            .toList();
-
-        loadedPolygons.add(
-          Polygon(
-            polygonId: PolygonId(name),
-            points: coords,
-            strokeColor: color,
-            strokeWidth: 1,
-            fillColor: color.withOpacity(0.3),
-          ),
-        );
-      }
-
-      setState(() {
-        _barangayPolygons = loadedPolygons;
-        _polygons = _polygons.union(_barangayPolygons);
-      });
-    } catch (e) {
-      print('Error loading GeoJSON: $e');
-      // Continue with the hardcoded boundaries if GeoJSON fails
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -193,15 +111,49 @@ class _MappingScreenState extends State<MappingScreen> {
     });
   }
 
-  Color _getColorForCases(int cases) {
-    if (cases >= 25) {
-      return Colors.red.withOpacity(0.7);
-    } else if (cases >= 15) {
-      return Colors.orange.withOpacity(0.7);
-    } else if (cases >= 8) {
-      return Colors.yellow.withOpacity(0.6);
-    } else {
-      return Colors.green.withOpacity(0.5);
+  Future<void> _loadGeoJsonPolygons() async {
+    try {
+      final String data =
+          await rootBundle.loadString('assets/geojson/barangays.geojson');
+      final geo = json.decode(data);
+
+      Set<Polygon> loadedPolygons = {};
+      for (final feature in geo['features']) {
+        final properties = feature['properties'];
+        final geometry = feature['geometry'];
+
+        if (properties == null ||
+            geometry == null ||
+            geometry['type'] != 'Polygon') continue;
+
+        final name = properties['name'] ?? properties['NAME_3'];
+        if (name == null) continue;
+
+        final severity = dengueData[name]?['severity'] ?? 'Unknown';
+        final color = _getColorForSeverity(severity);
+
+        final coords = geometry['coordinates'][0]
+            .map<LatLng>(
+                (coord) => LatLng(coord[1].toDouble(), coord[0].toDouble()))
+            .toList();
+
+        loadedPolygons.add(
+          Polygon(
+            polygonId: PolygonId(name),
+            points: coords,
+            strokeColor: color,
+            strokeWidth: 2,
+            fillColor: color.withOpacity(0.3),
+          ),
+        );
+      }
+
+      setState(() {
+        _barangayPolygons = loadedPolygons;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading GeoJSON: \$e');
     }
   }
 
@@ -217,6 +169,18 @@ class _MappingScreenState extends State<MappingScreen> {
         return Colors.red;
       default:
         return Colors.grey;
+    }
+  }
+
+  Color _getColorForCases(int cases) {
+    if (cases >= 25) {
+      return Colors.red.withOpacity(0.7);
+    } else if (cases >= 15) {
+      return Colors.orange.withOpacity(0.7);
+    } else if (cases >= 8) {
+      return Colors.yellow.withOpacity(0.6);
+    } else {
+      return Colors.green.withOpacity(0.5);
     }
   }
 
@@ -272,25 +236,8 @@ class _MappingScreenState extends State<MappingScreen> {
         }
 
         // Add polygon borders if borders are enabled and we have boundary data
-        if (_layerOptions['Borders']! && boundaries != null) {
-          final color = _getColorForCases(cases);
-          polygons.add(
-            Polygon(
-              polygonId: PolygonId('border_$barangay'),
-              points: boundaries,
-              strokeWidth: 2,
-              strokeColor: Colors.black54,
-              fillColor: color.withOpacity(0.5),
-              consumeTapEvents: true,
-              onTap: () => _showDengueDetails(
-                context,
-                barangay,
-                cases,
-                severity,
-                latLng,
-              ),
-            ),
-          );
+        if (_layerOptions['Borders']! && _barangayPolygons.isNotEmpty) {
+          polygons = polygons.union(_barangayPolygons);
         }
       }
     });
@@ -374,6 +321,7 @@ class _MappingScreenState extends State<MappingScreen> {
                 child: Stack(
                   children: [
                     GoogleMap(
+                      mapType: _currentMapType,
                       initialCameraPosition: _initialCameraPosition,
                       onMapCreated: (controller) {
                         _mapController = controller;
@@ -468,50 +416,53 @@ class _MappingScreenState extends State<MappingScreen> {
       child: Column(
         children: [
           Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
+            decoration: _buttonStyle(),
             child: IconButton(
               icon: const Icon(Icons.layers),
-              onPressed: () {
-                _showLayerOptions(context);
-              },
+              onPressed: () => _showLayerOptions(context),
               tooltip: 'Layer Controls',
             ),
           ),
           const SizedBox(height: 8),
           Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
+            decoration: _buttonStyle(),
             child: IconButton(
               icon: const Icon(Icons.info_outline),
-              onPressed: () {
-                _showMapLegend(context);
-              },
+              onPressed: () => _showMapLegend(context),
               tooltip: 'Map Legend',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            decoration: _buttonStyle(),
+            child: IconButton(
+              icon: const Icon(Icons.map),
+              onPressed: () {
+                setState(() {
+                  _currentMapType = _currentMapType == MapType.normal
+                      ? MapType.satellite
+                      : MapType.normal;
+                });
+              },
+              tooltip: 'Toggle Map/Satellite View',
             ),
           ),
         ],
       ),
     );
   }
+
+  BoxDecoration _buttonStyle() => BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      );
 
   void _showLayerOptions(BuildContext context) {
     showDialog(
