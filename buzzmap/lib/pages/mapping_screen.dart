@@ -3,13 +3,11 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:buzzmap/widgets/appbar/custom_app_bar.dart';
 import 'package:buzzmap/pages/location_details_screen.dart';
-import 'dart:ui' as ui;
-import 'dart:typed_data';
 import 'dart:math';
 import 'dart:async';
 import 'dart:convert';
 import 'package:buzzmap/data/dengue_data.dart';
-import 'package:buzzmap/pages/location_details_screen.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 
 class MappingScreen extends StatefulWidget {
   const MappingScreen({super.key});
@@ -26,69 +24,154 @@ class _MappingScreenState extends State<MappingScreen> {
   Set<Marker> _markers = {};
   Set<Polygon> _polygons = {};
   Set<Polygon> _barangayPolygons = {};
+
+  Map<String, LatLng> _barangayCentroids = {};
+
   bool _showHeatmap = true;
   bool _showBorders = true;
   bool _isLoading = true;
   MapType _currentMapType = MapType.normal;
 
   final CameraPosition _initialCameraPosition = const CameraPosition(
-    target: LatLng(14.6507, 121.0495),
-    zoom: 12.6,
+    target: LatLng(14.6700, 121.0437),
+    zoom: 11.8,
   );
 
   // Layer control options
   final Map<String, bool> _layerOptions = {
-    'Heatmap': true,
+    'Heatmap': false,
     'Borders': true,
-    'Markers': true,
+    'Markers': false,
   };
 
   final Map<String, List<String>> districtData = {
-    'District I': ['Bahay Toro', 'Balingasa', 'Damar', 'Katipunan', 'Mariblo'],
-    'District II': ['Baesa', 'Balumbato', 'Sangandaan', 'Unang Sigaw'],
+    'District I': [
+      'Alicia',
+      'Apollonio Samson',
+      'Bahay Toro',
+      'Balingasa',
+      'Damar',
+      'Del Monte',
+      'Lourdes',
+      'Maharlika',
+      'Manresa',
+      'Mariblo',
+      'N.S. Amoranto',
+      'Paltok',
+      'Paraiso',
+      'Salvacion',
+      'San Antonio',
+      'San Isidro Labrador',
+      'Santa Cruz',
+      'Sienna',
+      'Sta. Teresita',
+      'Sto. Cristo',
+      'Sto. Domingo',
+      'Talayan',
+      'Vasra',
+      'Veterans Village',
+    ],
+    'District II': [
+      'Baesa',
+      'Bagong Pag-asa',
+      'Balumbato',
+      'Culiat',
+      'Kaligayahan',
+      'New Era',
+      'Pasong Putik Proper',
+      'San Bartolome',
+      'Sangandaan',
+      'Sauyo',
+      'Talipapa',
+      'Unang Sigaw',
+    ],
     'District III': [
       'Amihan',
-      'Bagbag',
+      'Botocan',
       'Claro',
-      'Masambong',
-      'San Isidro Labrador'
+      'Duyan-Duyan',
+      'E. Rodriguez Sr.',
+      'Escopa I',
+      'Escopa II',
+      'Escopa III',
+      'Escopa IV',
+      'Kalusugan',
+      'Kristong Hari',
+      'Loyola Heights',
+      'Marilag',
+      'Masagana',
+      'Matandang Balara',
+      'Milagrosa',
+      'Pansol',
+      'Quirino 2-A',
+      'Quirino 2-B',
+      'Quirino 2-C',
+      'Quirino 3-A',
+      'San Vicente',
+      'Silangan',
+      'Tagumpay',
+      'Villa Maria Clara',
+      'White Plains',
     ],
-    'District IV': ['Bagong Lipunan', 'Dona Josefa', 'Mariblo', 'San Jose'],
-    'District V': ['Bagong Silangan', 'Commonwealth', 'Fairview', 'Payatas'],
+    'District IV': [
+      'Bagong Lipunan ng Crame',
+      'Damayang Lagi',
+      'Doña Aurora',
+      'Doña Imelda',
+      'Doña Josefa',
+      'Horseshoe',
+      'Immaculate Concepcion',
+      'Kamuning',
+      'Kaunlaran',
+      'Laging Handa',
+      'Obrero',
+      'Old Capitol Site',
+      'Paligsahan',
+      'Roxas',
+      'Sacred Heart',
+      'San Martin de Porres',
+      'South Triangle',
+      'West Triangle',
+    ],
+    'District V': [
+      'Bagong Silangan',
+      'Capri',
+      'Commonwealth',
+      'Greater Lagro',
+      'Gulod',
+      'Holy Spirit',
+      'Nagkaisang Nayon',
+      'North Fairview',
+      'Payatas',
+      'San Agustin',
+      'Santa Lucia',
+      'Santa Monica',
+      'Tandang Sora',
+      'Fairview',
+    ],
     'District VI': [
       'Batasan Hills',
-      'Holy Spirit',
-      'Matandang Balara',
-      'Pasong Tamo'
+      'Blue Ridge A',
+      'Blue Ridge B',
+      'Camp Aguinaldo',
+      'Central',
+      'Cubao',
+      'East Kamias',
+      'Libis',
+      'Mangga',
+      'Pinagkaisahan',
+      'Project 6',
+      'San Roque',
+      'Sikatuna Village',
+      'Socorro',
+      'UP Campus',
+      'UP Village',
+      'Ugong Norte',
+      'West Kamias',
+      'Teachers Village East',
+      'Teachers Village West',
+      'Pasong Tamo',
     ],
-  };
-
-  final Map<String, LatLng> locationData = {
-    'Bahay Toro': LatLng(14.6572, 121.0214),
-    'Balingasa': LatLng(14.6482, 120.9978),
-    'Damar': LatLng(14.6523, 121.0112),
-    'Katipunan': LatLng(14.6392, 121.0744),
-    'Mariblo': LatLng(14.6581, 121.0045),
-    'Baesa': LatLng(14.6743, 121.0131),
-    'Balumbato': LatLng(14.6760, 121.0437),
-    'Sangandaan': LatLng(14.6556, 121.0053),
-    'Unang Sigaw': LatLng(14.6611, 121.0172),
-    'Amihan': LatLng(14.6467, 121.0491),
-    'Bagbag': LatLng(14.7000, 121.0500),
-    'Claro': LatLng(14.6512, 121.0367),
-    'Masambong': LatLng(14.6461, 121.0133),
-    'San Isidro Labrador': LatLng(14.6437, 121.0231),
-    'Bagong Lipunan': LatLng(14.6386, 121.0376),
-    'Dona Josefa': LatLng(14.6413, 121.0416),
-    'San Jose': LatLng(14.6288, 121.0343),
-    'Bagong Silangan': LatLng(14.6731, 121.1067),
-    'Commonwealth': LatLng(14.6903, 121.0819),
-    'Fairview': LatLng(14.6300, 121.0400),
-    'Payatas': LatLng(14.7015, 121.0965),
-    'Batasan Hills': LatLng(14.6831, 121.0912),
-    'Holy Spirit': LatLng(14.6694, 121.0777),
-    'Matandang Balara': LatLng(14.6574, 121.0823),
-    'Pasong Tamo': LatLng(14.6499, 121.0693),
   };
 
   // Barangay boundary data - coordinates for polygon borders
@@ -110,6 +193,32 @@ class _MappingScreenState extends State<MappingScreen> {
       });
     });
   }
+
+  double _estimateBarangaySize(List<LatLng> points) {
+    double maxDistance = 0;
+    for (int i = 0; i < points.length; i++) {
+      for (int j = i + 1; j < points.length; j++) {
+        final d = _distanceBetween(points[i], points[j]);
+        if (d > maxDistance) maxDistance = d;
+      }
+    }
+    return maxDistance;
+  }
+
+  double _distanceBetween(LatLng a, LatLng b) {
+    const double earthRadius = 6371; // km
+    final dLat = _degToRad(b.latitude - a.latitude);
+    final dLon = _degToRad(b.longitude - a.longitude);
+    final lat1 = _degToRad(a.latitude);
+    final lat2 = _degToRad(b.latitude);
+
+    final aVal = sin(dLat / 2) * sin(dLat / 2) +
+        sin(dLon / 2) * sin(dLon / 2) * cos(lat1) * cos(lat2);
+    final c = 2 * atan2(sqrt(aVal), sqrt(1 - aVal));
+    return earthRadius * c;
+  }
+
+  double _degToRad(double degree) => degree * pi / 180;
 
   Future<void> _loadGeoJsonPolygons() async {
     try {
@@ -136,6 +245,8 @@ class _MappingScreenState extends State<MappingScreen> {
             .map<LatLng>(
                 (coord) => LatLng(coord[1].toDouble(), coord[0].toDouble()))
             .toList();
+
+        _barangayCentroids[name] = _getPolygonCentroid(coords);
 
         loadedPolygons.add(
           Polygon(
@@ -172,6 +283,19 @@ class _MappingScreenState extends State<MappingScreen> {
     }
   }
 
+  LatLng _getPolygonCentroid(List<LatLng> points) {
+    double latitude = 0;
+    double longitude = 0;
+
+    for (var point in points) {
+      latitude += point.latitude;
+      longitude += point.longitude;
+    }
+
+    int totalPoints = points.length;
+    return LatLng(latitude / totalPoints, longitude / totalPoints);
+  }
+
   Color _getColorForCases(int cases) {
     if (cases >= 25) {
       return Colors.red.withOpacity(0.7);
@@ -196,7 +320,7 @@ class _MappingScreenState extends State<MappingScreen> {
 
     // Process each barangay's data
     dengueData.forEach((barangay, data) {
-      final latLng = locationData[barangay];
+      final latLng = _barangayCentroids[barangay];
       final cases = data['cases'] as int;
       final severity = data['severity'] as String;
       final boundaries = barangayBoundaries[barangay];
@@ -310,6 +434,7 @@ class _MappingScreenState extends State<MappingScreen> {
               height: 1,
             ),
           ),
+          const SizedBox(height: 9),
           _buildLocationSelector(context, colorScheme),
           _buildHeatmapLegend(),
           Expanded(
@@ -647,150 +772,102 @@ class _MappingScreenState extends State<MappingScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _buildDistrictDropdown(context, colorScheme),
-          const SizedBox(width: 16),
-          _buildBarangayDropdown(context, colorScheme),
+          Expanded(
+            child: _buildBarangayDropdown(context, colorScheme),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDistrictDropdown(BuildContext context, ColorScheme colorScheme) {
-    return SizedBox(
-      width: 170,
-      height: 34,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.white, width: 1.5),
-          borderRadius: BorderRadius.circular(40),
-        ),
-        child: DropdownButton<String>(
-          isExpanded: true,
-          underline: const SizedBox(),
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-          dropdownColor: const Color.fromRGBO(36, 82, 97, 1),
-          value: selectedDistrict,
-          items: [
-            DropdownMenuItem(value: null, child: Text('Select District')),
-            ...districtData.keys.map((district) {
-              return DropdownMenuItem(value: district, child: Text(district));
-            }).toList(),
-          ],
-          onChanged: (value) {
-            setState(() {
-              selectedDistrict = value;
-              selectedBarangay = null;
-            });
-
-            if (value != null) {
-              _zoomToDistrict(value); // map movement logic
-            }
-          },
-          style: const TextStyle(color: Color.fromARGB(255, 255, 255, 255)),
-          hint: Text('Select District', // No const here
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-              )),
-        ),
-      ),
-    );
-  }
-
   Widget _buildBarangayDropdown(BuildContext context, ColorScheme colorScheme) {
-    final barangays =
-        selectedDistrict != null ? districtData[selectedDistrict]! : <String>[];
+    final allBarangays = _barangayCentroids.keys.toList()..sort();
 
     return SizedBox(
-      width: 170,
-      height: 34,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.white, width: 1.5),
-          borderRadius: BorderRadius.circular(40),
+      width: double.infinity,
+      height: 40,
+      child: DropdownSearch<String>(
+        items: allBarangays,
+        selectedItem: selectedBarangay,
+        dropdownDecoratorProps: DropDownDecoratorProps(
+          dropdownSearchDecoration: InputDecoration(
+            labelText: "Select Barangay",
+            labelStyle: const TextStyle(color: Colors.white, fontSize: 12),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(40),
+              borderSide: const BorderSide(color: Colors.white, width: 1.5),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(40),
+              borderSide: const BorderSide(color: Colors.white, width: 1.5),
+            ),
+          ),
         ),
-        child: DropdownButton<String>(
-          isExpanded: true,
-          underline: const SizedBox(),
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-          dropdownColor: const Color.fromRGBO(36, 82, 97, 1),
-          value: selectedBarangay,
-          items: [
-            if (selectedDistrict != null)
-              DropdownMenuItem(value: null, child: Text('Select Barangay')),
-            ...barangays.map((barangay) {
-              return DropdownMenuItem(value: barangay, child: Text(barangay));
-            }).toList(),
-          ],
-          onChanged: selectedDistrict == null
-              ? null
-              : (value) {
-                  setState(() {
-                    selectedBarangay = value;
-                  });
-
-                  if (value != null && locationData.containsKey(value)) {
-                    _zoomToLocation(locationData[value]!);
-
-                    final data = dengueData[value];
-                    if (data != null) {
-                      _showDengueDetails(
-                        context,
-                        value,
-                        data['cases'] as int,
-                        data['severity'] as String,
-                        locationData[value]!,
-                      );
-                    }
-                  }
-                },
-          style: const TextStyle(color: Color.fromARGB(255, 255, 255, 255)),
-          hint: const Text('Select Barangay',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-              )),
+        popupProps: const PopupProps.menu(
+          showSearchBox: true,
+          searchFieldProps: TextFieldProps(
+            style: TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              hintText: "Search barangay...",
+              contentPadding: EdgeInsets.symmetric(horizontal: 12),
+            ),
+          ),
         ),
+        dropdownButtonProps: const DropdownButtonProps(
+          icon: Icon(Icons.arrow_drop_down, color: Colors.white),
+        ),
+        onChanged: (value) {
+          setState(() {
+            selectedBarangay = value;
+          });
+
+          if (value != null && _barangayCentroids.containsKey(value)) {
+            _zoomToLocation(_barangayCentroids[value]!, barangay: value);
+
+            final data = dengueData[value];
+            if (data != null) {
+              _showDengueDetails(
+                context,
+                value,
+                data['cases'] as int,
+                data['severity'] as String,
+                _barangayCentroids[value]!,
+              );
+            }
+          }
+        },
+        dropdownBuilder: (context, selectedItem) {
+          return Text(
+            selectedItem ?? 'Quezon City',
+            style: const TextStyle(color: Colors.white),
+          );
+        },
       ),
     );
   }
 
-  // Helper function to zoom to a district
-  void _zoomToDistrict(String district) {
-    if (!districtData.containsKey(district)) return;
+  void _zoomToLocation(LatLng location, {String? barangay}) {
+    double zoomLevel = 14.5;
 
-    final barangays = districtData[district]!;
-    if (barangays.isEmpty) return;
+    if (barangay != null && barangayBoundaries.containsKey(barangay)) {
+      final size = _estimateBarangaySize(barangayBoundaries[barangay]!);
 
-    // Calculate the center of the district
-    double totalLat = 0;
-    double totalLng = 0;
-    int count = 0;
-
-    for (final barangay in barangays) {
-      final location = locationData[barangay];
-      if (location != null) {
-        totalLat += location.latitude;
-        totalLng += location.longitude;
-        count++;
+      if (size > 2.5) {
+        zoomLevel = 13.5; // Large barangays
+      } else if (size > 1.0) {
+        zoomLevel = 14.5; // Medium
+      } else {
+        zoomLevel = 17.5; // Small, zoom in tighter
       }
     }
 
-    if (count > 0) {
-      final center = LatLng(totalLat / count, totalLng / count);
-      _zoomToLocation(center, zoom: 13.5);
-    }
-  }
-
-  // Helper function to zoom to a location
-  void _zoomToLocation(LatLng location, {double zoom = 14.5}) {
     _mapController?.animateCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
           target: location,
-          zoom: zoom,
+          zoom: zoomLevel,
         ),
       ),
     );

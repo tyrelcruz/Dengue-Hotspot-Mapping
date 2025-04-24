@@ -51,6 +51,7 @@ dependencies:
   firebase_auth: ^5.5.2
   another_flushbar: ^1.10.0
   flutter_map_geojson: ^1.0.8
+  dropdown_search: ^5.0.6
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1
