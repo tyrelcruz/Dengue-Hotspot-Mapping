@@ -10,6 +10,12 @@ import 'package:geocoding/geocoding.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 
+import 'package:buzzmap/auth/config.dart'; // Adjust the path based on your file structure
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
 class PostScreen extends StatefulWidget {
   const PostScreen({super.key});
 
@@ -20,6 +26,8 @@ class PostScreen extends StatefulWidget {
 class _PostScreenState extends State<PostScreen> {
   final TextEditingController dateController = TextEditingController();
   final TextEditingController timeController = TextEditingController();
+  final TextEditingController descriptionController = TextEditingController();
+
   final List<String> reportTypes = [
     'Breeding Site',
     'Suspected Case',
@@ -54,6 +62,47 @@ class _PostScreenState extends State<PostScreen> {
     return false;
   }
 
+  String? _combineDateAndTime(String selectedDate, String selectedTime) {
+    try {
+      // Parse date
+      DateTime parsedDate;
+      if (selectedDate.startsWith('20')) {
+        parsedDate = DateFormat('yyyy-MM-dd').parse(selectedDate);
+      } else {
+        parsedDate = DateFormat('MM-dd-yyyy').parse(selectedDate);
+      }
+
+      // Clean and split time
+      final parts = selectedTime.trim().split(RegExp(r'\s+'));
+      if (parts.length != 2) throw FormatException("Invalid time format");
+
+      final timePart = parts[0]; // e.g., "5:39"
+      final amPm = parts[1].toUpperCase(); // "PM" or "AM"
+
+      final hourMinute = timePart.split(":");
+      if (hourMinute.length != 2) throw FormatException("Invalid hour:minute");
+
+      int hour = int.parse(hourMinute[0]);
+      int minute = int.parse(hourMinute[1]);
+
+      if (amPm == "PM" && hour != 12) hour += 12;
+      if (amPm == "AM" && hour == 12) hour = 0;
+
+      final combined = DateTime(
+        parsedDate.year,
+        parsedDate.month,
+        parsedDate.day,
+        hour,
+        minute,
+      );
+
+      return combined.toUtc().toIso8601String();
+    } catch (e) {
+      print("❌ Date/time combination error: $e");
+      return null;
+    }
+  }
+
   bool _isPointInPolygon(LatLng point, List<LatLng> polygon) {
     int intersectCount = 0;
 
@@ -74,6 +123,13 @@ class _PostScreenState extends State<PostScreen> {
     }
 
     return (intersectCount % 2) == 1;
+  }
+
+  void dispose() {
+    dateController.dispose();
+    timeController.dispose();
+    descriptionController.dispose();
+    super.dispose();
   }
 
   void _disableMapScrolling() {
@@ -99,6 +155,121 @@ class _PostScreenState extends State<PostScreen> {
     });
 
     _loadGeoJsonPolygons();
+  }
+
+  Future<void> _submitPost() async {
+    if (selectedCoordinates == null ||
+        selectedBarangay == null ||
+        selectedReportType == null ||
+        dateController.text.isEmpty ||
+        timeController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please complete all required fields')),
+      );
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('authToken');
+    print('📤 Token used for post: $token');
+
+    if (token == null || token.isEmpty) {
+      print('❌ No token found in SharedPreferences');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User not authenticated')),
+      );
+      return;
+    }
+    final bool hasImages = _selectedImages.isNotEmpty;
+    final url = Uri.parse(Config.createPostUrl);
+
+    try {
+      // ✅ Combine MM-DD-YYYY + time (e.g. "04-24-2025" + "4:00 PM")
+      final String? formattedDateTime =
+          _combineDateAndTime(dateController.text, timeController.text);
+
+      if (formattedDateTime == null) {
+        throw Exception("Invalid date or time format");
+      }
+
+      if (hasImages) {
+        final request = http.MultipartRequest('POST', url);
+
+        request.headers['Authorization'] = 'Bearer $token'; // ✅ FIXED!
+
+        request.fields.addAll({
+          'barangay': selectedBarangay!,
+          'report_type': selectedReportType!,
+          'description': descriptionController.text,
+          'date_and_time': formattedDateTime,
+          'specific_location': jsonEncode({
+            "type": "Point",
+            "coordinates": [
+              selectedCoordinates!.longitude,
+              selectedCoordinates!.latitude,
+            ]
+          }),
+        });
+
+        for (final image in _selectedImages) {
+          request.files.add(
+            await http.MultipartFile.fromPath('images', image.path),
+          );
+        }
+
+        final response = await request.send();
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Post submitted successfully!')),
+          );
+          Navigator.pop(context);
+        } else {
+          throw Exception('Image post failed');
+        }
+      } else {
+        // ✅ Define bodyData FIRST
+        final bodyData = {
+          "barangay": selectedBarangay,
+          "report_type": selectedReportType,
+          "description": descriptionController.text,
+          "date_and_time": formattedDateTime,
+          "specific_location": {
+            "type": "Point",
+            "coordinates": [
+              selectedCoordinates!.longitude,
+              selectedCoordinates!.latitude,
+            ],
+          },
+        };
+
+        print('📦 Sending payload: ${jsonEncode(bodyData)}');
+
+        final response = await http.post(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(bodyData),
+        );
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Post submitted successfully!')),
+          );
+          Navigator.pop(context);
+        } else {
+          print('🔁 Response: ${response.statusCode} ${response.body}');
+          throw Exception('Post failed');
+        }
+      }
+    } catch (e) {
+      print('Submission error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error submitting post')),
+      );
+    }
   }
 
   Future<void> _loadGeoJsonPolygons() async {
@@ -595,6 +766,7 @@ class _PostScreenState extends State<PostScreen> {
                   Text('📝 Description:', style: theme.textTheme.titleSmall),
                   const SizedBox(height: 8),
                   TextFormField(
+                    controller: descriptionController,
                     maxLines: 15,
                     keyboardType: TextInputType.multiline,
                     style: theme.textTheme.bodyMedium,
@@ -689,7 +861,7 @@ class _PostScreenState extends State<PostScreen> {
                 height: 30,
                 width: 130,
                 child: FloatingActionButton.extended(
-                  onPressed: () {},
+                  onPressed: _submitPost,
                   backgroundColor: Colors.transparent,
                   elevation: 0,
                   label: Padding(

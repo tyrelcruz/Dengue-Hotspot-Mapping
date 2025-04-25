@@ -11,6 +11,8 @@ class Config {
   static String get verifyOtpUrl => '$baseUrl/api/v1/auth/verify-otp';
   static String get resendOtpUrl => '$baseUrl/api/v1/auth/resend-otp';
   static String get googleLoginUrl => '$baseUrl/api/v1/auth/google-login';
+  static String get createPostUrl => '$baseUrl/api/v1/reports';
+  static String get createPostwImageUrl => '$baseUrl/api/v1/posts';
 }
 
 //AuthService

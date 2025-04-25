@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -15,22 +16,33 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _startAnimation();
+    _startSplashFlow();
   }
 
-  void _startAnimation() {
+  void _startSplashFlow() {
     Future.delayed(const Duration(seconds: 1), () {
       if (!mounted) return;
       setState(() {
         _showFirstImage = !_showFirstImage;
       });
-
-      // Future.delayed(const Duration(seconds: 3), () {
-      //   if (mounted) {
-      //     Navigator.pushReplacementNamed(context, '/welcome');
-      //   }
-      // });
     });
+
+    // Navigate after 3 seconds and check token
+    Future.delayed(const Duration(seconds: 3), _checkAuthAndNavigate);
+  }
+
+  Future<void> _checkAuthAndNavigate() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('authToken');
+    debugPrint('🧪 SplashScreen token check: $token');
+
+    if (!mounted) return;
+
+    if (token != null && token.isNotEmpty) {
+      Navigator.pushReplacementNamed(context, '/home');
+    } else {
+      Navigator.pushReplacementNamed(context, '/login');
+    }
   }
 
   @override

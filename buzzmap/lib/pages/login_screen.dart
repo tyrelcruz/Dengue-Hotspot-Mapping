@@ -86,12 +86,21 @@ class _LoginScreenState extends State<LoginScreen> {
         }),
       );
 
+      print('🔐 Raw login response: ${response.body}');
       final responseData = jsonDecode(response.body);
+      final token = responseData['accessToken']; // ✅ FIXED KEY
+      print('🔑 Token received: $token');
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 &&
+          token != null &&
+          token is String &&
+          token.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('authToken', token);
+        print('✅ Token saved to SharedPreferences');
+
         await _saveCredentials();
 
-        // Check if user needs OTP verification
         if (responseData['user']?['verified'] == false) {
           Navigator.pushReplacement(
             context,
@@ -106,12 +115,11 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } else {
-        final errorMessage = responseData['errors'] is List
-            ? responseData['errors'].join('\n')
-            : responseData['message'] ?? 'Login failed. Please try again.';
-        _showError(errorMessage);
+        print('❌ Token not saved or missing in response');
+        _showError('Login failed: No valid token received');
       }
     } catch (e) {
+      print('❌ Login error: $e');
       _showError('Network error. Please check your connection.');
     } finally {
       if (mounted) {
@@ -151,9 +159,12 @@ class _LoginScreenState extends State<LoginScreen> {
           'idToken': googleAuth.idToken,
         }),
       );
+      print('🔐 Raw login response: ${response.body}');
+      final responseData = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
+
         if (responseData['user']?['verified'] == false) {
           Navigator.pushReplacement(
             context,
