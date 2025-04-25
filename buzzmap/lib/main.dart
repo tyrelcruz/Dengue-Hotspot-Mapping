@@ -1,4 +1,3 @@
-import 'package:buzzmap/pages/otp_screen.dart';
 import 'package:buzzmap/pages/splash_screen.dart';
 import 'package:buzzmap/pages/welcome_screen.dart';
 
@@ -158,7 +157,7 @@ class MyApp extends StatelessWidget {
                 ),
               ],
             ),
-            initialRoute: '/',
+            initialRoute: '/home',
             routes: {
               '/': (context) => const SplashScreen(),
               '/welcome': (context) => const WelcomeScreen(),

@@ -5,7 +5,6 @@ import 'package:buzzmap/auth/config.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:another_flushbar/flushbar.dart';
-import 'package:buzzmap/errors/flushbar.dart';
 
 class OTPScreen extends StatefulWidget {
   final String email;

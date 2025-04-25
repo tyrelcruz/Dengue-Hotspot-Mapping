@@ -52,6 +52,8 @@ dependencies:
   another_flushbar: ^1.10.0
   flutter_map_geojson: ^1.0.8
   dropdown_search: ^5.0.6
+  geocoding: ^2.1.0
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1

@@ -131,8 +131,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
               }
             },
             decoration: InputDecoration(
-              label: buildLabel(),
-              hintText: widget.hintText,
+              labelText: widget.hintText,
               hintStyle: theme.textTheme.bodyMedium?.copyWith(
                 color: colorScheme.primary.withOpacity(0.5),
               ),
@@ -181,8 +180,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
         color: colorScheme.primary,
       ),
       decoration: InputDecoration(
-        label: buildLabel(), // Add the label here
-        hintText: widget.hintText,
+        labelText: widget.hintText,
         hintStyle: theme.textTheme.bodyMedium?.copyWith(
           color: colorScheme.primary.withOpacity(0.5),
         ),

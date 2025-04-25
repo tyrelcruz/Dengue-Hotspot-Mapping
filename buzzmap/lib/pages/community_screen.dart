@@ -1,6 +1,6 @@
 import 'package:buzzmap/data/community_data.dart';
 import 'package:buzzmap/main.dart';
-import 'package:buzzmap/pages/post_screen.dart';
+import 'package:buzzmap/pages/post/post_screen.dart';
 import 'package:buzzmap/widgets/announcement_card.dart';
 import 'package:buzzmap/widgets/appbar/custom_app_bar.dart';
 import 'package:buzzmap/widgets/custom_search_bar.dart';

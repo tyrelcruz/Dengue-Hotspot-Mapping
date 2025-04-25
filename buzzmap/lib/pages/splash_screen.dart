@@ -25,11 +25,11 @@ class _SplashScreenState extends State<SplashScreen> {
         _showFirstImage = !_showFirstImage;
       });
 
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/welcome');
-        }
-      });
+      // Future.delayed(const Duration(seconds: 3), () {
+      //   if (mounted) {
+      //     Navigator.pushReplacementNamed(context, '/welcome');
+      //   }
+      // });
     });
   }
 

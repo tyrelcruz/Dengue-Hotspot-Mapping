@@ -5,7 +5,7 @@ import 'package:buzzmap/widgets/appbar/custom_app_bar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:buzzmap/pages/location_details_screen.dart';
-import 'package:buzzmap/pages/post_screen.dart';
+import 'package:buzzmap/pages/post/post_screen.dart';
 import 'package:buzzmap/tips/id_mosquito.dart';
 import 'package:latlong2/latlong.dart';
 
