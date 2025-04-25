@@ -207,7 +207,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
+                gradient: LinearGradient(
+                  colors: [
+                    const Color.fromRGBO(248, 169, 0, 1),
+                    theme.colorScheme.secondary,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
@@ -231,7 +238,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   width: 18,
                   height: 18,
                   colorFilter: ColorFilter.mode(
-                    Colors.white,
+                    theme.colorScheme.primary,
                     BlendMode.srcIn,
                   ),
                 ),

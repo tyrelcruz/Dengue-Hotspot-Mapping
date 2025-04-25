@@ -27,6 +27,8 @@ class _PostScreenState extends State<PostScreen> {
     'Infestation'
   ];
 
+  Set<Polygon> _barangayPolygons = {};
+
   List<File> _selectedImages = [];
 
   final ImagePicker _picker = ImagePicker();
@@ -40,6 +42,39 @@ class _PostScreenState extends State<PostScreen> {
   Map<String, LatLng> barangayCenters = {};
 
   bool _mapScrollable = true;
+
+  bool _isPointInsideBarangay(LatLng point) {
+    for (final polygon in _barangayPolygons) {
+      if (polygon.polygonId.value == 'outside-quezon-city') continue;
+
+      if (_isPointInPolygon(point, polygon.points)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isPointInPolygon(LatLng point, List<LatLng> polygon) {
+    int intersectCount = 0;
+
+    for (int j = 0; j < polygon.length - 1; j++) {
+      LatLng p1 = polygon[j];
+      LatLng p2 = polygon[j + 1];
+
+      if ((p1.longitude > point.longitude) !=
+          (p2.longitude > point.longitude)) {
+        double atX = (p2.latitude - p1.latitude) *
+                (point.longitude - p1.longitude) /
+                (p2.longitude - p1.longitude) +
+            p1.latitude;
+        if (point.latitude < atX) {
+          intersectCount++;
+        }
+      }
+    }
+
+    return (intersectCount % 2) == 1;
+  }
 
   void _disableMapScrolling() {
     setState(() {
@@ -57,10 +92,98 @@ class _PostScreenState extends State<PostScreen> {
   void initState() {
     super.initState();
     loadBarangayCentersFromGeoJson().then((data) {
+      _addQuezonCityMask();
       setState(() {
         barangayCenters = data;
       });
     });
+
+    _loadGeoJsonPolygons();
+  }
+
+  Future<void> _loadGeoJsonPolygons() async {
+    try {
+      final String data =
+          await rootBundle.loadString('assets/geojson/barangays.geojson');
+      final geo = json.decode(data);
+
+      Set<Polygon> loadedPolygons = {};
+      for (final feature in geo['features']) {
+        final properties = feature['properties'];
+        final geometry = feature['geometry'];
+
+        if (properties == null ||
+            geometry == null ||
+            geometry['type'] != 'Polygon') continue;
+
+        final name = properties['name'] ?? properties['NAME_3'];
+        if (name == null) continue;
+
+        final coords = geometry['coordinates'][0]
+            .map<LatLng>(
+                (coord) => LatLng(coord[1].toDouble(), coord[0].toDouble()))
+            .toList();
+
+        loadedPolygons.add(
+          Polygon(
+            polygonId: PolygonId(name),
+            points: coords,
+            strokeColor: Colors.black,
+            strokeWidth: 1,
+            fillColor: Colors.transparent,
+          ),
+        );
+      }
+
+      setState(() {
+        _barangayPolygons = loadedPolygons;
+      });
+    } catch (e) {
+      print('Error loading GeoJSON polygons: $e');
+    }
+  }
+
+  Future<void> _addQuezonCityMask() async {
+    try {
+      final String data =
+          await rootBundle.loadString('assets/geojson/barangays.geojson');
+      final geo = json.decode(data);
+
+      List<List<LatLng>> qcBarangayHoles = [];
+
+      for (final feature in geo['features']) {
+        final geometry = feature['geometry'];
+
+        if (geometry == null || geometry['type'] != 'Polygon') continue;
+
+        final coords = geometry['coordinates'][0]
+            .map<LatLng>((coord) => LatLng(coord[1], coord[0]))
+            .toList();
+
+        qcBarangayHoles.add(coords);
+      }
+
+      final List<LatLng> outerBounds = [
+        const LatLng(15.0, 120.5),
+        const LatLng(15.0, 121.5),
+        const LatLng(14.2, 121.5),
+        const LatLng(14.2, 120.5),
+      ];
+
+      setState(() {
+        _barangayPolygons.add(
+          Polygon(
+            polygonId: const PolygonId('outside-quezon-city'),
+            points: outerBounds,
+            holes: qcBarangayHoles,
+            fillColor: Colors.red.withOpacity(0.25),
+            strokeColor: Colors.transparent,
+          ),
+        );
+      });
+    } catch (e) {
+      print('Error fixing QC mask: $e');
+    }
   }
 
   Future<void> _pickImage() async {
@@ -309,6 +432,7 @@ class _PostScreenState extends State<PostScreen> {
                               child: AbsorbPointer(
                                 absorbing: false,
                                 child: GoogleMap(
+                                  polygons: _barangayPolygons,
                                   onMapCreated: (controller) {
                                     mapController = controller;
                                   },
@@ -318,9 +442,46 @@ class _PostScreenState extends State<PostScreen> {
                                     zoom: 11.8,
                                   ),
                                   onTap: (LatLng pos) async {
+                                    if (!_isPointInsideBarangay(pos)) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Outside Quezon City'),
+                                          backgroundColor: Colors.redAccent,
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                      return;
+                                    }
+
                                     setState(() {
                                       selectedCoordinates = pos;
                                     });
+
+                                    try {
+                                      List<Placemark> placemarks =
+                                          await placemarkFromCoordinates(
+                                              pos.latitude, pos.longitude);
+
+                                      if (placemarks.isNotEmpty) {
+                                        final place = placemarks.first;
+                                        setState(() {
+                                          selectedAddress =
+                                              '${place.name}, ${place.subLocality}, ${place.locality}';
+                                          selectedBarangay = place.subLocality;
+                                          selectedDistrict =
+                                              guessDistrictFromBarangay(
+                                                  place.subLocality);
+                                        });
+                                      }
+                                    } catch (e) {
+                                      print("Reverse geocoding error: $e");
+                                      setState(() {
+                                        selectedAddress = null;
+                                        selectedBarangay = null;
+                                        selectedDistrict = null;
+                                      });
+                                    }
 
                                     try {
                                       List<Placemark> placemarks =

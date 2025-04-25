@@ -68,6 +68,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
               TextSpan(
                 text: widget.hintText,
                 style: theme.textTheme.bodyMedium?.copyWith(
+                  fontFamily: 'Inter-Regular',
                   color: colorScheme.primary,
                 ),
               ),
@@ -99,6 +100,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
             menuMaxHeight:
                 200, // Enables scrolling when items exceed the height
             style: theme.textTheme.bodyMedium?.copyWith(
+              fontFamily: 'Inter-Regular',
               fontSize: 12,
               fontStyle: FontStyle.italic,
               fontWeight: FontWeight.w600,
@@ -133,6 +135,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
             decoration: InputDecoration(
               labelText: widget.hintText,
               hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                fontFamily: 'Inter-Regular',
                 color: colorScheme.primary.withOpacity(0.5),
               ),
               fillColor: colorScheme.surface,
@@ -177,11 +180,13 @@ class _CustomTextFieldState extends State<CustomTextField> {
       readOnly: widget.isDate || widget.isTime,
       onChanged: widget.onChanged,
       style: theme.textTheme.bodyMedium?.copyWith(
+        fontFamily: 'Inter-Regular',
         color: colorScheme.primary,
       ),
       decoration: InputDecoration(
         labelText: widget.hintText,
         hintStyle: theme.textTheme.bodyMedium?.copyWith(
+          fontFamily: 'Inter-Regular',
           color: colorScheme.primary.withOpacity(0.5),
         ),
         fillColor: colorScheme.surface,

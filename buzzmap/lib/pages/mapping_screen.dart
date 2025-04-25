@@ -27,8 +27,6 @@ class _MappingScreenState extends State<MappingScreen> {
 
   Map<String, LatLng> _barangayCentroids = {};
 
-  bool _showHeatmap = true;
-  bool _showBorders = true;
   bool _isLoading = true;
   MapType _currentMapType = MapType.normal;
 
@@ -323,7 +321,6 @@ class _MappingScreenState extends State<MappingScreen> {
       final latLng = _barangayCentroids[barangay];
       final cases = data['cases'] as int;
       final severity = data['severity'] as String;
-      final boundaries = barangayBoundaries[barangay];
 
       if (latLng != null) {
         // Only add circles if heatmap is enabled
