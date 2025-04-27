@@ -1,51 +1,60 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 
-const Schema = mongoose.Schema
+const Schema = mongoose.Schema;
 
 const accountSchema = new Schema({
-  // ? Should we use _id instead of account_id?
-  // account_id: {
-  //   type: String,
-  //   required: true,
-  //   unique: true
-  // },
   username: {
     type: String,
-    required: [true, 'Please provide a username']
+    required: [true, "Please provide a username"],
   },
   email: {
     type: String,
     lowercase: true,
-    required: [true, 'Please provide an email address'],
+    required: [true, "Please provide an email address"],
     match: [
       /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/,
       "Please provide a valid email",
     ],
-    unique: true
+    unique: true,
   },
   password: {
     type: String,
-    required: [true, 'Please provide a password'],
-    minLength: 8
+    required: [true, "Please provide a password"],
+    minLength: 8,
+  },
+  authProvider: {
+    type: String,
+    enum: ["local", "google"],
+    required: true,
+    default: "local",
   },
   role: {
     type: String,
     required: true,
-    enum: ['admin', 'user'],
-    default: 'user',
+    enum: ["admin", "user"],
+    default: "user",
+  },
+  verified: {
+    type: Boolean,
+    default: false,
   },
 });
 
-accountSchema.pre('save', async function (next) {
+accountSchema.pre("save", async function (next) {
+  if (this.authProvider !== "local" || !this.isModified("password")) {
+    return next();
+  }
+
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
 
 accountSchema.methods.comparePassword = async function (candidatePassword) {
-  const isMatch = await bcrypt.compare(candidatePassword, this.password);
-  return isMatch;
-}
+  if (this.authProvider !== "local" || !this.password) return false;
 
-module.exports = mongoose.model('Account', accountSchema);
+  return await bcrypt.compare(candidatePassword, this.password);
+};
+
+module.exports = mongoose.model("Account", accountSchema);
