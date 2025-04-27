@@ -217,7 +217,11 @@ class _PostScreenState extends State<PostScreen> {
           );
         }
 
-        final response = await request.send();
+        final streamedResponse = await request.send();
+        final response = await http.Response.fromStream(streamedResponse);
+
+        debugPrint('🔁 Image post response status: ${response.statusCode}');
+        debugPrint('🔁 Image post response body: ${response.body}');
 
         if (response.statusCode == 200 || response.statusCode == 201) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -225,6 +229,9 @@ class _PostScreenState extends State<PostScreen> {
           );
           Navigator.pop(context);
         } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Image Post Failed: ${response.body}')),
+          );
           throw Exception('Image post failed');
         }
       } else {
@@ -265,10 +272,12 @@ class _PostScreenState extends State<PostScreen> {
         }
       }
     } catch (e) {
-      print('Submission error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error submitting post')),
-      );
+      if (e is http.Response) {
+        debugPrint('❌ Backend error response: ${e.body}');
+      } else {
+        debugPrint('❌ Error submitting post: $e');
+      }
+      throw Exception('Image post failed');
     }
   }
 

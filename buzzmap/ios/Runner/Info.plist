@@ -46,6 +46,13 @@
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
     
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>http</string>
+        <string>https</string>
+    </array>
+
+
     <!-- Google Maps API Key -->
     <key>GMSApiKey</key>
     <string>AIzaSyAjVcilPoaJHytTgyBnLiW2oH7NKCLOmvk</string>

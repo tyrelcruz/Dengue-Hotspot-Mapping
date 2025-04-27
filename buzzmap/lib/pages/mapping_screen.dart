@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:buzzmap/data/dengue_data.dart';
 import 'package:dropdown_search/dropdown_search.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class MappingScreen extends StatefulWidget {
   const MappingScreen({super.key});
@@ -16,7 +17,8 @@ class MappingScreen extends StatefulWidget {
   State<MappingScreen> createState() => _MappingScreenState();
 }
 
-class _MappingScreenState extends State<MappingScreen> {
+class _MappingScreenState extends State<MappingScreen>
+    with SingleTickerProviderStateMixin {
   GoogleMapController? _mapController;
   String? selectedDistrict;
   String? selectedBarangay;
@@ -24,15 +26,19 @@ class _MappingScreenState extends State<MappingScreen> {
   Set<Marker> _markers = {};
   Set<Polygon> _polygons = {};
   Set<Polygon> _barangayPolygons = {};
+  String? selectedSeverity;
+
+  PolygonId? _selectedPolygonId;
 
   Map<String, LatLng> _barangayCentroids = {};
+  bool _isCardVisible = true; // 🔥 control floating card visibility
 
   bool _isLoading = true;
   MapType _currentMapType = MapType.normal;
 
   final CameraPosition _initialCameraPosition = const CameraPosition(
-    target: LatLng(14.6700, 121.0437),
-    zoom: 11.8,
+    target: LatLng(14.6760, 121.0437),
+    zoom: 10.7,
   );
 
   // Layer control options
@@ -171,6 +177,8 @@ class _MappingScreenState extends State<MappingScreen> {
       'Pasong Tamo',
     ],
   };
+  late AnimationController _bounceController;
+  late Animation<double> _bounceAnimation;
 
   // Barangay boundary data - coordinates for polygon borders
   final Map<String, List<LatLng>> barangayBoundaries = {
@@ -180,6 +188,19 @@ class _MappingScreenState extends State<MappingScreen> {
   @override
   void initState() {
     super.initState();
+
+    _bounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true); // 🔥 bounce back and forth
+
+    _bounceAnimation = Tween<double>(begin: 0, end: 10).animate(
+      CurvedAnimation(
+        parent: _bounceController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
     // Call the GeoJSON loading function
     _loadGeoJsonPolygons();
 
@@ -193,14 +214,17 @@ class _MappingScreenState extends State<MappingScreen> {
   }
 
   double _estimateBarangaySize(List<LatLng> points) {
-    double maxDistance = 0;
+    if (points.length < 3) return 0.0;
+
+    double area = 0.0;
+
     for (int i = 0; i < points.length; i++) {
-      for (int j = i + 1; j < points.length; j++) {
-        final d = _distanceBetween(points[i], points[j]);
-        if (d > maxDistance) maxDistance = d;
-      }
+      final p1 = points[i];
+      final p2 = points[(i + 1) % points.length];
+      area += (p1.longitude * p2.latitude) - (p2.longitude * p1.latitude);
     }
-    return maxDistance;
+
+    return area.abs() / 2.0; // approximate size
   }
 
   double _distanceBetween(LatLng a, LatLng b) {
@@ -246,15 +270,19 @@ class _MappingScreenState extends State<MappingScreen> {
 
         _barangayCentroids[name] = _getPolygonCentroid(coords);
 
-        loadedPolygons.add(
-          Polygon(
-            polygonId: PolygonId(name),
-            points: coords,
-            strokeColor: color,
-            strokeWidth: 2,
-            fillColor: color.withOpacity(0.3),
-          ),
-        );
+        loadedPolygons.add(Polygon(
+          polygonId: PolygonId(name),
+          points: coords,
+          strokeColor:
+              _selectedPolygonId == PolygonId(name) ? Colors.redAccent : color,
+          strokeWidth: _selectedPolygonId == PolygonId(name) ? 4 : 2,
+          fillColor: color.withOpacity(0.3),
+          consumeTapEvents: true,
+          onTap: () {
+            _onBarangayPolygonTapped(name);
+          },
+        ));
+        barangayBoundaries[name] = coords;
       }
 
       setState(() {
@@ -309,6 +337,70 @@ class _MappingScreenState extends State<MappingScreen> {
   double _getRadiusForCases(int cases) {
     // Base radius on case count with min and max limits
     return min(max(cases * 15.0, 150.0), 400.0);
+  }
+
+  void _onBarangayPolygonTapped(String barangayName) {
+    final data = dengueData[barangayName];
+
+    if (data != null) {
+      setState(() {
+        selectedBarangay = barangayName;
+        selectedSeverity = data['severity'] as String;
+        _selectedPolygonId = PolygonId(barangayName);
+        _isCardVisible = true;
+      });
+
+      final boundaryPoints = barangayBoundaries[barangayName];
+      if (boundaryPoints != null && boundaryPoints.isNotEmpty) {
+        print(
+            'Zooming to $barangayName with ${boundaryPoints.length} points'); // Debug
+        _fitPolygonToScreen(boundaryPoints);
+      } else {
+        print('No boundary points found for $barangayName'); // Debug
+        // Fallback to centroid if no boundaries
+        final centroid = _barangayCentroids[barangayName];
+        if (centroid != null) {
+          _zoomToLocation(centroid, barangay: barangayName);
+        }
+      }
+    }
+  }
+
+  void _fitPolygonToScreen(List<LatLng> points) {
+    if (points.isEmpty) return;
+
+    // First pass to find min/max
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+
+    for (var point in points) {
+      minLat = min(minLat, point.latitude);
+      maxLat = max(maxLat, point.latitude);
+      minLng = min(minLng, point.longitude);
+      maxLng = max(maxLng, point.longitude);
+    }
+
+    // Handle edge case where all points might be the same
+    if (minLat == maxLat) {
+      minLat -= 0.001;
+      maxLat += 0.001;
+    }
+    if (minLng == maxLng) {
+      minLng -= 0.001;
+      maxLng += 0.001;
+    }
+
+    final bounds = LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+
+    // Add some padding and animate
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLngBounds(bounds, 100), // Increased padding to 100
+    );
   }
 
   void _updateMapLayers() {
@@ -434,7 +526,9 @@ class _MappingScreenState extends State<MappingScreen> {
           const SizedBox(height: 9),
           _buildLocationSelector(context, colorScheme),
           _buildHeatmapLegend(),
-          Expanded(
+          SizedBox(
+            height: MediaQuery.of(context).size.height *
+                0.57, // 🔥 45% of screen height (or adjust)
             child: Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12),
@@ -442,6 +536,7 @@ class _MappingScreenState extends State<MappingScreen> {
                 borderRadius: BorderRadius.circular(12),
                 child: Stack(
                   children: [
+                    // 1. Google Map
                     GoogleMap(
                       mapType: _currentMapType,
                       initialCameraPosition: _initialCameraPosition,
@@ -455,6 +550,8 @@ class _MappingScreenState extends State<MappingScreen> {
                       zoomControlsEnabled: true,
                       mapToolbarEnabled: false,
                     ),
+
+                    // 2. Loading indicator
                     if (_isLoading)
                       Center(
                         child: Container(
@@ -473,7 +570,170 @@ class _MappingScreenState extends State<MappingScreen> {
                           ),
                         ),
                       ),
+
+                    // 3. Map layer controls
                     _buildLayerControls(),
+
+// 4. Floating Dengue Intervention Card (Always visible)
+                    if (_isCardVisible)
+                      Positioned(
+                        bottom: 10,
+                        left: 20,
+                        right: 20,
+                        child: Material(
+                          elevation: 8,
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            height: 300, // 🔥 Fixed height so body can scroll
+                            child: Column(
+                              children: [
+                                // Top Header (Logo + Text + Arrow)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Row(
+                                          children: [
+                                            SvgPicture.asset(
+                                              'assets/icons/logo_ligthbg.svg',
+                                              width: 45,
+                                              height: 45,
+                                              fit: BoxFit.contain,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: RichText(
+                                                textAlign: TextAlign.center,
+                                                text: TextSpan(
+                                                  style: TextStyle(
+                                                    fontFamily: 'Koulen',
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                    height: 1.2,
+                                                    letterSpacing: 1.0,
+                                                  ),
+                                                  children: [
+                                                    TextSpan(
+                                                      text:
+                                                          'Broad Urban Zone and Zeroing\n',
+                                                      style: TextStyle(
+                                                        color: Theme.of(context)
+                                                            .primaryColor,
+                                                      ),
+                                                    ),
+                                                    TextSpan(
+                                                      text:
+                                                          'Metropolitan Active Prevention',
+                                                      style: TextStyle(
+                                                        color: Color(
+                                                            0xFF4AA8C7), // 🔥 Your primary color hardcoded (or whatever you want)
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                            Icons.keyboard_arrow_down),
+                                        onPressed: () {
+                                          setState(() {
+                                            _isCardVisible = false;
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                // Divider line
+                                Container(
+                                  height: 1,
+                                  color: Colors.grey[300],
+                                  margin: const EdgeInsets.symmetric(
+                                      horizontal: 12),
+                                ),
+
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Dengue Situation Overview',
+                                          style: TextStyle(
+                                            fontFamily: 'Koulen',
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        const Text(
+                                          'Recent dengue cases are rising. Follow health precautions.',
+                                          style: TextStyle(fontSize: 14),
+                                        ),
+                                        const SizedBox(height: 12),
+
+                                        // Call the method to get recommendations based on severity
+                                        _buildRecommendations(
+                                            selectedSeverity ?? 'Unknown')
+                                        // Prescriptive logic here
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // 5. Minimized FAB button if hidden
+                    if (!_isCardVisible)
+                      Positioned(
+                        bottom: 10,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: AnimatedBuilder(
+                            animation: _bounceAnimation,
+                            builder: (context, child) {
+                              return Transform.translate(
+                                offset: Offset(
+                                    0,
+                                    -_bounceAnimation
+                                        .value), // 🔥 moves up and down
+                                child: FloatingActionButton(
+                                  mini: true,
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: Colors.black,
+                                  onPressed: () {
+                                    setState(() {
+                                      _isCardVisible = true;
+                                    });
+                                  },
+                                  child: const Icon(Icons.keyboard_arrow_up),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -825,6 +1085,7 @@ class _MappingScreenState extends State<MappingScreen> {
 
             final data = dengueData[value];
             if (data != null) {
+              selectedSeverity = data['severity'] as String;
               _showDengueDetails(
                 context,
                 value,
@@ -846,20 +1107,19 @@ class _MappingScreenState extends State<MappingScreen> {
   }
 
   void _zoomToLocation(LatLng location, {String? barangay}) {
-    double zoomLevel = 14.5;
+    double zoomLevel = 16.0; // default for small areas
 
     if (barangay != null && barangayBoundaries.containsKey(barangay)) {
       final size = _estimateBarangaySize(barangayBoundaries[barangay]!);
 
       if (size > 2.5) {
-        zoomLevel = 13.5; // Large barangays
+        zoomLevel = 13.5; // Big barangay
       } else if (size > 1.0) {
-        zoomLevel = 14.5; // Medium
+        zoomLevel = 14.5; // Medium barangay
       } else {
-        zoomLevel = 17.5; // Small, zoom in tighter
+        zoomLevel = 15.5; // Small barangay 🔥 (NOT 16)
       }
     }
-
     _mapController?.animateCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
@@ -989,36 +1249,33 @@ class _MappingScreenState extends State<MappingScreen> {
   Widget _buildRecommendations(String severity) {
     List<String> recommendations;
 
-    switch (severity) {
-      case 'Severe':
-        recommendations = [
-          'Eliminate all standing water sources immediately',
-          'Use mosquito repellent at all times',
-          'Install mosquito screens on all windows',
-          'Consider community fogging operations',
-          'Watch for fever and other dengue symptoms'
-        ];
-        break;
-      case 'Moderate':
-        recommendations = [
-          'Regularly check and empty water containers',
-          'Use mosquito repellent when outdoors',
-          'Wear long-sleeved clothes',
-          'Be alert for dengue symptoms'
-        ];
-        break;
-      case 'Low':
-        recommendations = [
-          'Keep surroundings clean',
-          'Remove potential water collection points',
-          'Use mosquito repellent when necessary'
-        ];
-        break;
-      default:
-        recommendations = [
-          'Maintain cleanliness in your surroundings',
-          'Be cautious about standing water'
-        ];
+    // Prescriptive logic based on severity
+    if (severity == 'Severe') {
+      recommendations = [
+        'Eliminate all standing water sources immediately',
+        'Use mosquito repellent at all times',
+        'Install mosquito screens on all windows',
+        'Consider community fogging operations',
+        'Watch for fever and other dengue symptoms'
+      ];
+    } else if (severity == 'Moderate') {
+      recommendations = [
+        'Regularly check and empty water containers',
+        'Use mosquito repellent when outdoors',
+        'Wear long-sleeved clothes',
+        'Be alert for dengue symptoms'
+      ];
+    } else if (severity == 'Low') {
+      recommendations = [
+        'Keep surroundings clean',
+        'Remove potential water collection points',
+        'Use mosquito repellent when necessary'
+      ];
+    } else {
+      recommendations = [
+        'Maintain cleanliness in your surroundings',
+        'Be cautious about standing water'
+      ];
     }
 
     return Column(

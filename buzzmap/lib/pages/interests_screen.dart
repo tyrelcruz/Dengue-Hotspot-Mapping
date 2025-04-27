@@ -79,14 +79,30 @@ class InterestsScreen extends StatelessWidget {
                   // physics: const NeverScrollableScrollPhysics(),
                   itemCount: ArticlesData.interestsArticles.length,
                   itemBuilder: (context, index) {
-                    return ArticleSampler(
-                      article: ArticlesData.interestsArticles[index],
-                      height: 130,
-                      textColor: Colors.white,
-                      bgColor: surfaceDarkColor,
-                      isInInterest: true,
+                    return Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Color(0xFF4AA8C7),
+                            Color(0xFF245261),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(
+                            12), // optional: add rounded corners
+                      ),
+                      child: ArticleSampler(
+                        article: ArticlesData.interestsArticles[index],
+                        height: 130,
+                        textColor: Colors.white,
+                        bgColor: Colors
+                            .transparent, // <-- Make background transparent inside
+                        isInInterest: true,
+                      ),
                     );
                   },
+
                   separatorBuilder: (context, index) =>
                       const SizedBox(height: 10),
                 ),

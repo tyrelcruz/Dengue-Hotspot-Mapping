@@ -3,8 +3,8 @@ import 'package:buzzmap/widgets/post_card.dart';
 import 'package:flutter/material.dart';
 import 'package:buzzmap/widgets/appbar/custom_app_bar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:buzzmap/widgets/earthview.dart';
 
 class LocationDetailsScreen extends StatefulWidget {
   final String location;
@@ -25,9 +25,14 @@ class LocationDetailsScreen extends StatefulWidget {
 }
 
 class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
+  GoogleMapController? _mapController;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context);
+
+    final LatLng targetLocation = LatLng(widget.latitude, widget.longitude);
+
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 255, 255, 255),
       appBar: CustomAppBar(
@@ -37,25 +42,27 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       ),
       body: Column(
         children: [
-          // Background container covering 30% of the screen with the map image
           Stack(
-            clipBehavior: Clip.none, // Ensures elements are not clipped
+            clipBehavior: Clip.none,
             children: [
+              // Background container
               Container(
                 height: MediaQuery.of(context).size.height * 0.34,
                 decoration: BoxDecoration(
-                  color: Color.fromRGBO(36, 82, 97, 1), // Background color
+                  color: const Color.fromRGBO(36, 82, 97, 1),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.3), // Shadow color
-                      blurRadius: 10, // Spread of the blur
-                      offset: Offset(0, 9), // Moves the shadow down
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 9),
                     ),
                   ],
                 ),
               ),
+
+              // Location label
               Positioned(
-                top: 20, // Increase spacing
+                top: 20,
                 left: 24,
                 right: 24,
                 child: Container(
@@ -73,8 +80,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            const Color.fromARGB(255, 0, 0, 0).withOpacity(0.2),
+                        color: Colors.black.withOpacity(0.2),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
@@ -89,7 +95,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                       Text(
                         widget.location,
                         style: const TextStyle(
-                          color: Color.fromARGB(255, 255, 255, 255),
+                          color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
@@ -98,49 +104,47 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   ),
                 ),
               ),
+
+              // Google Map
               Positioned(
                 top: 70,
                 bottom: 11,
                 left: 0,
                 right: 0,
                 child: Container(
-                  height: 230,
                   margin: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(60),
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(15),
-                    child: FlutterMap(
-                      options: MapOptions(
-                        initialCenter:
-                            LatLng(widget.latitude, widget.longitude),
-                        initialZoom: 15.0,
+                    child: GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: targetLocation,
+                        zoom: 15.0,
                       ),
-                      children: [
-                        TileLayer(
-                          urlTemplate:
-                              "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                      markers: {
+                        Marker(
+                          markerId: const MarkerId('selected-location'),
+                          position: targetLocation,
+                          icon: BitmapDescriptor.defaultMarkerWithHue(
+                            BitmapDescriptor.hueRed,
+                          ),
                         ),
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: LatLng(widget.latitude, widget.longitude),
-                              width: 40,
-                              height: 40,
-                              child: Icon(
-                                Icons.location_on,
-                                color: Colors.red,
-                                size: 40.0,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                      },
+                      onMapCreated: (controller) {
+                        _mapController = controller;
+                      },
+                      zoomControlsEnabled: false,
+                      myLocationButtonEnabled: false,
+                      tiltGesturesEnabled: false,
+                      mapToolbarEnabled: false,
                     ),
                   ),
                 ),
               ),
+
+              // Back to Maps button
               Positioned(
                 bottom: 30,
                 left: 34,
@@ -184,8 +188,64 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   ),
                 ),
               ),
+
+              // Earth 3D View button
+              Positioned(
+                bottom: 30,
+                right: 34,
+                child: SizedBox(
+                  width: 170,
+                  height: 31,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color.fromRGBO(0, 168, 89, 1),
+                          Color.fromRGBO(0, 221, 135, 1),
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => EarthWebViewScreen(
+                              latitude: widget.latitude,
+                              longitude: widget.longitude,
+                            ),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        padding: EdgeInsets.zero,
+                      ),
+                      icon: const Icon(Icons.public,
+                          color: Color.fromRGBO(36, 82, 97, 1)),
+                      label: const Text(
+                        "View in Earth 3D View",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontStyle: FontStyle.italic,
+                          fontSize: 11,
+                          color: Color.fromRGBO(36, 82, 97, 1),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
+
           // Scrollable section
           Expanded(
             child: SingleChildScrollView(
@@ -446,5 +506,11 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
   }
 }

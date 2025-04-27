@@ -2,6 +2,7 @@ import 'package:buzzmap/main.dart';
 import 'package:buzzmap/widgets/engagement_row.dart';
 import 'package:buzzmap/widgets/user_info_row.dart';
 import 'package:flutter/material.dart';
+import 'package:buzzmap/auth/config.dart';
 
 class PostCard extends StatelessWidget {
   final String username;
@@ -173,10 +174,18 @@ class PostCard extends StatelessWidget {
   Widget _buildImageGrid(List<String> images) {
     if (images.isEmpty) return const SizedBox.shrink();
 
-    if (images.length == 1) {
+    final validImages = images.where((img) => img.isNotEmpty).toList();
+
+    if (validImages.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    if (validImages.length == 1) {
       return ClipRRect(
-        child: Image.asset(
-          images[0],
+        child: Image.network(
+          validImages[0].startsWith('http')
+              ? validImages[0]
+              : Config.baseUrl + '/' + validImages[0].replaceAll('\\', '/'),
           fit: BoxFit.cover,
           width: double.infinity,
           height: 200,
@@ -187,16 +196,20 @@ class PostCard extends StatelessWidget {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: images.length <= 2 ? 2 : 3,
+          crossAxisCount: validImages.length <= 2 ? 2 : 3,
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
           childAspectRatio: 1,
         ),
-        itemCount: images.length,
+        itemCount: validImages.length,
         itemBuilder: (context, index) {
           return ClipRRect(
-            child: Image.asset(
-              images[index],
+            child: Image.network(
+              validImages[index].startsWith('http')
+                  ? validImages[index]
+                  : Config.baseUrl +
+                      '/' +
+                      validImages[index].replaceAll('\\', '/'),
               fit: BoxFit.cover,
             ),
           );
