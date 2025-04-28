@@ -579,6 +579,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           MaterialPageRoute(
                             builder: (context) => LocationDetailsScreen(
                               location: newBarangay,
+                              streetName:
+                                  newBarangay, // 🔥 just pass barangay as placeholder street
                               latitude: coordinates.latitude,
                               longitude: coordinates.longitude,
                               district: selectedDistrict,

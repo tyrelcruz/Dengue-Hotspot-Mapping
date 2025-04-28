@@ -7,15 +7,12 @@ class EngagementRow extends StatefulWidget {
     super.key,
     required this.numUpvotes,
     required this.numDownvotes,
-    required this.numComments,
-    required this.numShares,
     this.themeMode = 'dark',
   });
 
   final int numUpvotes;
   final int numDownvotes;
-  final int numComments;
-  final int numShares;
+
   final String themeMode;
 
   @override
@@ -116,10 +113,6 @@ class _EngagementRowState extends State<EngagementRow> {
                   color: iconColor,
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  formatCount(widget.numComments),
-                  style: theme.textTheme.bodyMedium?.copyWith(color: iconColor),
-                ),
               ],
             ),
           ],
@@ -132,10 +125,6 @@ class _EngagementRowState extends State<EngagementRow> {
               color: iconColor,
             ),
             const SizedBox(width: 4),
-            Text(
-              formatCount(widget.numShares),
-              style: theme.textTheme.bodyMedium?.copyWith(color: iconColor),
-            ),
           ],
         ),
       ],

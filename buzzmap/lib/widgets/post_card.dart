@@ -14,8 +14,6 @@ class PostCard extends StatelessWidget {
   final String description;
   final int numUpvotes;
   final int numDownvotes;
-  final int numComments;
-  final int numShares;
   final List<String> images;
   final String iconUrl; // Add iconUrl parameter
   final String type;
@@ -31,8 +29,6 @@ class PostCard extends StatelessWidget {
       required this.description,
       required this.numUpvotes,
       required this.numDownvotes,
-      required this.numComments,
-      required this.numShares,
       this.images = const <String>[],
       required this.iconUrl,
       this.type = 'normal' // Add iconUrl parameter
@@ -150,8 +146,6 @@ class PostCard extends StatelessWidget {
                       EngagementRow(
                         numUpvotes: numUpvotes,
                         numDownvotes: numDownvotes,
-                        numComments: numComments,
-                        numShares: numShares,
                         themeMode: 'light',
                       ),
                     ],

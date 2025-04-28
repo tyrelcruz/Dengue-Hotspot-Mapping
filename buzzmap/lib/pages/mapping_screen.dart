@@ -9,6 +9,8 @@ import 'dart:convert';
 import 'package:buzzmap/data/dengue_data.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:buzzmap/widgets/recommendations_widget.dart';
+import 'package:geocoding/geocoding.dart';
 
 class MappingScreen extends StatefulWidget {
   const MappingScreen({super.key});
@@ -28,17 +30,19 @@ class _MappingScreenState extends State<MappingScreen>
   Set<Polygon> _barangayPolygons = {};
   String? selectedSeverity;
 
+  Map<String, String> hazardRiskLevels = {};
+
   PolygonId? _selectedPolygonId;
 
   Map<String, LatLng> _barangayCentroids = {};
-  bool _isCardVisible = true; // 🔥 control floating card visibility
+  bool _isCardVisible = false; // 🔥 control floating card visibility
 
   bool _isLoading = true;
   MapType _currentMapType = MapType.normal;
 
   final CameraPosition _initialCameraPosition = const CameraPosition(
     target: LatLng(14.6760, 121.0437),
-    zoom: 10.7,
+    zoom: 11.4,
   );
 
   // Layer control options
@@ -294,6 +298,20 @@ class _MappingScreenState extends State<MappingScreen>
     }
   }
 
+  String _convertSeverityToRisk(String severity) {
+    switch (severity) {
+      case 'Severe':
+      case 'High':
+        return 'HIGH';
+      case 'Moderate':
+        return 'MODERATE';
+      case 'Low':
+        return 'LOW';
+      default:
+        return 'UNKNOWN';
+    }
+  }
+
   Color _getColorForSeverity(String severity) {
     switch (severity) {
       case 'Low':
@@ -348,6 +366,13 @@ class _MappingScreenState extends State<MappingScreen>
         selectedSeverity = data['severity'] as String;
         _selectedPolygonId = PolygonId(barangayName);
         _isCardVisible = true;
+
+        // 👉 Add hazard levels setup
+        hazardRiskLevels = {
+          'Mosquito Breeding Risk': _convertSeverityToRisk(data['severity']),
+          'Dengue Infection Risk': _convertSeverityToRisk(data['severity']),
+          'Home Safety Status': _convertSeverityToRisk(data['severity']),
+        };
       });
 
       final boundaryPoints = barangayBoundaries[barangayName];
@@ -528,7 +553,7 @@ class _MappingScreenState extends State<MappingScreen>
           _buildHeatmapLegend(),
           SizedBox(
             height: MediaQuery.of(context).size.height *
-                0.57, // 🔥 45% of screen height (or adjust)
+                0.60, // 🔥 45% of screen height (or adjust)
             child: Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12),
@@ -690,8 +715,9 @@ class _MappingScreenState extends State<MappingScreen>
                                         const SizedBox(height: 12),
 
                                         // Call the method to get recommendations based on severity
-                                        _buildRecommendations(
-                                            selectedSeverity ?? 'Unknown')
+                                        buildRecommendations(
+                                            selectedSeverity ?? 'Unknown',
+                                            hazardRiskLevels),
                                         // Prescriptive logic here
                                       ],
                                     ),
@@ -1078,23 +1104,27 @@ class _MappingScreenState extends State<MappingScreen>
         onChanged: (value) {
           setState(() {
             selectedBarangay = value;
-          });
 
-          if (value != null && _barangayCentroids.containsKey(value)) {
-            _zoomToLocation(_barangayCentroids[value]!, barangay: value);
+            if (value != null && _barangayCentroids.containsKey(value)) {
+              _zoomToLocation(_barangayCentroids[value]!, barangay: value);
 
-            final data = dengueData[value];
-            if (data != null) {
-              selectedSeverity = data['severity'] as String;
-              _showDengueDetails(
-                context,
-                value,
-                data['cases'] as int,
-                data['severity'] as String,
-                _barangayCentroids[value]!,
-              );
+              final data = dengueData[value];
+              if (data != null) {
+                selectedSeverity = data['severity'] as String;
+
+                // 🔥 ADD THESE:
+                hazardRiskLevels = {
+                  'Mosquito Breeding Risk':
+                      _convertSeverityToRisk(data['severity']),
+                  'Dengue Infection Risk':
+                      _convertSeverityToRisk(data['severity']),
+                  'Home Safety Status':
+                      _convertSeverityToRisk(data['severity']),
+                };
+                _isCardVisible = true; // 🔥 show the card when user selects
+              }
             }
-          }
+          });
         },
         dropdownBuilder: (context, selectedItem) {
           return Text(
@@ -1130,33 +1160,74 @@ class _MappingScreenState extends State<MappingScreen>
     );
   }
 
-  // Implementation for _showDengueDetails
   void _showDengueDetails(
     BuildContext context,
     String barangay,
     int cases,
     String severity,
     LatLng location,
-  ) {
+  ) async {
+    // 🔥 Reverse geocode to get street name
+    String streetName = '';
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        location.latitude,
+        location.longitude,
+      );
+      if (placemarks.isNotEmpty) {
+        streetName = placemarks.first.street ?? '';
+      }
+    } catch (e) {
+      print('Reverse geocoding failed: $e');
+    }
+
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white, // or any color you want
+
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Container(
+      builder: (context) => SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
+            // 🔥 Clean Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  barangay,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        streetName.isNotEmpty ? streetName : barangay,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${barangay.toUpperCase()}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Container(
@@ -1177,6 +1248,8 @@ class _MappingScreenState extends State<MappingScreen>
               ],
             ),
             const SizedBox(height: 16),
+
+            // Cases
             Row(
               children: [
                 const Icon(Icons.warning_amber_rounded),
@@ -1190,7 +1263,9 @@ class _MappingScreenState extends State<MappingScreen>
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+
+            // Coordinates
             Row(
               children: [
                 const Icon(Icons.location_on),
@@ -1201,7 +1276,9 @@ class _MappingScreenState extends State<MappingScreen>
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+
+            // Recommendations
             const Text(
               'Recommendations:',
               style: TextStyle(
@@ -1210,89 +1287,46 @@ class _MappingScreenState extends State<MappingScreen>
               ),
             ),
             const SizedBox(height: 8),
-            _buildRecommendations(severity),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => LocationDetailsScreen(
-                      location: barangay, // Correct parameter name
-                      latitude:
-                          location.latitude, // Extract latitude from LatLng
-                      longitude:
-                          location.longitude, // Extract longitude from LatLng
-                      district: selectedDistrict,
+            buildRecommendations(severity, hazardRiskLevels),
+
+            const SizedBox(height: 20), // 🔥 SMALL controlled space
+
+            // View Detailed Report Button - flows after recommendations naturally
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => LocationDetailsScreen(
+                        location: barangay,
+                        streetName: streetName, // from reverse geocoding
+                        latitude: location.latitude,
+                        longitude: location.longitude,
+                        cases: dengueData[barangay]!['cases'],
+                        severity: dengueData[barangay]!['severity'],
+                        district: selectedDistrict,
+                      ),
                     ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 45),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: const Text('View Detailed Report'),
               ),
-              child: const Text('View Detailed Report'),
             ),
+            const SizedBox(height: 8), // small bottom space
           ],
         ),
       ),
-    );
-  }
-
-  // Helper method to build recommendations based on severity
-  Widget _buildRecommendations(String severity) {
-    List<String> recommendations;
-
-    // Prescriptive logic based on severity
-    if (severity == 'Severe') {
-      recommendations = [
-        'Eliminate all standing water sources immediately',
-        'Use mosquito repellent at all times',
-        'Install mosquito screens on all windows',
-        'Consider community fogging operations',
-        'Watch for fever and other dengue symptoms'
-      ];
-    } else if (severity == 'Moderate') {
-      recommendations = [
-        'Regularly check and empty water containers',
-        'Use mosquito repellent when outdoors',
-        'Wear long-sleeved clothes',
-        'Be alert for dengue symptoms'
-      ];
-    } else if (severity == 'Low') {
-      recommendations = [
-        'Keep surroundings clean',
-        'Remove potential water collection points',
-        'Use mosquito repellent when necessary'
-      ];
-    } else {
-      recommendations = [
-        'Maintain cleanliness in your surroundings',
-        'Be cautious about standing water'
-      ];
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: recommendations
-          .map((rec) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('• ',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    Expanded(child: Text(rec)),
-                  ],
-                ),
-              ))
-          .toList(),
     );
   }
 

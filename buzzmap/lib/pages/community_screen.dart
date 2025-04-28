@@ -198,8 +198,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       description: post['description'],
                       numUpvotes: post['numUpvotes'] ?? 0,
                       numDownvotes: post['numDownvotes'] ?? 0,
-                      numComments: post['numComments'] ?? 0,
-                      numShares: post['numShares'] ?? 0,
                       images: List<String>.from(post['images']),
                       iconUrl: post['iconUrl'],
                     )),

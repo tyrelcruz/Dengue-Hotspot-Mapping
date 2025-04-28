@@ -108,8 +108,6 @@ class AnnouncementCard extends StatelessWidget {
                   const EngagementRow(
                     numUpvotes: 100,
                     numDownvotes: 100,
-                    numComments: 20,
-                    numShares: 5,
                   ),
                 ],
               ),
