@@ -262,9 +262,9 @@ class _PostScreenState extends State<PostScreen> {
         );
 
         if (response.statusCode == 200 || response.statusCode == 201) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Post submitted successfully!')),
-          );
+          SnackBar(
+              content: Text(
+                  'Post submitted successfully! Waiting for verification.'));
           Navigator.pop(context);
         } else {
           print('🔁 Response: ${response.statusCode} ${response.body}');

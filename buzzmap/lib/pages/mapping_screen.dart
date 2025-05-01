@@ -12,6 +12,9 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:buzzmap/widgets/recommendations_widget.dart';
 import 'package:geocoding/geocoding.dart';
 
+import 'package:http/http.dart' as http;
+import 'package:buzzmap/auth/config.dart';
+
 class MappingScreen extends StatefulWidget {
   const MappingScreen({super.key});
 
@@ -193,6 +196,10 @@ class _MappingScreenState extends State<MappingScreen>
   void initState() {
     super.initState();
 
+    // Initialize the default layer to show Markers initially
+    _layerOptions['Markers'] =
+        false; // Keep it false initially, until user selects
+
     _bounceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -205,7 +212,7 @@ class _MappingScreenState extends State<MappingScreen>
       ),
     );
 
-    // Call the GeoJSON loading function
+    // Call the GeoJSON loading function for borders
     _loadGeoJsonPolygons();
 
     // Using a slight delay to ensure Google Maps is fully loaded
@@ -215,6 +222,58 @@ class _MappingScreenState extends State<MappingScreen>
         _isLoading = false;
       });
     });
+  }
+
+// Call this function when Markers layer is enabled
+  void _loadVerifiedReportMarkers() async {
+    if (!_layerOptions['Markers']!)
+      return; // Ensure it's only called when Markers are enabled
+
+    try {
+      final response = await http.get(
+        Uri.parse('${Config.baseUrl}/api/v1/reports'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> reports = jsonDecode(response.body);
+        final verifiedReports = reports.where(
+          (r) => r['status']?.toString().toLowerCase() == 'validated',
+        );
+
+        Set<Marker> reportMarkers = {};
+
+        for (var report in verifiedReports) {
+          final coords = report['specific_location']?['coordinates'];
+          if (coords == null || coords.length != 2) continue;
+
+          final position = LatLng(coords[1], coords[0]);
+          final barangay = report['barangay'] ?? 'Unknown';
+
+          reportMarkers.add(
+            Marker(
+              markerId: MarkerId(report['_id']),
+              position: position,
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueRed),
+              onTap: () {
+                _showDengueDetails(context, barangay, 1, 'Verified', position);
+              },
+            ),
+          );
+        }
+
+        setState(() {
+          _markers = reportMarkers; // Only validated reports will show
+        });
+      } else {
+        print('❌ Failed to fetch reports: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Exception in _loadVerifiedReportMarkers: $e');
+    }
   }
 
   double _estimateBarangaySize(List<LatLng> points) {
@@ -430,18 +489,15 @@ class _MappingScreenState extends State<MappingScreen>
 
   void _updateMapLayers() {
     Set<Circle> circles = {};
-    Set<Marker> markers = {};
     Set<Polygon> polygons = {};
 
-    // Process each barangay's data
-    dengueData.forEach((barangay, data) {
-      final latLng = _barangayCentroids[barangay];
-      final cases = data['cases'] as int;
-      final severity = data['severity'] as String;
+    // Check if Heatmap is enabled and add circles
+    if (_layerOptions['Heatmap']!) {
+      dengueData.forEach((barangay, data) {
+        final latLng = _barangayCentroids[barangay];
+        final cases = data['cases'] as int;
 
-      if (latLng != null) {
-        // Only add circles if heatmap is enabled
-        if (_layerOptions['Heatmap']!) {
+        if (latLng != null) {
           circles.add(
             Circle(
               circleId: CircleId(barangay),
@@ -452,42 +508,26 @@ class _MappingScreenState extends State<MappingScreen>
             ),
           );
         }
-
-        // Only add markers if markers are enabled
-        if (_layerOptions['Markers']!) {
-          markers.add(
-            Marker(
-              markerId: MarkerId(barangay),
-              position: latLng,
-              onTap: () => _showDengueDetails(
-                context,
-                barangay,
-                cases,
-                severity,
-                latLng,
-              ),
-              icon: BitmapDescriptor.defaultMarkerWithHue(
-                _getSeverityHue(severity),
-              ),
-            ),
-          );
-        }
-
-        // Add polygon borders if borders are enabled and we have boundary data
-        if (_layerOptions['Borders']! && _barangayPolygons.isNotEmpty) {
-          polygons = polygons.union(_barangayPolygons);
-        }
-      }
-    });
-
-    // Add GeoJSON polygons if available
-    if (_layerOptions['Borders']! && _barangayPolygons.isNotEmpty) {
-      polygons = polygons.union(_barangayPolygons);
+      });
     }
 
+    // Add polygons only if Borders are enabled
+    if (_layerOptions['Borders']!) {
+      polygons = polygons.union(_barangayPolygons);
+      // Disable Markers when Borders are enabled
+      _layerOptions['Markers'] = false; // Disable markers
+    }
+
+    // Add markers only if Markers are enabled
+    if (_layerOptions['Markers']!) {
+      _loadVerifiedReportMarkers(); // Only validated markers should be shown
+      // Disable Borders when Markers are enabled
+      _layerOptions['Borders'] = false; // Disable borders
+    }
+
+    // Apply the layers to the map
     setState(() {
       _circles = circles;
-      _markers = markers;
       _polygons = polygons;
     });
   }
@@ -798,9 +838,9 @@ class _MappingScreenState extends State<MappingScreen>
   String _getInteractionText() {
     List<String> interactionElements = [];
 
-    if (_layerOptions['Markers']!) {
-      interactionElements.add('MARKERS');
-    }
+    // if (_layerOptions['Markers']!) {
+    //   interactionElements.add('MARKERS');
+    // }
 
     if (_layerOptions['Borders']!) {
       interactionElements.add('BORDERED AREAS');
@@ -896,7 +936,7 @@ class _MappingScreenState extends State<MappingScreen>
                 ),
                 _buildLayerSwitch(
                   'Location Markers',
-                  'Pins showing barangay centers',
+                  'Pins showing user reports',
                   'Markers',
                   setState,
                 ),
@@ -908,7 +948,7 @@ class _MappingScreenState extends State<MappingScreen>
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _updateMapLayers();
+              _updateMapLayers(); // Apply the layer settings
             },
             child: const Text('Apply'),
           ),
@@ -931,6 +971,15 @@ class _MappingScreenState extends State<MappingScreen>
         onChanged: (value) {
           setState(() {
             _layerOptions[optionKey] = value;
+
+            // When one option is toggled on, the other one will be toggled off automatically
+            if (optionKey == 'Borders') {
+              _layerOptions['Markers'] =
+                  false; // Disable Markers when Borders are enabled
+            } else if (optionKey == 'Markers') {
+              _layerOptions['Borders'] =
+                  false; // Disable Borders when Markers are enabled
+            }
           });
         },
       ),

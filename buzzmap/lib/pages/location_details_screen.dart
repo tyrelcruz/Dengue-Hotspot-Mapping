@@ -76,16 +76,16 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         'Content-Type': 'application/json',
       },
     );
+    print('🔍 Raw response body: ${response.body}');
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
-
       return data.map<Map<String, dynamic>>((report) {
         return {
-          'barangay': report['barangay'],
-          'username': report['user']?['name'] ?? 'Anonymous',
+          'username': report['user']?['username'] ?? 'Anonymous',
           'whenPosted': 'Just now',
-          'location': '${report['barangay']}, Quezon City',
+          'location': report['barangay'] ?? 'Unknown Location',
+          'barangay': report['barangay'], // Add this line
           'date': report['date_and_time'].split('T').first,
           'time':
               TimeOfDay.fromDateTime(DateTime.parse(report['date_and_time']))
@@ -97,6 +97,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   report['images'].map((img) => '${Config.baseUrl}/$img'))
               : <String>[],
           'iconUrl': 'assets/icons/person_1.svg',
+          'status': report['status'], // Add status
         };
       }).toList();
     } else {
@@ -107,20 +108,33 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   Future<void> _loadReports() async {
     try {
       final reports = await fetchReports();
-      final filtered = reports
-          .where((report) =>
-              report['barangay']?.toLowerCase() ==
-              widget.location.toLowerCase())
-          .toList();
+      print('All reports: ${reports.length}');
+      print('Target barangay: ${widget.location}');
+
       setState(() {
-        _barangayPosts = filtered;
+        _barangayPosts = reports.where((report) {
+          // Debug print
+          print('Checking report: ${report['barangay']} vs ${widget.location}');
+
+          // Check status first (remove or modify this if you want to show all)
+          if (report['status']?.toString().toLowerCase() != 'validated') {
+            return false;
+          }
+
+          // Compare barangay names
+          final reportBarangay =
+              report['barangay']?.toString().trim().toLowerCase();
+          final targetBarangay = widget.location.trim().toLowerCase();
+
+          return reportBarangay == targetBarangay;
+        }).toList();
+
+        print('Filtered reports: ${_barangayPosts.length}');
         _isLoadingPosts = false;
       });
     } catch (e) {
-      print('❌ Error fetching reports: $e');
-      setState(() {
-        _isLoadingPosts = false;
-      });
+      print('❌ Error filtering reports: $e');
+      setState(() => _isLoadingPosts = false);
     }
   }
 

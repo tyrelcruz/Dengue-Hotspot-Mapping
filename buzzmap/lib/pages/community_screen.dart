@@ -51,11 +51,15 @@ class _CommunityScreenState extends State<CommunityScreen> {
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
 
-      return data.map<Map<String, dynamic>>((report) {
+      return data
+          .where((report) => report['status'] == 'Validated')
+          .map<Map<String, dynamic>>((report) {
         return {
-          'username': report['user']?['name'] ?? 'Anonymous',
+          'username': report['user']?['username'] ??
+              'Anonymous', // Changed from 'name' to 'username'
           'whenPosted': 'Just now',
           'location': '${report['barangay']}, Quezon City',
+          'barangay': report['barangay'], // Added this line
           'date': report['date_and_time'].split('T').first,
           'time':
               TimeOfDay.fromDateTime(DateTime.parse(report['date_and_time']))
@@ -67,6 +71,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   report['images'].map((img) => '${Config.baseUrl}/$img'))
               : <String>[],
           'iconUrl': 'assets/icons/person_1.svg',
+          'status': report['status'], // Added status
         };
       }).toList();
     } else {
