@@ -6,7 +6,6 @@ import 'package:buzzmap/widgets/custom_search_bar.dart';
 import 'package:buzzmap/widgets/custom_tab_bar.dart';
 import 'package:buzzmap/widgets/post_card.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -22,6 +21,11 @@ class CommunityScreen extends StatefulWidget {
 
 class _CommunityScreenState extends State<CommunityScreen> {
   int selectedIndex = 0;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _showSuggestions = false;
+  List<Map<String, dynamic>> _allPosts = [];
+  bool _isLoading = true;
 
   void _onTabSelected(int index) {
     setState(() {
@@ -46,7 +50,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
         'Content-Type': 'application/json',
       },
     );
-    print('🔍 Raw response body: ${response.body}');
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
@@ -55,11 +58,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
           .where((report) => report['status'] == 'Validated')
           .map<Map<String, dynamic>>((report) {
         return {
-          'username': report['user']?['username'] ??
-              'Anonymous', // Changed from 'name' to 'username'
+          'username': report['user']?['username'] ?? 'Anonymous',
           'whenPosted': 'Just now',
           'location': '${report['barangay']}, Quezon City',
-          'barangay': report['barangay'], // Added this line
+          'barangay': report['barangay'],
           'date': report['date_and_time'].split('T').first,
           'time':
               TimeOfDay.fromDateTime(DateTime.parse(report['date_and_time']))
@@ -67,11 +69,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
           'reportType': report['report_type'],
           'description': report['description'],
           'images': report['images'] != null
-              ? List<String>.from(
-                  report['images'].map((img) => '${Config.baseUrl}/$img'))
+              ? List<String>.from(report['images'])
               : <String>[],
           'iconUrl': 'assets/icons/person_1.svg',
-          'status': report['status'], // Added status
+          'status': report['status'],
         };
       }).toList();
     } else {
@@ -87,20 +88,20 @@ class _CommunityScreenState extends State<CommunityScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      print('❌ Error fetching reports: $e');
       setState(() => _isLoading = false);
     }
   }
 
-  List<Map<String, dynamic>> _allPosts = [];
-  bool _isLoading = true;
-
   List<Map<String, dynamic>> get _currentPosts {
-    if (selectedIndex == 2) {
-      // Optionally filter for logged-in user posts if user info is available
-      return _allPosts;
-    }
-    return _allPosts;
+    final query = _searchQuery.toLowerCase();
+    final filtered = _allPosts.where((post) {
+      return post['username'].toLowerCase().contains(query) ||
+          post['description'].toLowerCase().contains(query) ||
+          post['reportType'].toLowerCase().contains(query) ||
+          post['barangay'].toLowerCase().contains(query);
+    }).toList();
+
+    return selectedIndex == 2 ? filtered : filtered;
   }
 
   @override
@@ -114,101 +115,176 @@ class _CommunityScreenState extends State<CommunityScreen> {
         title: 'Community',
         currentRoute: '/community',
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadReports,
-        edgeOffset: 80,
-        child: SingleChildScrollView(
-          physics:
-              const AlwaysScrollableScrollPhysics(), // ensures it can be pulled
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: CustomSearchBar(),
-              ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    CustomTabBar(
-                      label: 'Popular',
-                      isSelected: selectedIndex == 0,
-                      onTap: () => _onTabSelected(0),
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _loadReports,
+            edgeOffset: 80,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: CustomSearchBar(
+                      controller: _searchController,
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value;
+                          _showSuggestions = value.isNotEmpty;
+                        });
+                      },
                     ),
-                    CustomTabBar(
-                      label: 'Latest',
-                      isSelected: selectedIndex == 1,
-                      onTap: () => _onTabSelected(1),
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        CustomTabBar(
+                          label: 'Popular',
+                          isSelected: selectedIndex == 0,
+                          onTap: () => _onTabSelected(0),
+                        ),
+                        CustomTabBar(
+                          label: 'Latest',
+                          isSelected: selectedIndex == 1,
+                          onTap: () => _onTabSelected(1),
+                        ),
+                        CustomTabBar(
+                          label: 'My Posts',
+                          isSelected: selectedIndex == 2,
+                          onTap: () => _onTabSelected(2),
+                        ),
+                      ],
                     ),
-                    CustomTabBar(
-                      label: 'My Posts',
-                      isSelected: selectedIndex == 2,
-                      onTap: () => _onTabSelected(2),
+                  ),
+                  const SizedBox(height: 16),
+                  if (selectedIndex == 0 || selectedIndex == 1) ...[
+                    RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'STAY ',
+                            style: theme.textTheme.displayLarge
+                                ?.copyWith(color: theme.colorScheme.primary),
+                          ),
+                          TextSpan(
+                            text: 'AHEAD ',
+                            style: theme.textTheme.displayLarge
+                                ?.copyWith(color: customColors?.surfaceDark),
+                          ),
+                          TextSpan(
+                            text: 'OF DENGUE',
+                            style: theme.textTheme.displayLarge
+                                ?.copyWith(color: theme.colorScheme.primary),
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Real-Time Dengue Updates from the Community.',
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 18),
+                    const AnnouncementCard(),
                   ],
-                ),
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_currentPosts.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text("No reports available yet."),
+                    )
+                  else
+                    ..._currentPosts.map((post) => PostCard(
+                          username: post['username'],
+                          whenPosted: post['whenPosted'],
+                          location: post['location'],
+                          date: post['date'],
+                          time: post['time'],
+                          reportType: post['reportType'],
+                          description: post['description'],
+                          numUpvotes: post['numUpvotes'] ?? 0,
+                          numDownvotes: post['numDownvotes'] ?? 0,
+                          images: List<String>.from(post['images']),
+                          iconUrl: post['iconUrl'],
+                        )),
+                ],
               ),
-              const SizedBox(height: 16),
-              if (selectedIndex == 0 || selectedIndex == 1) ...[
-                RichText(
-                  text: TextSpan(
-                    children: [
-                      TextSpan(
-                        text: 'stay '.toUpperCase(),
-                        style: theme.textTheme.displayLarge
-                            ?.copyWith(color: theme.colorScheme.primary),
-                      ),
-                      TextSpan(
-                        text: 'ahead '.toUpperCase(),
-                        style: theme.textTheme.displayLarge
-                            ?.copyWith(color: customColors?.surfaceDark),
-                      ),
-                      TextSpan(
-                        text: 'of dengue'.toUpperCase(),
-                        style: theme.textTheme.displayLarge
-                            ?.copyWith(color: theme.colorScheme.primary),
-                      ),
-                    ],
+            ),
+          ),
+          if (_showSuggestions)
+            Positioned(
+              top: 100,
+              left: 16,
+              right: 16,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Builder(
+                    builder: (context) {
+                      final query = _searchQuery.toLowerCase();
+                      final suggestions = _allPosts
+                          .where((post) =>
+                              post['username'].toLowerCase().contains(query) ||
+                              post['barangay'].toLowerCase().contains(query) ||
+                              post['reportType']
+                                  .toLowerCase()
+                                  .contains(query) ||
+                              post['description'].toLowerCase().contains(query))
+                          .take(5)
+                          .toList();
+
+                      if (suggestions.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Text(
+                            'No matches found.',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        );
+                      }
+
+                      return ListView(
+                        shrinkWrap: true,
+                        children: suggestions
+                            .map((post) => ListTile(
+                                  title: Text(post['description']),
+                                  subtitle: Text(
+                                    '👤 ${post['username']} · 📍 ${post['barangay']} · ⚠️ ${post['reportType']}',
+                                    style: const TextStyle(
+                                        fontSize: 12, color: Colors.grey),
+                                  ),
+                                  onTap: () {
+                                    setState(() {
+                                      _searchController.text =
+                                          post['description'];
+                                      _searchQuery = post['description'];
+                                      _showSuggestions = false;
+                                    });
+                                  },
+                                ))
+                            .toList(),
+                      );
+                    },
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Real-Time Dengue Updates from the Community.',
-                  style: theme.textTheme.titleSmall?.copyWith(),
-                ),
-                const SizedBox(height: 18),
-                const AnnouncementCard(),
-              ],
-              if (_isLoading)
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_currentPosts.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text("No reports available yet."),
-                )
-              else
-                ..._currentPosts.map((post) => PostCard(
-                      username: post['username'],
-                      whenPosted: post['whenPosted'],
-                      location: post['location'],
-                      date: post['date'],
-                      time: post['time'],
-                      reportType: post['reportType'],
-                      description: post['description'],
-                      numUpvotes: post['numUpvotes'] ?? 0,
-                      numDownvotes: post['numDownvotes'] ?? 0,
-                      images: List<String>.from(post['images']),
-                      iconUrl: post['iconUrl'],
-                    )),
-            ],
-          ),
-        ),
+              ),
+            ),
+        ],
       ),
       floatingActionButton: Stack(
         children: [
@@ -324,5 +400,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 }

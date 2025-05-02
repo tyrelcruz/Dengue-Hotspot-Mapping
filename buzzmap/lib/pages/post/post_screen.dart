@@ -169,115 +169,87 @@ class _PostScreenState extends State<PostScreen> {
       return;
     }
 
+    final url = Uri.parse(Config.createPostUrl);
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('authToken');
-    print('📤 Token used for post: $token');
-
-    if (token == null || token.isEmpty) {
-      print('❌ No token found in SharedPreferences');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not authenticated')),
-      );
-      return;
-    }
-    final bool hasImages = _selectedImages.isNotEmpty;
-    final url = Uri.parse(Config.createPostUrl);
 
     try {
-      // ✅ Combine MM-DD-YYYY + time (e.g. "04-24-2025" + "4:00 PM")
-      final String? formattedDateTime =
+      final formattedDateTime =
           _combineDateAndTime(dateController.text, timeController.text);
 
       if (formattedDateTime == null) {
-        throw Exception("Invalid date or time format");
+        throw Exception("Invalid date/time format");
       }
 
-      if (hasImages) {
-        final request = http.MultipartRequest('POST', url);
+      // Create multipart request
+      final request = http.MultipartRequest('POST', url);
+      request.headers['Authorization'] = 'Bearer $token';
 
-        request.headers['Authorization'] = 'Bearer $token'; // ✅ FIXED!
+      // Add text fields
+      request.fields.addAll({
+        'barangay': selectedBarangay!,
+        'report_type': selectedReportType!,
+        'description': descriptionController.text,
+        'date_and_time': formattedDateTime,
+        'specific_location': jsonEncode({
+          "type": "Point",
+          "coordinates": [
+            selectedCoordinates!.longitude,
+            selectedCoordinates!.latitude,
+          ]
+        }),
+      });
 
-        request.fields.addAll({
-          'barangay': selectedBarangay!,
-          'report_type': selectedReportType!,
-          'description': descriptionController.text,
-          'date_and_time': formattedDateTime,
-          'specific_location': jsonEncode({
-            "type": "Point",
-            "coordinates": [
-              selectedCoordinates!.longitude,
-              selectedCoordinates!.latitude,
-            ]
-          }),
-        });
+      // Add images (if any)
+      if (_selectedImages.isNotEmpty) {
+        debugPrint(
+            '🚀 Selected images: ${_selectedImages.map((image) => image.path).toList()}');
 
         for (final image in _selectedImages) {
+          final bytes = await image.readAsBytes();
+          final filename = image.path.split('/').last;
+
+          // Use the field name 'images' to match what the backend expects
           request.files.add(
-            await http.MultipartFile.fromPath('images', image.path),
+            http.MultipartFile.fromBytes(
+              'image_files', // This should match what multer/express expects
+              bytes,
+              filename: filename,
+            ),
           );
         }
+      }
 
-        final streamedResponse = await request.send();
-        final response = await http.Response.fromStream(streamedResponse);
+      // For debugging
+      debugPrint('🚀 Sending request with ${_selectedImages.length} images');
+      debugPrint('📄 Request fields: ${request.fields}');
+      debugPrint(
+          '📁 Request files: ${request.files.map((f) => f.field).toList()}');
 
-        debugPrint('🔁 Image post response status: ${response.statusCode}');
-        debugPrint('🔁 Image post response body: ${response.body}');
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
 
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Post submitted successfully!')),
-          );
-          Navigator.pop(context);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Image Post Failed: ${response.body}')),
-          );
-          throw Exception('Image post failed');
-        }
-      } else {
-        // ✅ Define bodyData FIRST
-        final bodyData = {
-          "barangay": selectedBarangay,
-          "report_type": selectedReportType,
-          "description": descriptionController.text,
-          "date_and_time": formattedDateTime,
-          "specific_location": {
-            "type": "Point",
-            "coordinates": [
-              selectedCoordinates!.longitude,
-              selectedCoordinates!.latitude,
-            ],
-          },
-        };
+      debugPrint('📡 Response status: ${response.statusCode}');
+      debugPrint('📡 Response body: ${response.body}');
 
-        print('📦 Sending payload: ${jsonEncode(bodyData)}');
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseData = jsonDecode(response.body);
+        debugPrint('✅ Uploaded images: ${responseData['report']['images']}');
 
-        final response = await http.post(
-          url,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-          body: jsonEncode(bodyData),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report submitted successfully!')),
         );
-
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          SnackBar(
-              content: Text(
-                  'Post submitted successfully! Waiting for verification.'));
-          Navigator.pop(context);
-        } else {
-          print('🔁 Response: ${response.statusCode} ${response.body}');
-          throw Exception('Post failed');
-        }
+        Navigator.pop(context);
+      } else {
+        throw Exception(
+            'Failed with status ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
-      if (e is http.Response) {
-        debugPrint('❌ Backend error response: ${e.body}');
-      } else {
-        debugPrint('❌ Error submitting post: $e');
-      }
-      throw Exception('Image post failed');
+      debugPrint('❌ Error submitting post: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
     }
   }
 
@@ -772,7 +744,7 @@ class _PostScreenState extends State<PostScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('📝 Description:', style: theme.textTheme.titleSmall),
+                  Text('📝 Feedback:', style: theme.textTheme.titleSmall),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: descriptionController,

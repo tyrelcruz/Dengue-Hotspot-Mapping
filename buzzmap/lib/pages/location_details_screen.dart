@@ -93,9 +93,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           'reportType': report['report_type'],
           'description': report['description'],
           'images': report['images'] != null
-              ? List<String>.from(
-                  report['images'].map((img) => '${Config.baseUrl}/$img'))
+              ? List<String>.from(report['images'])
               : <String>[],
+
           'iconUrl': 'assets/icons/person_1.svg',
           'status': report['status'], // Add status
         };
@@ -406,44 +406,63 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
           // Scrollable section
           Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Text(
-                        'WHAT OTHERS ARE REPORTING...',
-                        style: Theme.of(context).textTheme.headlineLarge,
+            child: RefreshIndicator(
+              onRefresh: _loadReports,
+              edgeOffset: 80,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Text(
+                          'WHAT OTHERS ARE REPORTING...',
+                          style: Theme.of(context).textTheme.headlineLarge,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    if (_isLoadingPosts)
-                      const Center(child: CircularProgressIndicator())
-                    else if (_barangayPosts.isEmpty)
-                      const Center(
-                          child: Text('No reports for this barangay yet.'))
-                    else
-                      ..._barangayPosts.map((post) => Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: PostCard(
-                              username: post['username'],
-                              whenPosted: post['whenPosted'],
-                              location: post['location'],
-                              date: post['date'],
-                              time: post['time'],
-                              reportType: post['reportType'],
-                              description: post['description'],
-                              images: List<String>.from(post['images']),
-                              iconUrl: post['iconUrl'],
-                              numUpvotes:
-                                  post['numUpvotes'] ?? 0, // 🔥 default to 0
-                              numDownvotes:
-                                  post['numDownvotes'] ?? 0, // 🔥 default to 0
-                            ),
-                          )),
-                  ],
+                      const SizedBox(height: 16),
+                      if (_isLoadingPosts)
+                        const Center(child: CircularProgressIndicator())
+                      else if (_barangayPosts.isEmpty)
+                        const Center(
+                            child: Text('No reports for this barangay yet.'))
+                      else
+                        ..._barangayPosts.map((post) => Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 16, horizontal: 16),
+                                child: PostCard(
+                                  username: post['username'],
+                                  whenPosted: post['whenPosted'],
+                                  location: post['location'],
+                                  date: post['date'],
+                                  time: post['time'],
+                                  reportType: post['reportType'],
+                                  description: post['description'],
+                                  images: List<String>.from(post['images']),
+                                  iconUrl: post['iconUrl'],
+                                  numUpvotes: post['numUpvotes'] ?? 0,
+                                  numDownvotes: post['numDownvotes'] ?? 0,
+                                  type: 'bordered',
+                                ),
+                              ),
+                            )),
+                    ],
+                  ),
                 ),
               ),
             ),
