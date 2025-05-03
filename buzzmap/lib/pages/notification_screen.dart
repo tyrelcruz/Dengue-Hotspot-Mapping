@@ -1,7 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-class NotificationScreen extends StatelessWidget {
+import 'package:buzzmap/services/notification_service.dart';
+
+class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
+
+  @override
+  _NotificationScreenState createState() => _NotificationScreenState();
+}
+
+class _NotificationScreenState extends State<NotificationScreen> {
+  List<dynamic> _notifications = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchNotifications();
+  }
+
+  Future<void> _fetchNotifications() async {
+    try {
+      final notificationService = NotificationService();
+      final notifications =
+          await notificationService.fetchNotifications(context);
+      setState(() {
+        _notifications =
+            notifications; // Update notifications list with fetched data
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      print('Error: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,47 +62,41 @@ class NotificationScreen extends StatelessWidget {
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: ListView(
-          children: [
-            sectionTitle("Today"),
-            notificationItem(
-              "Dengue Outbreak in Your Area!",
-              "Cases have risen by 30% in Quezon City. Take precautions now!",
-              "assets/notifications/clean.png",
-            ),
-            notificationDivider(),
-            notificationItem(
-              "High-Risk Dengue Zone Detected",
-              "A hotspot has been identified near Mandaluyong City. Avoid mosquito-prone areas.",
-              "assets/notifications/mosquitos.png",
-            ),
-            notificationDivider(),
-            notificationItem(
-              "Emergency Fumigation Scheduled",
-              "Mosquito control operations will take place in Pasay City on February 18, 2025.",
-              "assets/notifications/clearingoperation.png",
-            ),
-            notificationDivider(),
-            sectionTitle("This Week"),
-            notificationItem(
-              "New Dengue Report Near You",
-              "A user has reported a dengue case at Quezon City. Stay alert!",
-              "assets/notifications/positivedengue.png",
-            ),
-            notificationDivider(),
-            notificationItem(
-              "Mosquito Breeding Site Found",
-              "Stagnant water was reported at Caloocan City. Authorities have been notified.",
-              "assets/notifications/breedingground.png",
-            ),
-            notificationDivider(),
-            notificationItem(
-              "Check Your Home for Breeding Sites!",
-              "Empty water containers and keep surroundings clean.",
-              "assets/notifications/breedingsites.png",
-            ),
-          ],
-        ),
+        child: _isLoading
+            ? Center(child: CircularProgressIndicator())
+            : ListView(
+                children: [
+                  sectionTitle("Today"),
+                  ..._notifications.where((notification) {
+                    // Filter today's notifications
+                    return DateTime.parse(notification['createdAt'])
+                        .isAfter(DateTime.now().subtract(Duration(days: 1)));
+                  }).map((notification) {
+                    return notificationItem(
+                      notification['message'],
+                      notification['createdAt'],
+                      "assets/notifications/clean.png", // Adjust this image
+                    );
+                  }).toList(),
+                  notificationDivider(),
+                  sectionTitle("This Week"),
+                  ..._notifications.where((notification) {
+                    // Filter notifications for this week
+                    final notificationDate =
+                        DateTime.parse(notification['createdAt']);
+                    final now = DateTime.now();
+                    return notificationDate
+                            .isAfter(now.subtract(Duration(days: 7))) &&
+                        notificationDate.isBefore(now);
+                  }).map((notification) {
+                    return notificationItem(
+                      notification['message'],
+                      notification['createdAt'],
+                      "assets/notifications/clean.png", // Adjust this image
+                    );
+                  }).toList(),
+                ],
+              ),
       ),
     );
   }

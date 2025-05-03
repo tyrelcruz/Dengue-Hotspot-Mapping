@@ -14,10 +14,19 @@ import 'package:buzzmap/pages/login_screen.dart';
 //Firebase Imports
 import 'package:firebase_core/firebase_core.dart';
 
+import 'package:provider/provider.dart';
+
+import 'package:buzzmap/services/notification_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => NotificationService(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 @immutable
