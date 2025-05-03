@@ -15,6 +15,8 @@ import 'package:geocoding/geocoding.dart';
 import 'package:http/http.dart' as http;
 import 'package:buzzmap/auth/config.dart';
 
+import 'package:permission_handler/permission_handler.dart';
+
 class MappingScreen extends StatefulWidget {
   const MappingScreen({super.key});
 

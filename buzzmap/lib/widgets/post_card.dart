@@ -1,8 +1,7 @@
 import 'package:buzzmap/main.dart';
-import 'package:buzzmap/widgets/engagement_row.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:buzzmap/widgets/user_info_row.dart';
 import 'package:flutter/material.dart';
-import 'package:buzzmap/auth/config.dart';
 
 class PostCard extends StatelessWidget {
   final String username;
@@ -196,19 +195,25 @@ class PostCard extends StatelessWidget {
               context: context,
               builder: (context) {
                 return Dialog(
-                  child: Image.network(validImages[index]),
+                  child: CachedNetworkImage(
+                    imageUrl: validImages[index],
+                    placeholder: (context, url) => Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                    errorWidget: (context, url, error) => Icon(Icons.error),
+                  ),
                 );
               },
             );
           },
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              validImages[index].startsWith('http')
-                  ? validImages[index]
-                  : Config.baseUrl +
-                      '/' +
-                      validImages[index].replaceAll('\\', '/'),
+            child: CachedNetworkImage(
+              imageUrl: validImages[index],
+              placeholder: (context, url) => Center(
+                child: CircularProgressIndicator(),
+              ),
+              errorWidget: (context, url, error) => Icon(Icons.error),
               fit: BoxFit.cover,
             ),
           ),
