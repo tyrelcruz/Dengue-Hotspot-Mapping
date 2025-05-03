@@ -15,7 +15,7 @@ class PostCard extends StatelessWidget {
   final int numUpvotes;
   final int numDownvotes;
   final List<String> images;
-  final String iconUrl; // Add iconUrl parameter
+  final String iconUrl;
   final String type;
 
   const PostCard(
@@ -31,8 +31,7 @@ class PostCard extends StatelessWidget {
       required this.numDownvotes,
       this.images = const <String>[],
       required this.iconUrl,
-      this.type = 'normal' // Add iconUrl parameter
-      });
+      this.type = 'normal'});
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +61,7 @@ class PostCard extends StatelessWidget {
                 UserInfoRow(
                   title: username,
                   subtitle: whenPosted,
-                  iconUrl: iconUrl, // Pass iconUrl to UserInfoRow
+                  iconUrl: iconUrl,
                   type: 'post',
                 ),
                 const SizedBox(height: 22),
@@ -139,26 +138,7 @@ class PostCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const SizedBox(height: 10),
-                          if (images.isNotEmpty)
-                            Column(
-                              children: [
-                                const SizedBox(height: 12),
-                                ...images.map((img) => Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 12),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Image.network(
-                                          img,
-                                          width: double.infinity,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
-                                              const Icon(Icons.broken_image),
-                                        ),
-                                      ),
-                                    )),
-                              ],
-                            ),
+                          _buildImageGrid(images, context),
                         ],
                       ),
                     ],
@@ -178,7 +158,7 @@ class PostCard extends StatelessWidget {
     );
   }
 
-  Widget _buildImageGrid(List<String> images) {
+  Widget _buildImageGrid(List<String> images, BuildContext context) {
     if (images.isEmpty) return const SizedBox.shrink();
 
     final validImages = images.where((img) => img.isNotEmpty).toList();
@@ -187,30 +167,42 @@ class PostCard extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    int crossAxisCount = 2; // Default grid for 2 images per row
     if (validImages.length == 1) {
-      return ClipRRect(
-        child: Image.network(
-          validImages[0].startsWith('http')
-              ? validImages[0]
-              : Config.baseUrl + '/' + validImages[0].replaceAll('\\', '/'),
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: 200,
-        ),
-      );
-    } else {
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: validImages.length <= 2 ? 2 : 3,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-          childAspectRatio: 1,
-        ),
-        itemCount: validImages.length,
-        itemBuilder: (context, index) {
-          return ClipRRect(
+      crossAxisCount = 1; // Single image takes full width
+    } else if (validImages.length == 2) {
+      crossAxisCount = 2; // Two images in one row
+    } else if (validImages.length == 3) {
+      crossAxisCount = 2; // Two images in the first row, one in the second row
+    } else if (validImages.length == 4) {
+      crossAxisCount = 2; // Two rows with two images each
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 1,
+      ),
+      itemCount: validImages.length,
+      itemBuilder: (context, index) {
+        return GestureDetector(
+          onTap: () {
+            // Open image in full view on click
+            showDialog(
+              context: context,
+              builder: (context) {
+                return Dialog(
+                  child: Image.network(validImages[index]),
+                );
+              },
+            );
+          },
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
             child: Image.network(
               validImages[index].startsWith('http')
                   ? validImages[index]
@@ -219,9 +211,9 @@ class PostCard extends StatelessWidget {
                       validImages[index].replaceAll('\\', '/'),
               fit: BoxFit.cover,
             ),
-          );
-        },
-      );
-    }
+          ),
+        );
+      },
+    );
   }
 }
