@@ -37,7 +37,12 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       floatingActionButton: pickedLocation != null
           ? FloatingActionButton.extended(
               onPressed: () {
-                Navigator.pop(context, pickedLocation);
+                if (pickedLocation != null) {
+                  debugPrint(
+                      '🚀 Picked Coordinates: ${pickedLocation!.latitude}, ${pickedLocation!.longitude}');
+                  Navigator.pop(context,
+                      pickedLocation); // Passing the coordinates back to PostScreen
+                }
               },
               label: const Text('Select'),
               icon: const Icon(Icons.check),

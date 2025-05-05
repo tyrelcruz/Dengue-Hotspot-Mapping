@@ -169,6 +169,17 @@ class _PostScreenState extends State<PostScreen> {
       return;
     }
 
+    // Ensure the coordinates are valid numbers
+    if (selectedCoordinates!.latitude.isNaN ||
+        selectedCoordinates!.longitude.isNaN) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content:
+                Text('Invalid coordinates. Please select a valid location')),
+      );
+      return;
+    }
+
     final url = Uri.parse(Config.createPostUrl);
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('authToken');
@@ -181,6 +192,18 @@ class _PostScreenState extends State<PostScreen> {
         throw Exception("Invalid date/time format");
       }
 
+      // Create the specific_location map (DO NOT stringify it)
+      Map<String, dynamic> specificLocation = {
+        "type": "Point",
+        "coordinates": [
+          selectedCoordinates!.longitude, // Longitude first
+          selectedCoordinates!.latitude, // Latitude second
+        ]
+      };
+
+      // Debugging: print out the specific_location before sending
+      debugPrint('🚀 Request body specific_location: $specificLocation');
+
       // Create multipart request
       final request = http.MultipartRequest('POST', url);
       request.headers['Authorization'] = 'Bearer $token';
@@ -191,13 +214,12 @@ class _PostScreenState extends State<PostScreen> {
         'report_type': selectedReportType!,
         'description': descriptionController.text,
         'date_and_time': formattedDateTime,
-        'specific_location': jsonEncode({
-          "type": "Point",
-          "coordinates": [
-            selectedCoordinates!.longitude,
-            selectedCoordinates!.latitude,
-          ]
-        }),
+        // Pass the specific_location as an object, NOT as a string
+        'specific_location[type]': specificLocation["type"],
+        'specific_location[coordinates][0]':
+            specificLocation["coordinates"][0].toString(),
+        'specific_location[coordinates][1]':
+            specificLocation["coordinates"][1].toString(),
       });
 
       // Add images (if any)
@@ -209,10 +231,10 @@ class _PostScreenState extends State<PostScreen> {
           final bytes = await image.readAsBytes();
           final filename = image.path.split('/').last;
 
-          // Use the field name 'images' to match what the backend expects
+          // Use the field name 'image_files' to match what the backend expects
           request.files.add(
             http.MultipartFile.fromBytes(
-              'image_files', // This should match what multer/express expects
+              'images', // This should match what multer/express expects
               bytes,
               filename: filename,
             ),
@@ -220,7 +242,7 @@ class _PostScreenState extends State<PostScreen> {
         }
       }
 
-      // For debugging
+      // Debugging request fields
       debugPrint('🚀 Sending request with ${_selectedImages.length} images');
       debugPrint('📄 Request fields: ${request.fields}');
       debugPrint(
