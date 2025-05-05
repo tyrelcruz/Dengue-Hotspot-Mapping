@@ -89,13 +89,34 @@ class _LoginScreenState extends State<LoginScreen> {
 
       print('🔐 Raw login response: ${response.body}');
       final responseData = jsonDecode(response.body);
+
+      // Check if there is an error in the response
+      if (responseData['status'] == 'error') {
+        String errorMessage = responseData['message'] ?? 'Login failed';
+        if (errorMessage.contains('Incorrect password')) {
+          _showError('Incorrect email or password');
+        } else {
+          _showError(errorMessage);
+        }
+        return;
+      }
+
       final token = responseData['accessToken']; // ✅ FIXED KEY
+      final userRole =
+          responseData['user']?['role']; // Assuming role is returned
+
       print('🔑 Token received: $token');
 
       if (response.statusCode == 200 &&
           token != null &&
           token is String &&
           token.isNotEmpty) {
+        // Check for the role
+        if (userRole == 'admin') {
+          _showError('Admins are not allowed to login');
+          return;
+        }
+
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('authToken', token);
         print('✅ Token saved to SharedPreferences');
