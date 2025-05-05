@@ -8,7 +8,7 @@ const _sendOTPEmail = async (account, { subject, heading, bodyText }) => {
     const hashedOTP = await hashOTP(otp);
 
     await saveOTPToDatabase(account._id, hashedOTP);
-
+    console.log(otp)
     const emailContent = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6;">
         <h2>${heading}</h2>

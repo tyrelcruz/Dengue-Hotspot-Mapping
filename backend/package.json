@@ -17,6 +17,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-fileupload": "^1.5.1",
     "express-validator": "^7.2.1",
     "geojson": "^0.5.0",
     "http-status-codes": "^2.3.0",

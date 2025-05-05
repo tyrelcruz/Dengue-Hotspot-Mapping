@@ -8,7 +8,7 @@ const router = express.Router();
 
 router.post("/interventions", getInterventions);
 
-router.post("/pattern-recognition", patternRecognitionAnalysis);
+router.get("/pattern-recognition", patternRecognitionAnalysis);
 
 router.get("/cluster-check", async (req, res) => {
   try {

@@ -154,142 +154,26 @@ const getInterventions = asyncErrorHandler(async (req, res) => {
 
 const patternRecognitionAnalysis = asyncErrorHandler(async (req, res) => {
   try {
-    // Today's date range
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0); // Start of today
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999); // End of today
-
-    // Past 6 days (excluding today)
-    const sevenDaysAgo = new Date(todayStart);
-    sevenDaysAgo.setDate(todayStart.getDate() - 6);
-
-    const yesterdayEnd = new Date(todayStart);
-    yesterdayEnd.setMilliseconds(-1); // End of yesterday (just before today started)
-
-    // Fetch report data from the database
-    const reports = await Report.aggregate([
-      {
-        $facet: {
-          today: [
-            { $match: { date_and_time: { $gte: todayStart, $lte: todayEnd } } },
-            {
-              $group: {
-                _id: { barangay: "$barangay", report_type: "$report_type" },
-                today_total: { $sum: 1 },
-              },
-            },
-          ],
-          past: [
-            {
-              $match: {
-                date_and_time: { $gte: sevenDaysAgo, $lte: yesterdayEnd },
-              },
-            },
-            {
-              $group: {
-                _id: { barangay: "$barangay", report_type: "$report_type" },
-                past_total: { $sum: 1 },
-              },
-            },
-            { $project: { _id: 1, past_avg: { $divide: ["$past_total", 6] } } },
-          ],
-          report_dates: [
-            {
-              $match: {
-                date_and_time: { $gte: sevenDaysAgo, $lte: todayEnd },
-              },
-            },
-            {
-              $project: {
-                barangay: 1,
-                date_and_time: 1,
-              },
-            },
-          ],
-        },
-      },
-      {
-        $project: {
-          all_data: {
-            $concatArrays: [
-              { $ifNull: ["$today", []] },
-              { $ifNull: ["$past", []] },
-            ],
-          },
-          report_dates: 1,
-        },
-      },
-      { $unwind: "$all_data" },
-      {
-        $group: {
-          _id: {
-            barangay: "$all_data._id.barangay",
-            report_type: "$all_data._id.report_type",
-          },
-          today_count: { $max: { $ifNull: ["$all_data.today_total", 0] } },
-          past_average: { $max: { $ifNull: ["$all_data.past_avg", 0] } },
-          report_dates: { $first: "$report_dates" },
-        },
-      },
-      {
-        $group: {
-          _id: "$_id.barangay",
-          report_data: {
-            $push: {
-              report_type: "$_id.report_type",
-              today_count: "$today_count",
-              past_average: "$past_average",
-            },
-          },
-          report_dates: { $first: "$report_dates" },
-        },
-      },
-      {
-        $project: {
-          barangay: "$_id",
-          report_counts_today: {
-            $arrayToObject: {
-              $map: {
-                input: "$report_data",
-                as: "data",
-                in: { k: "$$data.report_type", v: "$$data.today_count" },
-              },
-            },
-          },
-          report_7day_avg: {
-            $arrayToObject: {
-              $map: {
-                input: "$report_data",
-                as: "data",
-                in: { k: "$$data.report_type", v: "$$data.past_average" },
-              },
-            },
-          },
-          report_dates: {
-            $map: {
-              input: "$report_dates",
-              as: "date",
-              in: "$$date.date_and_time",
-            },
-          },
-        },
-      },
-    ]);
-
-    console.log("Reports Data:", JSON.stringify(reports, null, 2));
-
     // Send the fetched report data to the Python prescriptive analytics API
-    const pythonApiUrl = "http://localhost:8000/api/v1/analyze";
-    const response = await axios.post(pythonApiUrl, {
-      data: reports,
-    });
-
+    const pythonApiUrl = "http://localhost:8000/api/v1/pattern-recognition";
+    const response = await axios.get(pythonApiUrl);
     const analysisResults = response.data;
-    res.json({ analysisResults });
+
+    console.log("Received alerts from FastAPI:", analysisResults);
+
+    res.status(200).json({
+      success: true,
+      data: analysisResults,
+    });
   } catch (error) {
-    console.error("Error in patternRecognitionAnalysis:", error);
-    res.status(500).send("Error fetching data.");
+    console.error(
+      "Error in patternRecognitionAnalysis calling FastAPI:",
+      error.message
+    );
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch pattern recognition analysis.",
+    });
   }
 });
 
@@ -303,6 +187,42 @@ const detectReportedClusters = asyncErrorHandler(async (req, res) => {
         : "No significant clusters found",
     clusters,
   });
+});
+
+const submitCsvFile = asyncErrorHandler(async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const formData = new FormData();
+    formData.append("file", fs.createReadStream(req.file.path), {
+      filename: req.file.filename,
+    });
+
+    const response = await axios.post(
+      "http://localhost:8000/api/v1/upload-csv",
+      formData,
+      {
+        headers: {
+          ...formData.getHeaders(),
+        },
+      }
+    );
+
+    fs.unlinkSync(req.file.path);
+
+    return res.status(200).json({
+      message: "CSV file uploaded successfully!",
+      data: response.data,
+    });
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    return res.status(500).json({
+      error: "Failed to process file upload.",
+      message: error.message,
+    });
+  }
 });
 
 module.exports = {

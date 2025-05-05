@@ -1,15 +1,16 @@
 const mongoose = require("mongoose");
 const barangaysData = require("../data/barangays.json");
 
-let list_of_barangays = barangaysData.features.map(
-  (feature) => feature.properties.name
-);
-
 const Schema = mongoose.Schema;
+
+// Extract barangay names from barangays.features and normalize them, adding validation for undefined values
+const list_of_barangays = barangaysData.features
+  .filter((feature) => feature.properties && feature.properties.name) // Ensure properties and name exist
+  .map((feature) => feature.properties.name.toLowerCase().trim()); // Normalize barangay names
 
 const reportSchema = new Schema(
   {
-    // ! No Report ID, yet, or never
+    // No Report ID, yet, or never
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Account",
@@ -20,7 +21,8 @@ const reportSchema = new Schema(
       required: true,
       validate: {
         validator: function (value) {
-          return list_of_barangays.includes(value);
+          // Normalize and check against the list of barangays
+          return list_of_barangays.includes(value.toLowerCase().trim());
         },
         message: (props) => `${props.value} is not a valid barangay.`,
       },
@@ -73,6 +75,8 @@ const reportSchema = new Schema(
   { timestamps: true }
 );
 
+// Create a 2dsphere index for geospatial queries
 reportSchema.index({ specific_location: "2dsphere" });
 
+// Export the Report model
 module.exports = mongoose.model("Report", reportSchema);

@@ -13,7 +13,7 @@ const {
 } = require("../services/emailService");
 
 const register = asyncErrorHandler(async (req, res) => {
-  const { email } = req.body;
+  const { email, role } = req.body;
 
   const existingAccount = await Account.findOne({ email });
 
@@ -21,6 +21,9 @@ const register = asyncErrorHandler(async (req, res) => {
     throw new BadRequestError("Account with this email already exists.");
   }
 
+  if (!role) {
+    throw new BadRequestError("Account role is required.");
+  }
   const account = await Account.create(req.body);
 
   const result = await sendOTPVerificationEmail(account);
@@ -41,13 +44,14 @@ const register = asyncErrorHandler(async (req, res) => {
 });
 
 const login = asyncErrorHandler(async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, role } = req.body;
 
   if (!email || !password) {
     throw new BadRequestError(
       "Please provide both credentials for email and password."
     );
   }
+
   const account = await Account.findOne({ email });
 
   if (!account) {
@@ -68,10 +72,17 @@ const login = asyncErrorHandler(async (req, res) => {
     throw new UnauthenticatedError("Incorrect password inputted.");
   }
 
+  // Verify that the requested role matches the account's role
+  if (role && account.role !== role) {
+    throw new UnauthenticatedError(
+      `You are not authorized as a ${role}. Your account role is ${account.role}.`
+    );
+  }
+
   const payload = {
     userId: account._id,
     email: account.email,
-    role: account.role || "user",
+    role: account.role, // Always use the role from the database
   };
 
   const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
@@ -84,6 +95,7 @@ const login = asyncErrorHandler(async (req, res) => {
       _id: account._id,
       name: account.username,
       email: account.email,
+      role: account.role, // Always use the role from the database
     },
     accessToken,
   });

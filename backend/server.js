@@ -1,29 +1,39 @@
 require("dotenv").config();
 const path = require("path");
+const fileUpload = require("express-fileupload"); // Now properly installed
 
-// ^ Security
+// Security
 const cors = require("cors");
-
-// ^ Errors
 const errorController = require("./errors/error-controller");
 
 const express = require("express");
 const app = express();
 
-// ^ Middleware
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// Middleware
 app.use(
   cors({
     origin: "*",
     credentials: true,
   })
 );
+
+// Body parsing
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-app.use("/uploads", express.static("uploads"));
+// File upload handling
+app.use(
+  fileUpload({
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB
+    },
+    abortOnLimit: true,
+    useTempFiles: false,
+    createParentPath: true, // Creates upload directory if needed
+  })
+);
 
-// ^ Connect to the database
+// Database connection
 const connectDB = require("./db/connect");
 
 // ^ Routes
@@ -31,30 +41,28 @@ const authRoutes = require("./routes/auth");
 const reportsRoutes = require("./routes/reports");
 const analyticsRoutes = require("./routes/analytics");
 const notificationRoutes = require("./routes/notifications");
+const interventionRoutes = require("./routes/interventions");
+const adminPostRoutes = require("./routes/adminPosts");
 
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/reports", reportsRoutes);
 app.use("/api/v1/analytics", analyticsRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/interventions", interventionRoutes);
+app.use("/api/v1/adminposts", adminPostRoutes);
 
 app.use(errorController);
 
-// ! FOR TESTING ONLY, UNCOMMENT WHEN NEEDED
-// const testRoutes = require("./test/testRoutes");
-// app.use("/api/v1/test", testRoutes);
-
-// * Start the server
+// Server startup
 const start = async () => {
-  console.log("Starting the backend server...");
-
   try {
     await connectDB(process.env.MONGO_URI);
     app.listen(process.env.PORT, () => {
-      console.log("Connected to MongoDB.");
-      console.log(`Server is up and listening on port ${process.env.PORT}`);
+      console.log(`Server running on port ${process.env.PORT}`);
     });
   } catch (error) {
-    console.error("Error connecting to database:", error);
+    console.error("Server startup failed:", error);
+    process.exit(1);
   }
 };
 
