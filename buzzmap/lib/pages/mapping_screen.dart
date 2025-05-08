@@ -204,6 +204,11 @@ class _MappingScreenState extends State<MappingScreen>
   // Add this property to track previous state
   bool _previousIsInQuezonCity = true; // Default to true to avoid initial notification
 
+  // Add these maps to store API data
+  Map<String, String> _barangayRiskLevels = {};
+  Map<String, String> _barangayPatterns = {};
+  Map<String, String> _barangayAlerts = {};
+
   @override
   void initState() {
     super.initState();
@@ -225,6 +230,9 @@ class _MappingScreenState extends State<MappingScreen>
 
     // Call the GeoJSON loading function for borders
     _loadGeoJsonPolygons();
+
+    // Fetch risk levels from API
+    _fetchRiskLevels();
 
     // Initialize location services with a slight delay
     Future.delayed(const Duration(seconds: 1), () {
@@ -582,35 +590,32 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   void _onBarangayPolygonTapped(String barangayName) {
-    final data = dengueData[barangayName];
+    final riskLevel = _barangayRiskLevels[barangayName]?.toLowerCase() ?? 'no data';
+    final pattern = _barangayPatterns[barangayName]?.toLowerCase() ?? '';
 
-    if (data != null) {
-      setState(() {
-        selectedBarangay = barangayName;
-        selectedSeverity = data['severity'] as String;
-        _selectedPolygonId = PolygonId(barangayName);
-        _isCardVisible = true;
+    setState(() {
+      selectedBarangay = barangayName;
+      selectedSeverity = riskLevel;
+      _selectedPolygonId = PolygonId(barangayName);
+      _isCardVisible = true;
 
-        // 👉 Add hazard levels setup
-        hazardRiskLevels = {
-          'Mosquito Breeding Risk': _convertSeverityToRisk(data['severity']),
-          'Dengue Infection Risk': _convertSeverityToRisk(data['severity']),
-          'Home Safety Status': _convertSeverityToRisk(data['severity']),
-        };
-      });
+      // Update hazard levels based on risk level and pattern
+      hazardRiskLevels = {
+        'Mosquito Breeding Risk': riskLevel.toUpperCase(),
+        'Dengue Infection Risk': riskLevel.toUpperCase(),
+        'Home Safety Status': riskLevel.toUpperCase(),
+        'Pattern': pattern.toUpperCase(),
+        'RiskLevel': riskLevel.toUpperCase(),
+      };
+    });
 
-      final boundaryPoints = barangayBoundaries[barangayName];
-      if (boundaryPoints != null && boundaryPoints.isNotEmpty) {
-        print(
-            'Zooming to $barangayName with ${boundaryPoints.length} points'); // Debug
-        _fitPolygonToScreen(boundaryPoints);
-      } else {
-        print('No boundary points found for $barangayName'); // Debug
-        // Fallback to centroid if no boundaries
-        final centroid = _barangayCentroids[barangayName];
-        if (centroid != null) {
-          _zoomToLocation(centroid, barangay: barangayName);
-        }
+    final boundaryPoints = barangayBoundaries[barangayName];
+    if (boundaryPoints != null && boundaryPoints.isNotEmpty) {
+      _fitPolygonToScreen(boundaryPoints);
+    } else {
+      final centroid = _barangayCentroids[barangayName];
+      if (centroid != null) {
+        _zoomToLocation(centroid, barangay: barangayName);
       }
     }
   }
@@ -1154,17 +1159,23 @@ class _MappingScreenState extends State<MappingScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Dengue Cases Legend'),
+        title: const Text('Dengue Risk Levels & Patterns'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildLegendRow(Colors.green, 'Low', '1-7 cases'),
-            _buildLegendRow(Colors.yellow, 'Moderate', '8-14 cases'),
-            _buildLegendRow(Colors.orange, 'High', '15-24 cases'),
-            _buildLegendRow(Colors.red, 'Severe', '25+ cases'),
+            _buildLegendRow(Colors.grey, 'No Data', 'Information not available'),
+            const SizedBox(height: 8),
+            _buildLegendRow(Colors.green, 'Low Risk', 'Stable situation'),
+            _buildLegendRow(Colors.blue, 'Stability Pattern', 'No significant change'),
+            _buildLegendRow(Colors.green, 'Decline Pattern', 'Decreasing trend'),
+            const SizedBox(height: 8),
+            _buildLegendRow(Colors.orange, 'Moderate Risk', 'Slight increase in cases'),
+            _buildLegendRow(Colors.orange, 'Spike Pattern', 'Sudden increase'),
+            const SizedBox(height: 8),
+            _buildLegendRow(Colors.red, 'High Risk', 'Critical situation'),
             const SizedBox(height: 16),
             const Text(
-              'Areas are color-coded based on the number of dengue cases reported. Click on any area to see detailed information.',
+              'Areas are color-coded based on risk levels and patterns. Click on any area to see detailed information.',
               style: TextStyle(fontSize: 12),
             ),
           ],
@@ -1249,13 +1260,15 @@ class _MappingScreenState extends State<MappingScreen>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _legendItem(Colors.green, 'Low (1-7)'),
+            _legendItem(Colors.grey, 'No Data'),
             const SizedBox(width: 8),
-            _legendItem(Colors.yellow, 'Moderate (8-14)'),
+            _legendItem(Colors.green, 'Low'),
             const SizedBox(width: 8),
-            _legendItem(Colors.orange, 'High (15-24)'),
+            _legendItem(Colors.blue, 'Stable'),
             const SizedBox(width: 8),
-            _legendItem(Colors.red, 'Severe (25+)'),
+            _legendItem(Colors.orange, 'Moderate'),
+            const SizedBox(width: 8),
+            _legendItem(Colors.red, 'High'),
           ],
         ),
       ),
@@ -1541,6 +1554,111 @@ class _MappingScreenState extends State<MappingScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _fetchRiskLevels() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://localhost:4000/api/v1/analytics/retrieve-pattern-recognition-results'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          setState(() {
+            _barangayRiskLevels = {};
+            _barangayPatterns = {};
+            _barangayAlerts = {};
+            
+            for (var item in data['data'] as List) {
+              final name = item['name'];
+              if (item['risk_level'] != null) {
+                _barangayRiskLevels[name] = item['risk_level'].toString().toLowerCase();
+              }
+              if (item['triggered_pattern'] != null) {
+                _barangayPatterns[name] = item['triggered_pattern'].toString().toLowerCase();
+              }
+              if (item['alert'] != null) {
+                _barangayAlerts[name] = item['alert'].toString();
+              }
+            }
+          });
+          // Update polygons with new risk levels and patterns
+          _updatePolygonsWithRiskLevels();
+        }
+      } else {
+        if (mounted) {
+          AppFlushBar.showError(
+            context,
+            title: 'API Error',
+            message: 'Failed to fetch risk levels. Status code: ${response.statusCode}',
+          );
+        }
+      }
+    } catch (e) {
+      print('Error fetching risk levels: $e');
+      if (mounted) {
+        AppFlushBar.showError(
+          context,
+          title: 'Connection Error',
+          message: 'Unable to connect to the server. Please check your internet connection and try again.',
+        );
+      }
+    }
+  }
+
+  Color _getColorForBarangay(String barangayName) {
+    final riskLevel = _barangayRiskLevels[barangayName]?.toLowerCase();
+    final pattern = _barangayPatterns[barangayName]?.toLowerCase();
+
+    // If no data is available, return gray
+    if (riskLevel == null) return Colors.grey.shade700;
+
+    // If high risk, always return red
+    if (riskLevel == 'high') return Colors.red.shade700;
+
+    // If low risk, check pattern
+    if (riskLevel == 'low') {
+      if (pattern == 'stability') return Colors.blue.shade600;
+      if (pattern == 'spike') return Colors.orange.shade600;
+      if (pattern == 'decline') return Colors.green.shade600;
+      return Colors.green.shade600; // Default for low risk without pattern
+    }
+
+    // For moderate risk
+    if (riskLevel == 'moderate') {
+      if (pattern == 'spike') return Colors.orange.shade600;
+      return Colors.orange.shade500; // Default for moderate risk
+    }
+
+    return Colors.grey.shade400; // Default fallback
+  }
+
+  void _updatePolygonsWithRiskLevels() {
+    Set<Polygon> updatedPolygons = {};
+    
+    for (var polygon in _barangayPolygons) {
+      final barangayName = polygon.polygonId.value;
+      final color = _getColorForBarangay(barangayName);
+      
+      updatedPolygons.add(Polygon(
+        polygonId: polygon.polygonId,
+        points: polygon.points,
+        strokeColor: _selectedPolygonId == polygon.polygonId 
+          ? Colors.redAccent 
+          : color.withOpacity(0.8),
+        strokeWidth: _selectedPolygonId == polygon.polygonId ? 4 : 2,
+        fillColor: color.withOpacity(0.2),
+        consumeTapEvents: true,
+        onTap: () {
+          _onBarangayPolygonTapped(barangayName);
+        },
+      ));
+    }
+
+    setState(() {
+      _barangayPolygons = updatedPolygons;
+    });
   }
 
   @override
