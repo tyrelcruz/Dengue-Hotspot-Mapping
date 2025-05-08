@@ -14,7 +14,11 @@ import 'package:buzzmap/auth/config.dart'; // Adjust the path based on your file
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
+import 'package:buzzmap/services/notification_service.dart';
+import 'package:buzzmap/widgets/utils/notification_template.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:buzzmap/pages/community_screen.dart';
 
 class PostScreen extends StatefulWidget {
   const PostScreen({super.key});
@@ -163,6 +167,7 @@ class _PostScreenState extends State<PostScreen> {
         selectedReportType == null ||
         dateController.text.isEmpty ||
         timeController.text.isEmpty) {
+      // Use Snackbar here as fallback if needed for the form validation
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please complete all required fields')),
       );
@@ -172,10 +177,11 @@ class _PostScreenState extends State<PostScreen> {
     // Ensure the coordinates are valid numbers
     if (selectedCoordinates!.latitude.isNaN ||
         selectedCoordinates!.longitude.isNaN) {
+      // Show an error via Snackbar
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content:
-                Text('Invalid coordinates. Please select a valid location')),
+          content: Text('Invalid coordinates. Please select a valid location'),
+        ),
       );
       return;
     }
@@ -192,29 +198,22 @@ class _PostScreenState extends State<PostScreen> {
         throw Exception("Invalid date/time format");
       }
 
-      // Create the specific_location map (DO NOT stringify it)
       Map<String, dynamic> specificLocation = {
         "type": "Point",
         "coordinates": [
-          selectedCoordinates!.longitude, // Longitude first
-          selectedCoordinates!.latitude, // Latitude second
+          selectedCoordinates!.longitude,
+          selectedCoordinates!.latitude,
         ]
       };
 
-      // Debugging: print out the specific_location before sending
-      debugPrint('🚀 Request body specific_location: $specificLocation');
-
-      // Create multipart request
       final request = http.MultipartRequest('POST', url);
       request.headers['Authorization'] = 'Bearer $token';
 
-      // Add text fields
       request.fields.addAll({
         'barangay': selectedBarangay!,
         'report_type': selectedReportType!,
         'description': descriptionController.text,
         'date_and_time': formattedDateTime,
-        // Pass the specific_location as an object, NOT as a string
         'specific_location[type]': specificLocation["type"],
         'specific_location[coordinates][0]':
             specificLocation["coordinates"][0].toString(),
@@ -222,55 +221,50 @@ class _PostScreenState extends State<PostScreen> {
             specificLocation["coordinates"][1].toString(),
       });
 
-      // Add images (if any)
       if (_selectedImages.isNotEmpty) {
-        debugPrint(
-            '🚀 Selected images: ${_selectedImages.map((image) => image.path).toList()}');
-
         for (final image in _selectedImages) {
           final bytes = await image.readAsBytes();
           final filename = image.path.split('/').last;
-
-          // Use the field name 'image_files' to match what the backend expects
-          request.files.add(
-            http.MultipartFile.fromBytes(
-              'images', // This should match what multer/express expects
-              bytes,
-              filename: filename,
-            ),
-          );
+          request.files.add(http.MultipartFile.fromBytes(
+            'images',
+            bytes,
+            filename: filename,
+          ));
         }
       }
 
-      // Debugging request fields
-      debugPrint('🚀 Sending request with ${_selectedImages.length} images');
-      debugPrint('📄 Request fields: ${request.fields}');
-      debugPrint(
-          '📁 Request files: ${request.files.map((f) => f.field).toList()}');
-
-      // Send request
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-      debugPrint('📡 Response status: ${response.statusCode}');
-      debugPrint('📡 Response body: ${response.body}');
-
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final responseData = jsonDecode(response.body);
-        debugPrint('✅ Uploaded images: ${responseData['report']['images']}');
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Report submitted successfully!')),
+        // Show the empathetic feedback notification on success (replaces Snackbar)
+        await NotificationService.showEmpatheticFeedback(
+          context,
+          NotificationTemplate.empatheticMessage, // The empathetic message
         );
-        Navigator.pop(context);
+
+        final responseData = jsonDecode(response.body);
+        debugPrint(
+            '✅ Report submitted successfully: ${responseData['report']}');
+
+        // Delay navigation to avoid pop-related issues
+        await Future.delayed(Duration(milliseconds: 300));
+
+        // Navigate to the community screen (replace current screen)
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const CommunityScreen()),
+        );
       } else {
         throw Exception(
             'Failed with status ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
       debugPrint('❌ Error submitting post: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
+      // Instead of Snackbar, we can show a Flushbar or continue using Snackbar here
+      await NotificationService.showError(
+        context,
+        'Error submitting report: ${e.toString()}',
       );
     }
   }
@@ -770,7 +764,7 @@ class _PostScreenState extends State<PostScreen> {
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: descriptionController,
-                    maxLines: 15,
+                    maxLines: 3,
                     keyboardType: TextInputType.multiline,
                     style: theme.textTheme.bodyMedium,
                     decoration: InputDecoration(

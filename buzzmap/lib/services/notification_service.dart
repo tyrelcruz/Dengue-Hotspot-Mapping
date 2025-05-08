@@ -3,11 +3,26 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
+import 'package:buzzmap/widgets/utils/notification_template.dart'; // Import the template file
+import 'package:buzzmap/errors/flushbar.dart';
 
 class NotificationService with ChangeNotifier {
   final storage = FlutterSecureStorage(); // Instance of SecureStorage
 
-  // Fetch notifications and return the result
+  // Show the notification with the empathetic message
+  static Future<void> showEmpatheticFeedback(
+      BuildContext context, String message) async {
+    await AppFlushBar.showCustom(
+      context,
+      title: 'Report Submitted',
+      message: message,
+      backgroundColor: Colors.green,
+      duration: Duration(seconds: 3),
+    );
+  }
+
+// Fetch notifications and return the result
   Future<List<dynamic>> fetchNotifications(BuildContext context) async {
     try {
       // Retrieve the token dynamically
@@ -40,12 +55,30 @@ class NotificationService with ChangeNotifier {
     }
   }
 
-  // Retrieve the token from secure storage
-  Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    String? token =
-        prefs.getString('authToken'); // Retrieve from SharedPreferences
-    print('Retrieved Token: $token'); // Debugging line
-    return token;
+  // Example for showing success notification
+  static Future<void> showSuccess(BuildContext context, String message) async {
+    await AppFlushBar.showSuccess(
+      context,
+      message: message,
+      duration: Duration(seconds: 3),
+    );
   }
+
+  // Example for showing error notification
+  static Future<void> showError(BuildContext context, String message) async {
+    await AppFlushBar.showError(
+      context,
+      message: message,
+      duration: Duration(seconds: 3),
+    );
+  }
+}
+
+// Retrieve the token from secure storage
+Future<String?> getToken() async {
+  final prefs = await SharedPreferences.getInstance();
+  String? token =
+      prefs.getString('authToken'); // Retrieve from SharedPreferences
+  print('Retrieved Token: $token'); // Debugging line
+  return token;
 }

@@ -69,6 +69,21 @@ class AppFlushBar {
     );
   }
 
+  /// Shows an empathetic feedback message (special for your use case).
+  static Future<void> showEmpatheticFeedback(
+    BuildContext context, {
+    required String message,
+    Duration duration = const Duration(seconds: 4),
+  }) {
+    return _showFlushBar(
+      context,
+      title: 'Thank You for Reporting!',
+      message: message,
+      backgroundColor: Colors.green, // Using a more positive color like green
+      duration: duration,
+    );
+  }
+
   /// Private method to show FlushBar with the specified parameters.
   static Future<void> _showFlushBar(
     BuildContext context, {
