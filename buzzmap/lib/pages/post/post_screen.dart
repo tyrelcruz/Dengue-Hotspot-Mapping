@@ -22,6 +22,7 @@ import 'package:buzzmap/errors/flushbar.dart';
 
 import 'package:buzzmap/pages/community_screen.dart';
 import 'package:dropdown_search/dropdown_search.dart';
+import 'package:geolocator/geolocator.dart';
 
 class PostScreen extends StatefulWidget {
   const PostScreen({super.key});
@@ -37,7 +38,6 @@ class _PostScreenState extends State<PostScreen> {
 
   final List<String> reportTypes = [
     'Breeding Site',
-    'Suspected Case',
     'Standing Water',
     'Infestation'
   ];
@@ -59,6 +59,8 @@ class _PostScreenState extends State<PostScreen> {
   bool _mapScrollable = true;
 
   Map<String, List<String>> districtData = {};
+
+  bool _isLoadingLocation = false;
 
   bool _isPointInsideBarangay(LatLng point) {
     for (final polygon in _barangayPolygons) {
@@ -558,105 +560,110 @@ class _PostScreenState extends State<PostScreen> {
                         ClipRect(
                           child: SizedBox(
                             height: 200,
-                            child: Listener(
-                              onPointerDown: (_) => _disableMapScrolling(),
-                              onPointerUp: (_) => _enableMapScrolling(),
-                              child: AbsorbPointer(
-                                absorbing: false,
-                                child: GoogleMap(
-                                  polygons: _barangayPolygons,
-                                  onMapCreated: (controller) {
-                                    mapController = controller;
-                                  },
-                                  initialCameraPosition: CameraPosition(
-                                    target: selectedCoordinates ??
-                                        const LatLng(14.6700, 121.0437),
-                                    zoom: 11.8,
+                            child: Stack(
+                              children: [
+                                Listener(
+                                  onPointerDown: (_) => _disableMapScrolling(),
+                                  onPointerUp: (_) => _enableMapScrolling(),
+                                  child: AbsorbPointer(
+                                    absorbing: false,
+                                    child: GoogleMap(
+                                      polygons: _barangayPolygons,
+                                      onMapCreated: (controller) {
+                                        mapController = controller;
+                                      },
+                                      initialCameraPosition: CameraPosition(
+                                        target: selectedCoordinates ??
+                                            const LatLng(14.6700, 121.0437),
+                                        zoom: 11.8,
+                                      ),
+                                      onTap: (LatLng pos) async {
+                                        if (!_isPointInsideBarangay(pos)) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Outside Quezon City'),
+                                              backgroundColor: Colors.redAccent,
+                                              duration: Duration(seconds: 2),
+                                            ),
+                                          );
+                                          return;
+                                        }
+
+                                        setState(() {
+                                          selectedCoordinates = pos;
+                                        });
+
+                                        try {
+                                          List<Placemark> placemarks =
+                                              await placemarkFromCoordinates(
+                                                  pos.latitude, pos.longitude);
+
+                                          if (placemarks.isNotEmpty) {
+                                            final place = placemarks.first;
+                                            setState(() {
+                                              selectedAddress =
+                                                  '${place.name}, ${place.subLocality}, ${place.locality}';
+                                              selectedBarangay = place.subLocality;
+                                              selectedDistrict =
+                                                  guessDistrictFromBarangay(
+                                                      place.subLocality);
+                                            });
+                                          } else {
+                                            // If no placemarks found, try to find the nearest barangay
+                                            String? nearestBarangay = _findNearestBarangay(pos);
+                                            if (nearestBarangay != null) {
+                                              setState(() {
+                                                selectedBarangay = nearestBarangay;
+                                                selectedDistrict = guessDistrictFromBarangay(nearestBarangay);
+                                                selectedAddress = 'Near $nearestBarangay';
+                                              });
+                                            } else {
+                                              setState(() {
+                                                selectedAddress = 'Selected Location';
+                                                selectedBarangay = null;
+                                                selectedDistrict = null;
+                                              });
+                                            }
+                                          }
+                                        } catch (e) {
+                                          print("Reverse geocoding error: $e");
+                                          // Try to find the nearest barangay as fallback
+                                          String? nearestBarangay = _findNearestBarangay(pos);
+                                          if (nearestBarangay != null) {
+                                            setState(() {
+                                              selectedBarangay = nearestBarangay;
+                                              selectedDistrict = guessDistrictFromBarangay(nearestBarangay);
+                                              selectedAddress = 'Near $nearestBarangay';
+                                            });
+                                          } else {
+                                            setState(() {
+                                              selectedAddress = 'Selected Location';
+                                              selectedBarangay = null;
+                                              selectedDistrict = null;
+                                            });
+                                          }
+                                        }
+                                      },
+                                      markers: selectedCoordinates != null
+                                          ? {
+                                              Marker(
+                                                markerId:
+                                                    const MarkerId('selected'),
+                                                position: selectedCoordinates!,
+                                              )
+                                            }
+                                          : {},
+                                      zoomGesturesEnabled: true,
+                                      scrollGesturesEnabled: true,
+                                      rotateGesturesEnabled: true,
+                                      tiltGesturesEnabled: true,
+                                      myLocationEnabled: true,
+                                      myLocationButtonEnabled: true,
+                                    ),
                                   ),
-                                  onTap: (LatLng pos) async {
-                                    if (!_isPointInsideBarangay(pos)) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Outside Quezon City'),
-                                          backgroundColor: Colors.redAccent,
-                                          duration: Duration(seconds: 2),
-                                        ),
-                                      );
-                                      return;
-                                    }
-
-                                    setState(() {
-                                      selectedCoordinates = pos;
-                                    });
-
-                                    try {
-                                      List<Placemark> placemarks =
-                                          await placemarkFromCoordinates(
-                                              pos.latitude, pos.longitude);
-
-                                      if (placemarks.isNotEmpty) {
-                                        final place = placemarks.first;
-                                        setState(() {
-                                          selectedAddress =
-                                              '${place.name}, ${place.subLocality}, ${place.locality}';
-                                          selectedBarangay = place.subLocality;
-                                          selectedDistrict =
-                                              guessDistrictFromBarangay(
-                                                  place.subLocality);
-                                        });
-                                      } else {
-                                        // If no placemarks found, try to find the nearest barangay
-                                        String? nearestBarangay = _findNearestBarangay(pos);
-                                        if (nearestBarangay != null) {
-                                          setState(() {
-                                            selectedBarangay = nearestBarangay;
-                                            selectedDistrict = guessDistrictFromBarangay(nearestBarangay);
-                                            selectedAddress = 'Near $nearestBarangay';
-                                          });
-                                        } else {
-                                          setState(() {
-                                            selectedAddress = 'Selected Location';
-                                            selectedBarangay = null;
-                                            selectedDistrict = null;
-                                          });
-                                        }
-                                      }
-                                    } catch (e) {
-                                      print("Reverse geocoding error: $e");
-                                      // Try to find the nearest barangay as fallback
-                                      String? nearestBarangay = _findNearestBarangay(pos);
-                                      if (nearestBarangay != null) {
-                                        setState(() {
-                                          selectedBarangay = nearestBarangay;
-                                          selectedDistrict = guessDistrictFromBarangay(nearestBarangay);
-                                          selectedAddress = 'Near $nearestBarangay';
-                                        });
-                                      } else {
-                                        setState(() {
-                                          selectedAddress = 'Selected Location';
-                                          selectedBarangay = null;
-                                          selectedDistrict = null;
-                                        });
-                                      }
-                                    }
-                                  },
-                                  markers: selectedCoordinates != null
-                                      ? {
-                                          Marker(
-                                            markerId:
-                                                const MarkerId('selected'),
-                                            position: selectedCoordinates!,
-                                          )
-                                        }
-                                      : {},
-                                  zoomGesturesEnabled: true,
-                                  scrollGesturesEnabled: true,
-                                  rotateGesturesEnabled: true,
-                                  tiltGesturesEnabled: true,
-                                  myLocationEnabled: true,
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                         ),
