@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:buzzmap/main.dart';
@@ -17,8 +18,10 @@ import 'package:intl/intl.dart';
 import 'package:buzzmap/services/notification_service.dart';
 import 'package:buzzmap/widgets/utils/notification_template.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:buzzmap/errors/flushbar.dart';
 
 import 'package:buzzmap/pages/community_screen.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 
 class PostScreen extends StatefulWidget {
   const PostScreen({super.key});
@@ -54,6 +57,8 @@ class _PostScreenState extends State<PostScreen> {
   Map<String, LatLng> barangayCenters = {};
 
   bool _mapScrollable = true;
+
+  Map<String, List<String>> districtData = {};
 
   bool _isPointInsideBarangay(LatLng point) {
     for (final polygon in _barangayPolygons) {
@@ -167,9 +172,11 @@ class _PostScreenState extends State<PostScreen> {
         selectedReportType == null ||
         dateController.text.isEmpty ||
         timeController.text.isEmpty) {
-      // Use Snackbar here as fallback if needed for the form validation
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please complete all required fields')),
+      // Show error using AppFlushBar
+      await AppFlushBar.showError(
+        context,
+        title: 'Missing Information',
+        message: 'Please complete all required fields before sharing.',
       );
       return;
     }
@@ -177,11 +184,11 @@ class _PostScreenState extends State<PostScreen> {
     // Ensure the coordinates are valid numbers
     if (selectedCoordinates!.latitude.isNaN ||
         selectedCoordinates!.longitude.isNaN) {
-      // Show an error via Snackbar
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid coordinates. Please select a valid location'),
-        ),
+      // Show error using AppFlushBar
+      await AppFlushBar.showError(
+        context,
+        title: 'Invalid Location',
+        message: 'Please select a valid location within Quezon City.',
       );
       return;
     }
@@ -195,7 +202,12 @@ class _PostScreenState extends State<PostScreen> {
           _combineDateAndTime(dateController.text, timeController.text);
 
       if (formattedDateTime == null) {
-        throw Exception("Invalid date/time format");
+        await AppFlushBar.showError(
+          context,
+          title: 'Invalid Date/Time',
+          message: 'Please check your date and time format.',
+        );
+        return;
       }
 
       Map<String, dynamic> specificLocation = {
@@ -237,10 +249,10 @@ class _PostScreenState extends State<PostScreen> {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // Show the empathetic feedback notification on success (replaces Snackbar)
+        // Show the empathetic feedback notification on success
         await NotificationService.showEmpatheticFeedback(
           context,
-          NotificationTemplate.empatheticMessage, // The empathetic message
+          NotificationTemplate.empatheticMessage,
         );
 
         final responseData = jsonDecode(response.body);
@@ -261,10 +273,10 @@ class _PostScreenState extends State<PostScreen> {
       }
     } catch (e) {
       debugPrint('❌ Error submitting post: $e');
-      // Instead of Snackbar, we can show a Flushbar or continue using Snackbar here
-      await NotificationService.showError(
+      await AppFlushBar.showError(
         context,
-        'Error submitting report: ${e.toString()}',
+        title: 'Submission Failed',
+        message: 'Unable to submit your report. Please try again.',
       );
     }
   }
@@ -367,15 +379,15 @@ class _PostScreenState extends State<PostScreen> {
   }
 
   Future<Map<String, LatLng>> loadBarangayCentersFromGeoJson() async {
-    final String data =
-        await rootBundle.loadString('assets/geojson/barangays.geojson');
-    print('GeoJSON loaded: ${data.length} characters');
-
+    final String data = await rootBundle.loadString('assets/geojson/barangays.geojson');
     final geojson = json.decode(data);
     Map<String, LatLng> centers = {};
+    Set<String> barangayNames = {};
+
     for (var feature in geojson['features']) {
-      final name =
-          feature['properties']['barangay'] ?? feature['properties']['name'];
+      final name = feature['properties']['name'];
+      if (name == null) continue;
+
       final geometry = feature['geometry'];
       if (geometry != null && geometry['type'] == 'Polygon') {
         final coords = geometry['coordinates'][0];
@@ -387,14 +399,42 @@ class _PostScreenState extends State<PostScreen> {
         }
         final count = coords.length;
         centers[name] = LatLng(latSum / count, lngSum / count);
+        barangayNames.add(name);
       }
     }
+
+    // Update the district data with all barangays
+    setState(() {
+      districtData = {
+        'District I': barangayNames.where((name) => _isInDistrict(name, 1)).toList(),
+        'District II': barangayNames.where((name) => _isInDistrict(name, 2)).toList(),
+        'District III': barangayNames.where((name) => _isInDistrict(name, 3)).toList(),
+        'District IV': barangayNames.where((name) => _isInDistrict(name, 4)).toList(),
+        'District V': barangayNames.where((name) => _isInDistrict(name, 5)).toList(),
+        'District VI': barangayNames.where((name) => _isInDistrict(name, 6)).toList(),
+      };
+    });
+
     return centers;
+  }
+
+  bool _isInDistrict(String barangayName, int district) {
+    // This is a simplified version - you might want to implement a more accurate district mapping
+    final districtRanges = {
+      1: ['Alicia', 'Apollonio Samson', 'Bahay Toro', 'Balingasa', 'Damar', 'Del Monte', 'Lourdes', 'Maharlika', 'Manresa', 'Mariblo', 'N.S. Amoranto', 'Paltok', 'Paraiso', 'Salvacion', 'San Antonio', 'San Isidro Labrador', 'Santa Cruz', 'Sienna', 'Sta. Teresita', 'Sto. Cristo', 'Sto. Domingo', 'Talayan', 'Vasra', 'Veterans Village'],
+      2: ['Baesa', 'Bagong Pag-asa', 'Balumbato', 'Culiat', 'Kaligayahan', 'New Era', 'Pasong Putik Proper', 'San Bartolome', 'Sangandaan', 'Sauyo', 'Talipapa', 'Unang Sigaw'],
+      3: ['Amihan', 'Botocan', 'Claro', 'Duyan-Duyan', 'E. Rodriguez Sr.', 'Escopa I', 'Escopa II', 'Escopa III', 'Escopa IV', 'Kalusugan', 'Kristong Hari', 'Loyola Heights', 'Marilag', 'Masagana', 'Matandang Balara', 'Milagrosa', 'Pansol', 'Quirino 2-A', 'Quirino 2-B', 'Quirino 2-C', 'Quirino 3-A', 'San Vicente', 'Silangan', 'Tagumpay', 'Villa Maria Clara', 'White Plains'],
+      4: ['Bagong Lipunan ng Crame', 'Damayang Lagi', 'Doña Aurora', 'Doña Imelda', 'Doña Josefa', 'Horseshoe', 'Immaculate Concepcion', 'Kamuning', 'Kaunlaran', 'Laging Handa', 'Obrero', 'Old Capitol Site', 'Paligsahan', 'Roxas', 'Sacred Heart', 'San Martin de Porres', 'South Triangle', 'West Triangle'],
+      5: ['Bagong Silangan', 'Capri', 'Commonwealth', 'Greater Lagro', 'Gulod', 'Holy Spirit', 'Nagkaisang Nayon', 'North Fairview', 'Payatas', 'San Agustin', 'Santa Lucia', 'Santa Monica', 'Tandang Sora', 'Fairview'],
+      6: ['Batasan Hills', 'Blue Ridge A', 'Blue Ridge B', 'Camp Aguinaldo', 'Central', 'Cubao', 'East Kamias', 'Libis', 'Mangga', 'Pinagkaisahan', 'Project 6', 'San Roque', 'Sikatuna Village', 'Socorro', 'UP Campus', 'UP Village', 'Ugong Norte', 'West Kamias', 'Teachers Village East', 'Teachers Village West', 'Pasong Tamo'],
+    };
+
+    return districtRanges[district]?.contains(barangayName) ?? false;
   }
 
   String? guessDistrictFromBarangay(String? barangay) {
     if (barangay == null) return null;
-    for (var entry in districtBarangays.entries) {
+    for (var entry in districtData.entries) {
       if (entry.value.contains(barangay)) {
         return entry.key;
       }
@@ -402,126 +442,71 @@ class _PostScreenState extends State<PostScreen> {
     return null;
   }
 
-  final Map<String, List<String>> districtBarangays = {
-    '1st District': [
-      'Bagong Pag-asa',
-      'Bahay Toro',
-      'Alicia',
-      'Bungad',
-      'Project 6',
-      'Vasra',
-      'Phil-Am',
-      'San Antonio',
-      'Sto. Cristo',
-      'Ramon Magsaysay'
-    ],
-    '2nd District': [
-      'Bagong Silangan',
-      'Batasan Hills',
-      'Commonwealth',
-      'Holy Spirit',
-      'Payatas'
-    ],
-    '3rd District': [
-      'Amihan',
-      'Bagumbuhay',
-      'Bayanihan',
-      'Blue Ridge A',
-      'Blue Ridge B',
-      'Duyan-Duyan',
-      'E. Rodriguez',
-      'East Kamias',
-      'Escopa I',
-      'Escopa II',
-      'Escopa III',
-      'Escopa IV',
-      'Libis',
-      'Loyola Heights',
-      'Mangga',
-      'Marilag',
-      'Masagana',
-      'Matandang Balara',
-      'Pansol',
-      'Quirino 2-A',
-      'Quirino 2-B',
-      'Quirino 2-C',
-      'Quirino 3-A',
-      'San Roque',
-      'Silangan',
-      'St. Ignatius',
-      'Tagumpay',
-      'Villa Maria Clara',
-      'West Kamias',
-      'White Plains'
-    ],
-    '4th District': [
-      'Bagumbayan',
-      'Bagong Lipunan Crame',
-      'Camp Aguinaldo',
-      'Claro',
-      'Damar',
-      'Damayang Lagi',
-      'Del Monte',
-      'Don Manuel',
-      'Dona Aurora',
-      'Dona Imelda',
-      'Dona Josefa',
-      'Horseshoe',
-      'Immaculate Concepcion',
-      'Kalusugan',
-      'Kaunlaran',
-      'Kristong Hari',
-      'Laging Handa',
-      'Mariana',
-      'N.S. Amoranto',
-      'Obrero',
-      'Paligsahan',
-      'Pinagkaisahan',
-      'Roxas',
-      'Sacred Heart',
-      'San Isidro Galas',
-      'San Martin de Porres',
-      'San Vicente',
-      'Santol',
-      'Santo Domingo',
-      'Santo Nino',
-      'Sikatuna Village',
-      'South Triangle',
-      'Tatalon',
-      'Teachers Village East',
-      'Teachers Village West',
-      'Ugong Norte',
-      'Valencia'
-    ],
-    '5th District': [
-      'Bagbag',
-      'Capri',
-      'Fairview',
-      'Greater Lagro',
-      'Gulod',
-      'Kaligayahan',
-      'Nagkaisang Nayon',
-      'North Fairview',
-      'Novaliches Proper',
-      'Pasong Putik Proper',
-      'San Agustin',
-      'San Bartolome',
-      'Santa Monica',
-      'Santa Lucia',
-      'Sauyo'
-    ],
-    '6th District': [
-      'Apolonio Samson',
-      'Baesa',
-      'Balon Bato',
-      'Culiat',
-      'New Era',
-      'Pasong Tamo',
-      'Sangandaan',
-      'Tandang Sora',
-      'Unang Sigaw'
-    ],
-  };
+  Widget _buildBarangayDropdown(BuildContext context) {
+    final theme = Theme.of(context);
+    final allBarangays = districtData.values.expand((list) => list).toList()..sort();
+
+    return SizedBox(
+      width: double.infinity,
+      height: 40,
+      child: DropdownSearch<String>(
+        items: allBarangays,
+        selectedItem: selectedBarangay,
+        dropdownDecoratorProps: DropDownDecoratorProps(
+          dropdownSearchDecoration: InputDecoration(
+            labelText: "Select Barangay",
+            labelStyle: TextStyle(color: theme.colorScheme.primary, fontSize: 12),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            filled: true,
+            fillColor: theme.colorScheme.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        popupProps: const PopupProps.menu(
+          showSearchBox: true,
+          searchFieldProps: TextFieldProps(
+            style: TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              hintText: "Search barangay...",
+              contentPadding: EdgeInsets.symmetric(horizontal: 12),
+            ),
+          ),
+        ),
+        dropdownButtonProps: DropdownButtonProps(
+          icon: Icon(Icons.arrow_drop_down, color: theme.colorScheme.primary),
+        ),
+        onChanged: (value) {
+          setState(() {
+            selectedBarangay = value;
+            selectedDistrict = guessDistrictFromBarangay(value);
+            if (value != null && barangayCenters.containsKey(value)) {
+              selectedCoordinates = barangayCenters[value];
+              mapController?.animateCamera(
+                CameraUpdate.newLatLngZoom(selectedCoordinates!, 16),
+              );
+            }
+          });
+        },
+        dropdownBuilder: (context, selectedItem) {
+          return Text(
+            selectedItem ?? 'Select Barangay',
+            style: TextStyle(color: theme.colorScheme.primary),
+          );
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -568,28 +553,7 @@ class _PostScreenState extends State<PostScreen> {
                             style: theme.textTheme.titleSmall
                                 ?.copyWith(color: theme.colorScheme.primary)),
                         const SizedBox(height: 10),
-                        CustomTextField(
-                          hintText: 'Select Barangay',
-                          isRequired: true,
-                          suffixIcon: const Icon(Icons.arrow_drop_down),
-                          choices: barangayCenters.keys.toList(),
-                          onChanged: (barangay) {
-                            setState(() {
-                              selectedBarangay = barangay;
-                              selectedDistrict =
-                                  guessDistrictFromBarangay(barangay);
-                              selectedCoordinates = barangayCenters[barangay];
-                            });
-
-                            if (mapController != null &&
-                                selectedCoordinates != null) {
-                              mapController!.animateCamera(
-                                CameraUpdate.newLatLngZoom(
-                                    selectedCoordinates!, 16),
-                              );
-                            }
-                          },
-                        ),
+                        _buildBarangayDropdown(context),
                         const SizedBox(height: 8),
                         ClipRect(
                           child: SizedBox(
@@ -641,41 +605,40 @@ class _PostScreenState extends State<PostScreen> {
                                               guessDistrictFromBarangay(
                                                   place.subLocality);
                                         });
+                                      } else {
+                                        // If no placemarks found, try to find the nearest barangay
+                                        String? nearestBarangay = _findNearestBarangay(pos);
+                                        if (nearestBarangay != null) {
+                                          setState(() {
+                                            selectedBarangay = nearestBarangay;
+                                            selectedDistrict = guessDistrictFromBarangay(nearestBarangay);
+                                            selectedAddress = 'Near $nearestBarangay';
+                                          });
+                                        } else {
+                                          setState(() {
+                                            selectedAddress = 'Selected Location';
+                                            selectedBarangay = null;
+                                            selectedDistrict = null;
+                                          });
+                                        }
                                       }
                                     } catch (e) {
                                       print("Reverse geocoding error: $e");
-                                      setState(() {
-                                        selectedAddress = null;
-                                        selectedBarangay = null;
-                                        selectedDistrict = null;
-                                      });
-                                    }
-
-                                    try {
-                                      List<Placemark> placemarks =
-                                          await placemarkFromCoordinates(
-                                        pos.latitude,
-                                        pos.longitude,
-                                      );
-
-                                      if (placemarks.isNotEmpty) {
-                                        final place = placemarks.first;
+                                      // Try to find the nearest barangay as fallback
+                                      String? nearestBarangay = _findNearestBarangay(pos);
+                                      if (nearestBarangay != null) {
                                         setState(() {
-                                          selectedAddress =
-                                              '${place.name}, ${place.subLocality}, ${place.locality}';
-                                          selectedBarangay = place.subLocality;
-                                          selectedDistrict =
-                                              guessDistrictFromBarangay(
-                                                  place.subLocality);
+                                          selectedBarangay = nearestBarangay;
+                                          selectedDistrict = guessDistrictFromBarangay(nearestBarangay);
+                                          selectedAddress = 'Near $nearestBarangay';
+                                        });
+                                      } else {
+                                        setState(() {
+                                          selectedAddress = 'Selected Location';
+                                          selectedBarangay = null;
+                                          selectedDistrict = null;
                                         });
                                       }
-                                    } catch (e) {
-                                      print("Reverse geocoding error: $e");
-                                      setState(() {
-                                        selectedAddress = null;
-                                        selectedBarangay = null;
-                                        selectedDistrict = null;
-                                      });
                                     }
                                   },
                                   markers: selectedCoordinates != null
@@ -768,10 +731,12 @@ class _PostScreenState extends State<PostScreen> {
                     keyboardType: TextInputType.multiline,
                     style: theme.textTheme.bodyMedium,
                     decoration: InputDecoration(
-                      hintText:
-                          'What did you see? Is there anything you’d like to share?',
+                      hintText: 'What did you see? Is there anything you\'d like to share?',
                       hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.5)),
+                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[100],
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -898,5 +863,42 @@ class _PostScreenState extends State<PostScreen> {
         ],
       ),
     );
+  }
+
+  String? _findNearestBarangay(LatLng point) {
+    if (barangayCenters.isEmpty) return null;
+
+    String? nearestBarangay;
+    double minDistance = double.infinity;
+
+    barangayCenters.forEach((barangay, center) {
+      double distance = _calculateDistance(point, center);
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestBarangay = barangay;
+      }
+    });
+
+    // Only return the nearest barangay if it's within a reasonable distance (e.g., 1km)
+    return minDistance <= 1.0 ? nearestBarangay : null;
+  }
+
+  double _calculateDistance(LatLng point1, LatLng point2) {
+    const double earthRadius = 6371; // Earth's radius in kilometers
+
+    double lat1 = point1.latitude * (pi / 180);
+    double lat2 = point2.latitude * (pi / 180);
+    double lon1 = point1.longitude * (pi / 180);
+    double lon2 = point2.longitude * (pi / 180);
+
+    double dLat = lat2 - lat1;
+    double dLon = lon2 - lon1;
+
+    double a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2);
+    double c = 2.0 * atan2(sqrt(a), sqrt(1 - a)).toDouble();
+    double distance = earthRadius * c;
+
+    return distance;
   }
 }
