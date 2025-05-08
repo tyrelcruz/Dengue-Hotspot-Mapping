@@ -5,10 +5,26 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:buzzmap/widgets/utils/notification_template.dart'; // Import the template file
+import 'package:another_flushbar/flushbar.dart';  // Updated import
 import 'package:buzzmap/errors/flushbar.dart';
 
 class NotificationService with ChangeNotifier {
   final storage = FlutterSecureStorage(); // Instance of SecureStorage
+
+  static Future<void> showLocationToast(
+    BuildContext context,
+    String message,
+  ) async {
+    await Flushbar(
+      message: message,
+      backgroundColor: Colors.red, // Red color for "outside"
+      duration: Duration(seconds: 3), // Duration of the notification
+      flushbarPosition:
+          FlushbarPosition.BOTTOM, // Position at the bottom (like a Toast)
+      forwardAnimationCurve: Curves.easeInOut, // Animation effect for fade-in
+      reverseAnimationCurve: Curves.easeInOut, // Animation effect for fade-out
+    ).show(context);
+  }
 
   // Show the notification with the empathetic message
   static Future<void> showEmpatheticFeedback(

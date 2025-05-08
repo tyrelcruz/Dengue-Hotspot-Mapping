@@ -11,11 +11,12 @@ import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:buzzmap/widgets/recommendations_widget.dart';
 import 'package:geocoding/geocoding.dart';
-
+import 'package:buzzmap/services/notification_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:buzzmap/auth/config.dart';
-
+import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:buzzmap/errors/flushbar.dart';
 
 class MappingScreen extends StatefulWidget {
   const MappingScreen({super.key});
@@ -194,18 +195,26 @@ class _MappingScreenState extends State<MappingScreen>
     // Other barangay boundaries remain unchanged
     // ... [For brevity, other boundaries are not repeated]
   };
+
+  // Add these new properties
+  Position? _currentPosition;
+  bool _isInQuezonCity = false;
+  Timer? _locationCheckTimer;
+
+  // Add this property to track previous state
+  bool _previousIsInQuezonCity = true; // Default to true to avoid initial notification
+
   @override
   void initState() {
     super.initState();
 
     // Initialize the default layer to show Markers initially
-    _layerOptions['Markers'] =
-        false; // Keep it false initially, until user selects
+    _layerOptions['Markers'] = false;
 
     _bounceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
-    )..repeat(reverse: true); // 🔥 bounce back and forth
+    )..repeat(reverse: true);
 
     _bounceAnimation = Tween<double>(begin: 0, end: 10).animate(
       CurvedAnimation(
@@ -217,6 +226,11 @@ class _MappingScreenState extends State<MappingScreen>
     // Call the GeoJSON loading function for borders
     _loadGeoJsonPolygons();
 
+    // Initialize location services with a slight delay
+    Future.delayed(const Duration(seconds: 1), () {
+      _initializeLocationServices();
+    });
+
     // Using a slight delay to ensure Google Maps is fully loaded
     Timer(const Duration(milliseconds: 500), () {
       _updateMapLayers();
@@ -226,7 +240,156 @@ class _MappingScreenState extends State<MappingScreen>
     });
   }
 
-// Call this function when Markers layer is enabled
+  Future<void> _initializeLocationServices() async {
+    // First check if location services are enabled
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Location Services Disabled'),
+              content: const Text(
+                'Please enable location services to use this feature.',
+              ),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
+                TextButton(
+                  child: const Text('Settings'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Geolocator.openLocationSettings();
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      }
+      return;
+    }
+
+    // Check location permission
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          AppFlushBar.showError(
+            context,
+            message: 'Location permissions are required to use this feature.',
+          );
+        }
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Location Permission Required'),
+              content: const Text(
+                'Location permissions are permanently denied. Please enable them in app settings.',
+              ),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
+                TextButton(
+                  child: const Text('Settings'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Geolocator.openAppSettings();
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      }
+      return;
+    }
+
+    // Start periodic location check with a longer interval
+    _locationCheckTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      _checkCurrentLocation();
+    });
+
+    // Initial location check
+    _checkCurrentLocation();
+  }
+
+  Future<void> _checkCurrentLocation() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 5),
+      );
+      
+      if (!mounted) return;
+
+      // Check if the location is within Quezon City bounds
+      const double qcMinLat = 14.4;
+      const double qcMaxLat = 14.9;
+      const double qcMinLng = 120.8;
+      const double qcMaxLng = 121.3;
+
+      bool isInQC = position.latitude >= qcMinLat &&
+          position.latitude <= qcMaxLat &&
+          position.longitude >= qcMinLng &&
+          position.longitude <= qcMaxLng;
+
+      // Only show notification if the status has changed
+      if (isInQC != _previousIsInQuezonCity) {
+        if (!mounted) return;
+        
+        if (!isInQC) {
+          AppFlushBar.showCustom(
+            context,
+            title: 'Location Alert',
+            message: 'You are currently outside Quezon City. Please select a location within Quezon City.',
+            backgroundColor: const Color(0xFFB8585B),
+            duration: const Duration(seconds: 4),
+          );
+        }
+
+        // Update both current and previous states
+        setState(() {
+          _isInQuezonCity = isInQC;
+          _previousIsInQuezonCity = isInQC;
+        });
+      } else {
+        // Just update the current position without showing notification
+        setState(() {
+          _currentPosition = position;
+        });
+      }
+    } catch (e) {
+      print('Error getting location: $e');
+      if (mounted) {
+        AppFlushBar.showError(
+          context,
+          message: 'Unable to get your location. Please check your location settings.',
+        );
+      }
+    }
+  }
+
+  // Call this function when Markers layer is enabled
   void _loadVerifiedReportMarkers() async {
     if (!_layerOptions['Markers']!)
       return; // Ensure it's only called when Markers are enabled
@@ -594,11 +757,9 @@ class _MappingScreenState extends State<MappingScreen>
           _buildLocationSelector(context, colorScheme),
           _buildHeatmapLegend(),
           SizedBox(
-            height: MediaQuery.of(context).size.height *
-                0.60, // 🔥 45% of screen height (or adjust)
+            height: MediaQuery.of(context).size.height * 0.60,
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Stack(
@@ -1384,6 +1545,7 @@ class _MappingScreenState extends State<MappingScreen>
   @override
   void dispose() {
     _mapController?.dispose();
+    _locationCheckTimer?.cancel();
     super.dispose();
   }
 }
