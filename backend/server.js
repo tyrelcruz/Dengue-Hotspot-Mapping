@@ -36,21 +36,18 @@ app.use(
 // Database connection
 const connectDB = require("./db/connect");
 
-// ^ Routes
-const authRoutes = require("./routes/auth");
-const reportsRoutes = require("./routes/reports");
-const analyticsRoutes = require("./routes/analytics");
-const notificationRoutes = require("./routes/notifications");
-const interventionRoutes = require("./routes/interventions");
-const adminPostRoutes = require("./routes/adminPosts");
+// Routes
+app.use("/api/v1/auth", require("./routes/auth"));
+app.use("/api/v1/reports", require("./routes/reports"));
+app.use("/api/v1/analytics", require("./routes/analytics"));
+app.use("/api/v1/notifications", require("./routes/notifications"));
+app.use("/api/v1/interventions", require("./routes/interventions"));
+app.use("/api/v1/adminposts", require("./routes/adminPosts"));
+app.use("/api/v1/alerts", require("./routes/alerts"));
+app.use("/api/v1/barangays", require("./routes/barangays"));
+app.use("/api/v1/accounts", require("./routes/accounts"));
 
-app.use("/api/v1/auth", authRoutes);
-app.use("/api/v1/reports", reportsRoutes);
-app.use("/api/v1/analytics", analyticsRoutes);
-app.use("/api/v1/notifications", notificationRoutes);
-app.use("/api/v1/interventions", interventionRoutes);
-app.use("/api/v1/adminposts", adminPostRoutes);
-
+// Error handling
 app.use(errorController);
 
 // Server startup

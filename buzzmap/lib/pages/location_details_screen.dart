@@ -81,28 +81,39 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
       return data.map<Map<String, dynamic>>((report) {
+        final DateTime reportDate = DateTime.parse(report['date_and_time']);
+        final DateTime now = DateTime.now();
+        final Duration difference = now.difference(reportDate);
+        
+        String whenPosted;
+        if (difference.inDays > 0) {
+          whenPosted = '${difference.inDays} days ago';
+        } else if (difference.inHours > 0) {
+          whenPosted = '${difference.inHours} hours ago';
+        } else if (difference.inMinutes > 0) {
+          whenPosted = '${difference.inMinutes} minutes ago';
+        } else {
+          whenPosted = 'Just now';
+        }
+
         return {
           'username': report['user']?['username'] ?? 'Anonymous',
-          'whenPosted': 'Just now',
+          'whenPosted': whenPosted,
           'location': report['barangay'] ?? 'Unknown Location',
-          'barangay': report['barangay'], // Add this line
-          'date': report['date_and_time'].split('T').first,
-          'time':
-              TimeOfDay.fromDateTime(DateTime.parse(report['date_and_time']))
-                  .format(context),
+          'barangay': report['barangay'],
+          'date': '${reportDate.month}/${reportDate.day}/${reportDate.year}',
+          'time': '${reportDate.hour.toString().padLeft(2, '0')}:${reportDate.minute.toString().padLeft(2, '0')}',
           'reportType': report['report_type'],
           'description': report['description'],
           'images': report['images'] != null
               ? List<String>.from(report['images'])
               : <String>[],
-
           'iconUrl': 'assets/icons/person_1.svg',
-          'status': report['status'], // Add status
+          'status': report['status'],
         };
       }).toList();
-    } else {
-      throw Exception('Failed to fetch reports');
     }
+    throw Exception('Failed to fetch reports');
   }
 
   Future<void> _loadReports() async {
@@ -155,245 +166,317 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     final LatLng targetLocation = LatLng(widget.latitude, widget.longitude);
 
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 255, 255, 255),
-      appBar: CustomAppBar(
-        title: widget.location,
-        currentRoute: '/community',
+      backgroundColor: Colors.white,
+      resizeToAvoidBottomInset: false,
+      appBar: const CustomAppBar(
+        title: 'Location Details',
+        currentRoute: '/location-details',
         themeMode: 'dark',
       ),
-      body: Column(
+      body: SafeArea(
+        child: Stack(
         children: [
-          Stack(
-            clipBehavior: Clip.none,
+          Column(
             children: [
-              // Background container
-              Container(
-                height: MediaQuery.of(context).size.height * 0.40,
-                decoration: BoxDecoration(
-                  color: const Color.fromRGBO(36, 82, 97, 1),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 9),
-                    ),
-                  ],
-                ),
-              ),
-// Dengue Info Section (fixed container height, auto text adjust)
-              Positioned(
-                top: 20,
-                left: 16,
-                right: 16,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.topCenter,
-                  children: [
-                    // 📦 Main white container
-                    Container(
-                      height: 70, // 🔥 Fixed height
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 6,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Barangay name (small gray)
-                            AutoSizeText(
-                              widget.location,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              minFontSize: 10,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                height: 1.1,
-                                fontWeight: FontWeight.w500,
-                                color: Color.fromARGB(255, 69, 69, 69),
-                              ),
-                            ),
-
-                            // Street name (big bold)
-                            AutoSizeText(
-                              widget.streetName,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              minFontSize: 14,
-                              style: const TextStyle(
-                                fontSize: 22,
-                                height: 1.1,
-                                fontWeight: FontWeight.bold,
-                                color: Color.fromRGBO(36, 82, 97, 1),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // 🏷️ Overlapping badges
-                    Positioned(
-                      bottom: -18,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Cases Badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 15, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color.fromRGBO(255, 179, 0, 1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.warning_amber_rounded,
-                                  size: 16,
-                                  color: Color(0xFF264F64),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${cases > 0 ? cases : 0} Cases',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(width: 6),
-
-                          // Severity Badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _getSeverityColor(severity),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.local_hospital_rounded,
-                                  size: 16,
-                                  color: Color(0xFF264F64),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  severity != 'Unknown'
-                                      ? 'Case Severity: $severity'
-                                      : 'Severity N/A',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(
-                height: 24,
-              ),
-
-              // Google Map
-              Positioned(
-                top: 110,
-                left: 0,
-                right: 0,
-                height: 250,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(60),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(15),
-                    child: GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: targetLocation,
-                        zoom: 15.0,
-                      ),
-                      markers: {
-                        Marker(
-                          markerId: const MarkerId('selected-location'),
-                          position: targetLocation,
-                          icon: BitmapDescriptor.defaultMarkerWithHue(
-                            BitmapDescriptor.hueRed,
-                          ),
-                        ),
-                      },
-                      onMapCreated: (controller) {
-                        _mapController = controller;
-                      },
-                      zoomControlsEnabled: false,
-                      myLocationButtonEnabled: false,
-                      tiltGesturesEnabled: false,
-                      mapToolbarEnabled: false,
-                    ),
-                  ),
-                ),
-              ),
-              // Back to Maps button
-              Positioned(
-                bottom: 39,
-                left: 34,
-                child: SizedBox(
-                  width: 116,
-                  height: 31,
-                  child: DecoratedBox(
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Background container
+                  Container(
+                    height: MediaQuery.of(context).size.height * 0.40,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [
-                          Color.fromRGBO(248, 169, 0, 1),
-                          Color.fromRGBO(250, 221, 55, 1),
-                        ],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-                      borderRadius: BorderRadius.circular(15),
+                      color: const Color.fromRGBO(36, 82, 97, 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 9),
+                        ),
+                      ],
                     ),
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
+                  ),
+                  // Dengue Info Section (fixed container height, auto text adjust)
+                  Positioned(
+                    top: 20,
+                    left: 16,
+                    right: 16,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.topCenter,
+                      children: [
+                        // 📦 Main white container
+                        Container(
+                          height: 70, // 🔥 Fixed height
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 6,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Barangay name (small gray)
+                                AutoSizeText(
+                                  widget.location,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  minFontSize: 10,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    height: 1.1,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color.fromARGB(255, 69, 69, 69),
+                                  ),
+                                ),
+
+                                // Street name (big bold)
+                                AutoSizeText(
+                                  widget.streetName,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  minFontSize: 14,
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    height: 1.1,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color.fromRGBO(36, 82, 97, 1),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // 🏷️ Overlapping badges
+                        Positioned(
+                          bottom: -18,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // Cases Badge
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 15, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: const Color.fromRGBO(255, 179, 0, 1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.warning_amber_rounded,
+                                      size: 16,
+                                      color: Color(0xFF264F64),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${cases > 0 ? cases : 0} Cases',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(width: 6),
+
+                              // Severity Badge
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: _getSeverityColor(severity),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.local_hospital_rounded,
+                                      size: 16,
+                                      color: Color(0xFF264F64),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      severity != 'Unknown'
+                                          ? 'Case Severity: $severity'
+                                          : 'Severity N/A',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(
+                    height: 24,
+                  ),
+
+                  // Google Map
+                  Positioned(
+                    top: 110,
+                    left: 0,
+                    right: 0,
+                    height: 250,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(60),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(15),
+                        child: GoogleMap(
+                          initialCameraPosition: CameraPosition(
+                            target: targetLocation,
+                            zoom: 15.0,
+                          ),
+                          markers: {
+                            Marker(
+                              markerId: const MarkerId('selected-location'),
+                              position: targetLocation,
+                              icon: BitmapDescriptor.defaultMarkerWithHue(
+                                BitmapDescriptor.hueRed,
+                              ),
+                            ),
+                          },
+                          onMapCreated: (controller) {
+                            _mapController = controller;
+                          },
+                          zoomControlsEnabled: false,
+                          myLocationButtonEnabled: false,
+                          tiltGesturesEnabled: false,
+                          mapToolbarEnabled: false,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Back to Maps button
+                  Positioned(
+                    bottom: 39,
+                    left: 34,
+                    child: SizedBox(
+                      width: 116,
+                      height: 31,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color.fromRGBO(248, 169, 0, 1),
+                              Color.fromRGBO(250, 221, 55, 1),
+                            ],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
                           borderRadius: BorderRadius.circular(15),
                         ),
-                        padding: EdgeInsets.zero,
-                      ),
-                      child: const Text(
-                        "Back to Maps",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontStyle: FontStyle.italic,
-                          fontSize: 14,
-                          color: Color.fromRGBO(36, 82, 97, 1),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: const Text(
+                            "Back to Maps",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontStyle: FontStyle.italic,
+                              fontSize: 14,
+                              color: Color.fromRGBO(36, 82, 97, 1),
+                            ),
+                          ),
                         ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // Scrollable section
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _loadReports,
+                  edgeOffset: 80,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Text(
+                              'WHAT OTHERS ARE REPORTING...',
+                              style: Theme.of(context).textTheme.headlineLarge,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          if (_isLoadingPosts)
+                            const Center(child: CircularProgressIndicator())
+                          else if (_barangayPosts.isEmpty)
+                            const Center(
+                                child: Text('No reports for this barangay yet.'))
+                          else
+                            ..._barangayPosts.map((post) => Container(
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.05),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 16, horizontal: 16),
+                                    child: PostCard(
+                                      username: post['username'],
+                                      whenPosted: post['whenPosted'],
+                                      location: post['location'],
+                                      date: post['date'],
+                                      time: post['time'],
+                                      reportType: post['reportType'],
+                                      description: post['description'],
+                                      images: List<String>.from(post['images']),
+                                      iconUrl: post['iconUrl'],
+                                      numUpvotes: post['numUpvotes'] ?? 0,
+                                      numDownvotes: post['numDownvotes'] ?? 0,
+                                      type: 'bordered',
+                                    ),
+                                  ),
+                                )),
+                        ],
                       ),
                     ),
                   ),
@@ -401,73 +484,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
               ),
             ],
           ),
-
-          const SizedBox(height: 24),
-
-          // Scrollable section
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _loadReports,
-              edgeOffset: 80,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Text(
-                          'WHAT OTHERS ARE REPORTING...',
-                          style: Theme.of(context).textTheme.headlineLarge,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      if (_isLoadingPosts)
-                        const Center(child: CircularProgressIndicator())
-                      else if (_barangayPosts.isEmpty)
-                        const Center(
-                            child: Text('No reports for this barangay yet.'))
-                      else
-                        ..._barangayPosts.map((post) => Container(
-                              margin: const EdgeInsets.only(bottom: 16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 16, horizontal: 16),
-                                child: PostCard(
-                                  username: post['username'],
-                                  whenPosted: post['whenPosted'],
-                                  location: post['location'],
-                                  date: post['date'],
-                                  time: post['time'],
-                                  reportType: post['reportType'],
-                                  description: post['description'],
-                                  images: List<String>.from(post['images']),
-                                  iconUrl: post['iconUrl'],
-                                  numUpvotes: post['numUpvotes'] ?? 0,
-                                  numDownvotes: post['numDownvotes'] ?? 0,
-                                  type: 'bordered',
-                                ),
-                              ),
-                            )),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
         ],
+        ),
       ),
       floatingActionButton: Stack(
         children: [

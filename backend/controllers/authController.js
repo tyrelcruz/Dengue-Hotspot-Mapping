@@ -51,7 +51,9 @@ const login = asyncErrorHandler(async (req, res) => {
       "Please provide both credentials for email and password."
     );
   }
-
+  if (!role) {
+    throw new BadRequestError("Please provide an account type.");
+  }
   const account = await Account.findOne({ email });
 
   if (!account) {

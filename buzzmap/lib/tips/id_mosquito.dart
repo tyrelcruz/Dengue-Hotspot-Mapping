@@ -1,6 +1,7 @@
 import 'package:buzzmap/main.dart';
 import 'package:flutter/material.dart';
 import 'package:buzzmap/widgets/appbar/custom_app_bar.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class IdMosquito extends StatelessWidget {
   const IdMosquito({super.key});
@@ -21,10 +22,26 @@ class IdMosquito extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const SizedBox(height: 15),
-            Image.network(
-              'https://1000logos.net/wp-content/uploads/2023/02/Queensland-Government-logo.png',
+            CachedNetworkImage(
+              imageUrl: 'https://1000logos.net/wp-content/uploads/2023/02/Queensland-Government-logo.png',
               width: double.infinity,
               height: 50,
+              placeholder: (context, url) => Container(
+                width: double.infinity,
+                height: 50,
+                color: Colors.grey[200],
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                ),
+              ),
+              errorWidget: (context, url, error) => Container(
+                width: double.infinity,
+                height: 50,
+                color: Colors.grey[200],
+                child: const Icon(Icons.error),
+              ),
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 27.0),

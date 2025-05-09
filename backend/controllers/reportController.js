@@ -63,32 +63,21 @@ const getReport = asyncErrorHandler(async (req, res) => {
 });
 
 // * UPDATED createReport with fixed ImgBB integration for express-fileupload
+const ALLOWED_REPORT_TYPES = ["Breeding Site", "Standing Water", "Infestation"];
 const createReport = asyncErrorHandler(async (req, res) => {
-  console.log("REQ BODY:", req.body);  // Logs the form data
-  console.log("REQ FILES:", req.files); // Logs all uploaded files
+  console.log("[DEBUG] REQ BODY:", req.body);  // Logs the form data
+  console.log("[DEBUG] REQ FILES:", req.files); // Logs all uploaded files
 
   // Check if the file is present in the request
   if (req.files && req.files.images) {
-    // Ensure it's in the expected array or object format
     const imageFiles = Array.isArray(req.files.images) ? req.files.images : [req.files.images];
-    
     imageFiles.forEach((file) => {
-      console.log("Uploaded Image:", file.name);  // Log the name of the uploaded image
-      console.log("Image Size:", file.size);     // Log the size of the uploaded image
-
-      // You can save the image file here (e.g., using the mv method)
-      const uploadPath = path.join(__dirname, 'uploads', file.name);  // Set the upload directory
-      console.log('UPLOADDD'+uploadPath)
-      // Move the uploaded file to the desired location
-      file.mv(uploadPath, (err) => {
-        if (err) {
-          return res.status(500).json({ error: 'File upload failed', details: err });
-        }
-        console.log(`File uploaded to ${uploadPath}`);
-      });
+      console.log("[DEBUG] Uploaded Image Name:", file.name);
+      console.log("[DEBUG] Uploaded Image Size:", file.size);
+      console.log("[DEBUG] Uploaded Image Mimetype:", file.mimetype);
     });
   } else {
-    console.log("No images found in the request.");
+    console.log("[DEBUG] No images found in the request.");
   }
 
   // Reconstruct specific_location from the form data
@@ -123,6 +112,10 @@ const createReport = asyncErrorHandler(async (req, res) => {
     return res.status(400).json({ error: `${req.body.barangay} is not a valid barangay.` });
   }
 
+  if (!ALLOWED_REPORT_TYPES.includes(req.body.report_type)) {
+    return res.status(400).json({ error: `Invalid report_type. Allowed values: ${ALLOWED_REPORT_TYPES.join(", ")}.` });
+  }
+
   // Continue with creating the report...
   const imageUrls = [];
   if (req.files && req.files.images) {
@@ -130,23 +123,27 @@ const createReport = asyncErrorHandler(async (req, res) => {
     for (const file of imageFiles) {
       try {
         const imgbbResponse = await uploadToImgBB(file.data);  // Assuming `file.data` contains the image data
+        console.log("[DEBUG] ImgBB Response:", imgbbResponse);
         imageUrls.push(imgbbResponse.url);  // Store the URL returned by ImgBB
       } catch (error) {
-        console.error("ImgBB upload error:", error);
+        console.error("[DEBUG] ImgBB upload error:", error);
         return res.status(500).json({ error: "Image upload failed" });
       }
     }
   }
 
-  const report = await Report.create({
+  const reportData = {
     user: userId,
     barangay: req.body.barangay,
     specific_location,
     date_and_time: req.body.date_and_time,
     report_type: req.body.report_type,
     description: req.body.description,
-    images: imageUrls,  // Store ImgBB URLs for images
-  });
+    images: imageUrls,
+  };
+  console.log("[DEBUG] Constructed Report Data:", reportData);
+
+  const report = await Report.create(reportData);
 
   await Notification.create({
     report: report._id,
@@ -160,12 +157,10 @@ const createReport = asyncErrorHandler(async (req, res) => {
       _id: report._id,
       barangay: report.barangay,
       report_type: report.report_type,
-      images: report.images,  // Include ImgBB URLs in the response
+      images: report.images,
     },
   });
 });
-
-
 
 // * UPDATED deleteReport to handle ImgBB URLs
 const deleteReport = asyncErrorHandler(async (req, res) => {
