@@ -423,7 +423,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         child: const Text('Cancel'),
                                       ),
                                       TextButton(
-                                        onPressed: () {
+                            onPressed: () {
                                           Navigator.pop(context, _forgotEmailController.text.trim());
                                         },
                                         child: const Text('Submit'),

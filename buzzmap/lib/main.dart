@@ -17,6 +17,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 
 import 'package:buzzmap/services/notification_service.dart';
+import 'package:buzzmap/services/alert_service.dart';
+import 'package:buzzmap/widgets/global_alert_overlay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

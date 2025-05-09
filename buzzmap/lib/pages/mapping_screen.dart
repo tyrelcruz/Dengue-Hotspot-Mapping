@@ -17,6 +17,8 @@ import 'package:buzzmap/auth/config.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:buzzmap/widgets/location_notification.dart';
+import 'package:buzzmap/services/alert_service.dart';
+import 'package:buzzmap/widgets/global_alert.dart';
 
 class MappingScreen extends StatefulWidget {
   final double? initialLatitude;
@@ -223,6 +225,10 @@ class _MappingScreenState extends State<MappingScreen>
   Map<String, dynamic> _dengueData = {};
   bool _isLoadingData = true;
 
+  final AlertService _alertService = AlertService();
+  bool _showAlert = false;
+  Map<String, dynamic>? _currentAlert;
+
   @override
   void initState() {
     super.initState();
@@ -275,6 +281,23 @@ class _MappingScreenState extends State<MappingScreen>
     });
 
     _fetchDengueData();
+
+    // Start listening for alerts
+    _alertService.alertStream.listen((alert) {
+      debugPrint('Received new alert in mapping screen: $alert');
+      if (mounted) {
+        setState(() {
+          _currentAlert = alert;
+          _showAlert = true;
+          debugPrint('Alert state updated: _showAlert = $_showAlert, _currentAlert = $_currentAlert');
+        });
+      }
+    }, onError: (error) {
+      debugPrint('Error in alert stream: $error');
+    });
+
+    // Start polling for alerts
+    _alertService.startPolling();
   }
 
   @override
@@ -291,6 +314,8 @@ class _MappingScreenState extends State<MappingScreen>
     
     // Clear any existing notifications
     LocationNotificationService.dismiss();
+    
+    _alertService.dispose();
     
     super.dispose();
   }
@@ -831,6 +856,7 @@ class _MappingScreenState extends State<MappingScreen>
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    debugPrint('Building mapping screen. Alert state: _showAlert = $_showAlert, _currentAlert = $_currentAlert');
 
     return Scaffold(
       backgroundColor: colorScheme.primary,
@@ -843,284 +869,292 @@ class _MappingScreenState extends State<MappingScreen>
           themeMode: 'dark',
         ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 16),
-            child: Text(
-              'CHECK YOUR PLACE',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Koulen',
-                fontSize: 46,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                height: 1.5,
+          Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 16),
+                child: Text(
+                  'CHECK YOUR PLACE',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Koulen',
+                    fontSize: 46,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    height: 1.5,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const Text(
-            'Stay Protected. Look out for Dengue Outbreaks.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-              color: Colors.white,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 9),
-          _buildLocationSelector(context, colorScheme),
-          _buildHeatmapLegend(),
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.60,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Stack(
-                  children: [
-                    // 1. Google Map
-                    GoogleMap(
-                      mapType: _currentMapType,
-                      initialCameraPosition: CameraPosition(
-                        target: LatLng(
-                          widget.initialLatitude ?? 14.6760, // Center of Quezon City
-                          widget.initialLongitude ?? 121.0437, // Center of Quezon City
-                        ),
-                        zoom: widget.initialZoom ?? 11.4,
-                      ),
-                      onMapCreated: (controller) => _mapController = controller,
-                      circles: _circles,
-                      markers: _markers,
-                      polygons: _polygons,
-                      myLocationEnabled: true,
-                      myLocationButtonEnabled: true,
-                      zoomControlsEnabled: true,
-                      mapToolbarEnabled: false,
-                    ),
-
-                    // 2. Loading indicator
-                    if (_isLoading)
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 8),
-                              Text('Loading map data...'),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                    // 3. Map layer controls
-                    _buildLayerControls(),
-
-// 4. Floating Dengue Intervention Card (Always visible)
-                    if (_isCardVisible)
-                      Positioned(
-                        bottom: 10,
-                        left: 20,
-                        right: 20,
-                        child: Material(
-                          elevation: 8,
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
+              const Text(
+                'Stay Protected. Look out for Dengue Outbreaks.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: Colors.white,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 9),
+              _buildLocationSelector(context, colorScheme),
+              _buildHeatmapLegend(),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Stack(
+                      children: [
+                        GoogleMap(
+                          mapType: _currentMapType,
+                          initialCameraPosition: CameraPosition(
+                            target: LatLng(
+                              widget.initialLatitude ?? 14.6760,
+                              widget.initialLongitude ?? 121.0437,
                             ),
-                            height: 300, // 🔥 Fixed height so body can scroll
-                            child: Column(
-                              children: [
-                                // Top Header (Logo + Text + Arrow)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(
-                                        child: Row(
-                                          children: [
-                                            SvgPicture.asset(
-                                              'assets/icons/logo_ligthbg.svg',
-                                              width: 45,
-                                              height: 45,
-                                              fit: BoxFit.contain,
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: RichText(
-                                                textAlign: TextAlign.center,
-                                                text: TextSpan(
-                                                  style: TextStyle(
-                                                    fontFamily: 'Koulen',
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.bold,
-                                                    height: 1.2,
-                                                    letterSpacing: 1.0,
-                                                  ),
-                                                  children: [
-                                                    TextSpan(
-                                                      text:
-                                                          'Broad Urban Zone and Zeroing\n',
-                                                      style: TextStyle(
-                                                        color: Theme.of(context)
-                                                            .primaryColor,
-                                                      ),
-                                                    ),
-                                                    TextSpan(
-                                                      text:
-                                                          'Metropolitan Active Prevention',
-                                                      style: TextStyle(
-                                                        color: Color(
-                                                            0xFF4AA8C7), // 🔥 Your primary color hardcoded (or whatever you want)
-                                                      ),
-                                                    ),
-                                                  ],
+                            zoom: widget.initialZoom ?? 11.4,
+                          ),
+                          onMapCreated: (controller) => _mapController = controller,
+                          circles: _circles,
+                          markers: _markers,
+                          polygons: _polygons,
+                          myLocationEnabled: true,
+                          myLocationButtonEnabled: true,
+                          zoomControlsEnabled: true,
+                          mapToolbarEnabled: false,
+                        ),
+                        if (_isLoading)
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(),
+                                  SizedBox(height: 8),
+                                  Text('Loading map data...'),
+                                ],
+                              ),
+                            ),
+                          ),
+                        _buildLayerControls(),
+                        if (_isCardVisible)
+                          Positioned(
+                            bottom: 10,
+                            left: 20,
+                            right: 20,
+                            child: Material(
+                              elevation: 8,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                height: 300,
+                                child: Column(
+                                  children: [
+                                    // Top Header (Logo + Text + Arrow)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Row(
+                                              children: [
+                                                SvgPicture.asset(
+                                                  'assets/icons/logo_ligthbg.svg',
+                                                  width: 45,
+                                                  height: 45,
+                                                  fit: BoxFit.contain,
                                                 ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: RichText(
+                                                    textAlign: TextAlign.center,
+                                                    text: TextSpan(
+                                                      style: TextStyle(
+                                                        fontFamily: 'Koulen',
+                                                        fontSize: 16,
+                                                        fontWeight: FontWeight.bold,
+                                                        height: 1.2,
+                                                        letterSpacing: 1.0,
+                                                      ),
+                                                      children: [
+                                                        TextSpan(
+                                                          text:
+                                                              'Broad Urban Zone and Zeroing\n',
+                                                          style: TextStyle(
+                                                            color: Theme.of(context)
+                                                                .primaryColor,
+                                                          ),
+                                                        ),
+                                                        TextSpan(
+                                                          text:
+                                                              'Metropolitan Active Prevention',
+                                                          style: TextStyle(
+                                                            color: Color(
+                                                                0xFF4AA8C7), // 🔥 Your primary color hardcoded (or whatever you want)
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                                Icons.keyboard_arrow_down),
+                                            onPressed: () {
+                                              setState(() {
+                                                _isCardVisible = false;
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // Divider line
+                                    Container(
+                                      height: 1,
+                                      color: Colors.grey[300],
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 12),
+                                    ),
+
+                                    Expanded(
+                                      child: SingleChildScrollView(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Dengue Situation Overview',
+                                              style: TextStyle(
+                                                fontFamily: 'Koulen',
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
                                               ),
                                             ),
+                                            const SizedBox(height: 8),
+                                            const Text(
+                                              'Recent dengue cases are rising. Follow health precautions.',
+                                              style: TextStyle(fontSize: 14),
+                                            ),
+                                            const SizedBox(height: 12),
+
+                                            // Call the method to get recommendations based on severity
+                                            RecommendationsWidget(
+                                              severity: selectedSeverity ?? 'Unknown',
+                                              hazardRiskLevels: hazardRiskLevels,
+                                              latitude: _barangayCentroids[selectedBarangay ?? '']?.latitude ?? 14.6760,
+                                              longitude: _barangayCentroids[selectedBarangay ?? '']?.longitude ?? 121.0437,
+                                              selectedBarangay: selectedBarangay ?? '',
+                                              barangayColor: _getColorForBarangay(selectedBarangay ?? ''),
+                                            ),
+                                            // Prescriptive logic here
                                           ],
                                         ),
                                       ),
-                                      IconButton(
-                                        icon: const Icon(
-                                            Icons.keyboard_arrow_down),
-                                        onPressed: () {
-                                          setState(() {
-                                            _isCardVisible = false;
-                                          });
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // Divider line
-                                Container(
-                                  height: 1,
-                                  color: Colors.grey[300],
-                                  margin: const EdgeInsets.symmetric(
-                                      horizontal: 12),
-                                ),
-
-                                Expanded(
-                                  child: SingleChildScrollView(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text(
-                                          'Dengue Situation Overview',
-                                          style: TextStyle(
-                                            fontFamily: 'Koulen',
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        const Text(
-                                          'Recent dengue cases are rising. Follow health precautions.',
-                                          style: TextStyle(fontSize: 14),
-                                        ),
-                                        const SizedBox(height: 12),
-
-                                        // Call the method to get recommendations based on severity
-                                        RecommendationsWidget(
-                                          severity: selectedSeverity ?? 'Unknown',
-                                          hazardRiskLevels: hazardRiskLevels,
-                                          latitude: _barangayCentroids[selectedBarangay ?? '']?.latitude ?? 14.6760,
-                                          longitude: _barangayCentroids[selectedBarangay ?? '']?.longitude ?? 121.0437,
-                                          selectedBarangay: selectedBarangay ?? '',
-                                          barangayColor: _getColorForBarangay(selectedBarangay ?? ''),
-                                        ),
-                                        // Prescriptive logic here
-                                      ],
                                     ),
-                                  ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-
-                    // 5. Minimized FAB button if hidden
-                    if (!_isCardVisible)
-                      Positioned(
-                        bottom: 10,
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: AnimatedBuilder(
-                            animation: _bounceAnimation,
-                            builder: (context, child) {
-                              return Transform.translate(
-                                offset: Offset(
-                                    0,
-                                    -_bounceAnimation
-                                        .value), // 🔥 moves up and down
-                                child: FloatingActionButton(
-                                  mini: true,
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: Colors.black,
-                                  onPressed: () {
-                                    setState(() {
-                                      _isCardVisible = true;
-                                    });
-                                  },
-                                  child: const Icon(Icons.keyboard_arrow_up),
-                                ),
-                              );
-                            },
+                        if (!_isCardVisible)
+                          Positioned(
+                            bottom: 10,
+                            left: 0,
+                            right: 0,
+                            child: Center(
+                              child: AnimatedBuilder(
+                                animation: _bounceAnimation,
+                                builder: (context, child) {
+                                  return Transform.translate(
+                                    offset: Offset(0, -_bounceAnimation.value),
+                                    child: FloatingActionButton(
+                                      mini: true,
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: Colors.black,
+                                      onPressed: () {
+                                        setState(() {
+                                          _isCardVisible = true;
+                                        });
+                                      },
+                                      child: const Icon(Icons.keyboard_arrow_up),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 5),
-            child: RichText(
-              textAlign: TextAlign.center,
-              text: TextSpan(
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-                children: [
-                  const TextSpan(text: 'NOTE: '),
-                  const TextSpan(text: 'Click on '),
-                  TextSpan(
-                    text: _getInteractionText(),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Color.fromRGBO(102, 255, 102, 1.0),
+                      ],
                     ),
                   ),
-                  const TextSpan(text: ' to view dengue reports.'),
-                ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 5),
+                child: RichText(
+                  textAlign: TextAlign.center,
+                  text: TextSpan(
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    children: [
+                      const TextSpan(text: 'NOTE: '),
+                      const TextSpan(text: 'Click on '),
+                      TextSpan(
+                        text: _getInteractionText(),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color.fromRGBO(102, 255, 102, 1.0),
+                        ),
+                      ),
+                      const TextSpan(text: ' to view dengue reports.'),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // Global Alert Overlay
+          if (_showAlert && _currentAlert != null)
+            Positioned.fill(
+              child: GlobalAlert(
+                messages: List<String>.from(_currentAlert!['messages'] ?? []),
+                severity: _currentAlert!['severity'],
+                barangays: _currentAlert!['barangays'] != null
+                    ? List<Map<String, dynamic>>.from(_currentAlert!['barangays'])
+                    : null,
+                onDismiss: () {
+                  debugPrint('Alert dismissed');
+                  setState(() {
+                    _showAlert = false;
+                  });
+                },
               ),
             ),
-          ),
         ],
       ),
     );
