@@ -1,12 +1,12 @@
 const express = require("express");
 const {
-  getInterventions,
   patternRecognitionAnalysis,
+  submitCsvFile,
+  retrievePatternRecognitionResults,
+  getLocationRiskLevelByWeather,
 } = require("../controllers/analyticsController");
 const { detectClustersToday } = require("../services/clusterService");
 const router = express.Router();
-
-router.post("/interventions", getInterventions);
 
 router.get("/pattern-recognition", patternRecognitionAnalysis);
 
@@ -19,5 +19,14 @@ router.get("/cluster-check", async (req, res) => {
     res.status(500).json({ error: "Failed to detect clusters." });
   }
 });
+
+router.post("/submit-csv-file", submitCsvFile);
+
+router.get(
+  "/retrieve-pattern-recognition-results",
+  retrievePatternRecognitionResults
+);
+
+router.post("/get-location-weather-risk", getLocationRiskLevelByWeather);
 
 module.exports = router;

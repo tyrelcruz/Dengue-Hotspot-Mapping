@@ -51,6 +51,14 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/interventions", interventionRoutes);
 app.use("/api/v1/adminposts", adminPostRoutes);
 
+// Routes
+app.use("/api/v1/auth", require("./routes/auth"));
+app.use("/api/v1/reports", require("./routes/reports"));
+app.use("/api/v1/analytics", require("./routes/analytics"));
+app.use("/api/v1/notifications", require("./routes/notifications"));
+app.use("/api/v1/barangays", require("./routes/barangays"));
+
+// Error handling
 app.use(errorController);
 
 // Server startup

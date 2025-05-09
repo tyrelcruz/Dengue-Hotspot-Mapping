@@ -2,159 +2,11 @@ const axios = require("axios");
 const Report = require("../models/Reports");
 const asyncErrorHandler = require("../middleware/asyncErrorHandler");
 const { detectClusters } = require("../services/clusterService");
-
-const getInterventions = asyncErrorHandler(async (req, res) => {
-  try {
-    // Today's range (full day)
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0); // Start of today (midnight)
-
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999); // End of today
-
-    // Past 6 days
-    const sevenDaysAgo = new Date(todayStart);
-    sevenDaysAgo.setDate(todayStart.getDate() - 6); // 6 days before today
-
-    const yesterdayEnd = new Date(todayStart);
-    yesterdayEnd.setMilliseconds(-1); // End of yesterday (just before today started)
-
-    console.log("Date ranges:");
-    console.log("- Today:", todayStart, "to", todayEnd);
-    console.log("- Past 6 days:", sevenDaysAgo, "to", yesterdayEnd);
-
-    // Check what data we have in each range
-    const todayDocs = await Report.countDocuments({
-      date_and_time: { $gte: todayStart, $lte: todayEnd },
-    });
-    console.log("Documents for today:", todayDocs);
-
-    const pastDocs = await Report.countDocuments({
-      date_and_time: { $gte: sevenDaysAgo, $lte: yesterdayEnd },
-    });
-    console.log("Documents for past 6 days:", pastDocs);
-
-    const reports = await Report.aggregate([
-      {
-        $facet: {
-          // TODAY'S COUNTS
-          today: [
-            {
-              $match: {
-                date_and_time: { $gte: todayStart, $lte: todayEnd },
-              },
-            },
-            {
-              $group: {
-                _id: {
-                  barangay: "$barangay",
-                  report_type: "$report_type",
-                },
-                today_total: { $sum: 1 },
-              },
-            },
-          ],
-          // PAST 6-DAY AVERAGE (excluding today)
-          past: [
-            {
-              $match: {
-                date_and_time: { $gte: sevenDaysAgo, $lte: yesterdayEnd },
-              },
-            },
-            {
-              $group: {
-                _id: {
-                  barangay: "$barangay",
-                  report_type: "$report_type",
-                },
-                past_total: { $sum: 1 },
-              },
-            },
-            {
-              $project: {
-                _id: 1,
-                past_avg: { $divide: ["$past_total", 6] },
-              },
-            },
-          ],
-        },
-      },
-      // Combine the results
-      {
-        $project: {
-          all_data: {
-            $concatArrays: [
-              { $ifNull: ["$today", []] },
-              { $ifNull: ["$past", []] },
-            ],
-          },
-        },
-      },
-      { $unwind: "$all_data" },
-      {
-        $group: {
-          _id: {
-            barangay: "$all_data._id.barangay",
-            report_type: "$all_data._id.report_type",
-          },
-          today_count: { $max: { $ifNull: ["$all_data.today_total", 0] } },
-          past_average: { $max: { $ifNull: ["$all_data.past_avg", 0] } },
-        },
-      },
-      {
-        $group: {
-          _id: "$_id.barangay",
-          report_data: {
-            $push: {
-              report_type: "$_id.report_type",
-              today_count: "$today_count",
-              past_average: "$past_average",
-            },
-          },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          barangay: "$_id",
-          report_counts_today: {
-            $arrayToObject: {
-              $map: {
-                input: "$report_data",
-                as: "data",
-                in: { k: "$$data.report_type", v: "$$data.today_count" },
-              },
-            },
-          },
-          report_7day_avg: {
-            $arrayToObject: {
-              $map: {
-                input: "$report_data",
-                as: "data",
-                in: { k: "$$data.report_type", v: "$$data.past_average" },
-              },
-            },
-          },
-        },
-      },
-    ]);
-
-    console.log("Reports Data:", JSON.stringify(reports, null, 2));
-
-    const response = await axios.post("http://localhost:8000/api/v1/analyze", {
-      data: reports,
-    });
-
-    res.json({ recommendations: response.data });
-  } catch (error) {
-    console.error("Error in getInterventions:", error);
-    res.status(500).send("Error fetching data.");
-  }
-});
+const Barangay = require("../models/Barangays");
+const weatherAnalysis = require("../services/weatherRiskService");
 
 const patternRecognitionAnalysis = asyncErrorHandler(async (req, res) => {
   try {
-    // Send the fetched report data to the Python prescriptive analytics API
     const pythonApiUrl = "http://localhost:8000/api/v1/pattern-recognition";
     const response = await axios.get(pythonApiUrl);
     const analysisResults = response.data;
@@ -166,16 +18,53 @@ const patternRecognitionAnalysis = asyncErrorHandler(async (req, res) => {
       data: analysisResults,
     });
   } catch (error) {
-    console.error(
-      "Error in patternRecognitionAnalysis calling FastAPI:",
-      error.message
-    );
+    console.error("Error calling FastAPI:", error.message);
     res.status(500).json({
       success: false,
       message: "Failed to fetch pattern recognition analysis.",
     });
   }
 });
+
+const retrievePatternRecognitionResults = asyncErrorHandler(
+  async (req, res) => {
+    const { barangay_name, pattern, risk_level, topCheck } = req.query;
+
+    try {
+      const query = {};
+
+      if (barangay_name) {
+        query.name = { $regex: new RegExp(barangay_name, "i") };
+      }
+
+      if (pattern) {
+        query.triggered_pattern = pattern;
+      }
+
+      if (risk_level) {
+        query.risk_level = risk_level;
+      }
+
+      let results;
+      if (topCheck) {
+        results = await Barangay.find(query).limit(parseInt(topCheck));
+      } else {
+        results = await Barangay.find(query);
+      }
+
+      res.status(200).json({
+        success: true,
+        count: results.length,
+        data: results,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: `Server Error: ${error}`,
+      });
+    }
+  }
+);
 
 const detectReportedClusters = asyncErrorHandler(async (req, res) => {
   const clusters = await detectClusters();
@@ -213,20 +102,83 @@ const submitCsvFile = asyncErrorHandler(async (req, res) => {
     fs.unlinkSync(req.file.path);
 
     return res.status(200).json({
-      message: "CSV file uploaded successfully!",
+      message: "CSV uploaded successfully!",
       data: response.data,
     });
   } catch (error) {
     console.error("Error uploading file:", error);
     return res.status(500).json({
       error: "Failed to process file upload.",
-      message: error.message,
+      details: error.message,
+    });
+  }
+});
+
+const getLocationRiskLevelByWeather = asyncErrorHandler(async (req, res) => {
+  const { selectedLatitude, selectedLongitude } = req.body;
+  // Throw to Google Maps Weather API, then process here in Node, send the updated data to both the DB and front end
+
+  try {
+    const weatherDataResponse = await axios.get(
+      "https://weather.googleapis.com/v1/currentConditions:lookup",
+      {
+        params: {
+          key: process.env.GOOGLE_MAPS_WEATHER_API_KEY,
+          "location.latitude": selectedLatitude,
+          "location.longitude": selectedLongitude,
+        },
+      }
+    );
+
+    const weatherData = weatherDataResponse.data;
+
+    const extractedData = {
+      temperature: weatherData.temperature.degrees,
+      relativeHumidity: weatherData.relativeHumidity,
+      rainfall: weatherData.precipitation.qpf.quantity,
+    };
+
+    const result = await weatherAnalysis(
+      extractedData.rainfall,
+      extractedData.temperature,
+      extractedData.relativeHumidity
+    );
+
+    let recommendation;
+
+    if (result === "HIGH") {
+      recommendation =
+        "Stay alert! Based on the analyzed weather data, your area is an optimal breeding ground for mosquitoes!";
+    } else if (result === "MODERATE") {
+      recommendation =
+        "Tread with caution! Based on the analyzed weather data, your area shows some promises for dengue to thrive.";
+    } else {
+      recommendation =
+        "Based on the analyzed data, your area is safe from dengue as of the moment.";
+    }
+    res.status(200).json({
+      status: "success",
+      data: {
+        extractedData,
+        recommendation,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "Error fetching weather data: ",
+      error.response?.data || error.message
+    );
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to fetch weather data",
     });
   }
 });
 
 module.exports = {
-  getInterventions,
   patternRecognitionAnalysis,
   detectReportedClusters,
+  submitCsvFile,
+  retrievePatternRecognitionResults,
+  getLocationRiskLevelByWeather,
 };
