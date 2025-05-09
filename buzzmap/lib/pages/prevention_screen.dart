@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:buzzmap/data/articles_data.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class PreventionScreen extends StatelessWidget {
   const PreventionScreen({super.key});
@@ -298,11 +299,6 @@ class PreventionScreen extends StatelessWidget {
               return ArticleSampler(article: ArticlesData.articles[index]);
             },
             separatorBuilder: (context, index) => const SizedBox(height: 10),
-            // children: [
-            //   ...ArticlesData.articles.map((article) {
-            //     return ArticleSampler(article: article);
-            //   }),
-            // ],
           ),
           const SizedBox(height: 25)
         ],

@@ -934,9 +934,14 @@ class _MappingScreenState extends State<MappingScreen>
                                         const SizedBox(height: 12),
 
                                         // Call the method to get recommendations based on severity
-                                        buildRecommendations(
-                                            selectedSeverity ?? 'Unknown',
-                                            hazardRiskLevels),
+                                        RecommendationsWidget(
+                                          severity: selectedSeverity ?? 'Unknown',
+                                          hazardRiskLevels: hazardRiskLevels,
+                                          latitude: _barangayCentroids[selectedBarangay ?? '']?.latitude ?? 14.6760,
+                                          longitude: _barangayCentroids[selectedBarangay ?? '']?.longitude ?? 121.0437,
+                                          selectedBarangay: selectedBarangay ?? '',
+                                          barangayColor: _getColorForBarangay(selectedBarangay ?? ''),
+                                        ),
                                         // Prescriptive logic here
                                       ],
                                     ),
@@ -1523,7 +1528,14 @@ class _MappingScreenState extends State<MappingScreen>
               ),
             ),
             const SizedBox(height: 8),
-            buildRecommendations(severity, hazardRiskLevels),
+            RecommendationsWidget(
+              severity: severity,
+              hazardRiskLevels: hazardRiskLevels,
+              latitude: location.latitude,
+              longitude: location.longitude,
+              selectedBarangay: barangay,
+              barangayColor: _getColorForBarangay(barangay),
+            ),
 
             const SizedBox(height: 20), // 🔥 SMALL controlled space
 
@@ -1569,7 +1581,7 @@ class _MappingScreenState extends State<MappingScreen>
   Future<void> _fetchRiskLevels() async {
     try {
       final response = await http.get(
-        Uri.parse('http://localhost:4000/api/v1/analytics/retrieve-pattern-recognition-results'),
+        Uri.parse('${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
       );
 
       if (response.statusCode == 200) {
@@ -1622,7 +1634,7 @@ class _MappingScreenState extends State<MappingScreen>
     final pattern = _barangayPatterns[barangayName]?.toLowerCase();
 
     // If no data is available, return gray
-    if (riskLevel == null) return Colors.grey.shade700;
+    if (riskLevel == null || pattern == null) return Colors.grey.shade700;
 
     // If high risk, always return red
     if (riskLevel == 'high') return Colors.red.shade700;
@@ -1641,7 +1653,7 @@ class _MappingScreenState extends State<MappingScreen>
       return Colors.orange.shade500; // Default for moderate risk
     }
 
-    return Colors.grey.shade400; // Default fallback
+    return Colors.grey.shade700; // Default fallback
   }
 
   void _updatePolygonsWithRiskLevels() {
