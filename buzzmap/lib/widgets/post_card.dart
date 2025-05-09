@@ -16,21 +16,28 @@ class PostCard extends StatelessWidget {
   final List<String> images;
   final String iconUrl;
   final String type;
+  final VoidCallback? onReport;
+  final VoidCallback? onDelete;
+  final bool isOwner;
 
-  const PostCard(
-      {super.key,
-      required this.username,
-      required this.whenPosted,
-      this.location = '',
-      required this.date,
-      required this.time,
-      required this.reportType,
-      required this.description,
-      required this.numUpvotes,
-      required this.numDownvotes,
-      this.images = const <String>[],
-      required this.iconUrl,
-      this.type = 'normal'});
+  const PostCard({
+    super.key,
+    required this.username,
+    required this.whenPosted,
+    this.location = '',
+    required this.date,
+    required this.time,
+    required this.reportType,
+    required this.description,
+    required this.numUpvotes,
+    required this.numDownvotes,
+    this.images = const <String>[],
+    required this.iconUrl,
+    this.type = 'normal',
+    this.onReport,
+    this.onDelete,
+    this.isOwner = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +69,9 @@ class PostCard extends StatelessWidget {
                   subtitle: whenPosted,
                   iconUrl: iconUrl,
                   type: 'post',
+                  onReport: onReport,
+                  onDelete: onDelete,
+                  isOwner: isOwner,
                 ),
                 const SizedBox(height: 22),
                 Padding(

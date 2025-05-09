@@ -55,18 +55,78 @@ class AppFlushBar {
   /// Shows a custom message FlushBar with specified parameters.
   static Future<void> showCustom(
     BuildContext context, {
-    String? title,
+    required String title,
     required String message,
-    Color backgroundColor = const Color(0xFFB8585B),
+    required Color backgroundColor,
     Duration duration = const Duration(seconds: 3),
   }) {
-    return _showFlushBar(
-      context,
+    return Flushbar(
       title: title,
       message: message,
       backgroundColor: backgroundColor,
       duration: duration,
-    );
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.all(16),
+      borderRadius: BorderRadius.circular(12),
+      boxShadows: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.1),
+          offset: const Offset(0, 2),
+          blurRadius: 4,
+        ),
+      ],
+      icon: Padding(
+        padding: const EdgeInsets.only(right: 15),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.location_on,
+            color: Colors.white,
+            size: 24,
+          ),
+        ),
+      ),
+      shouldIconPulse: false,
+      flushbarPosition: FlushbarPosition.TOP,
+      titleText: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 16,
+        ),
+      ),
+      messageText: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          message,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+          ),
+        ),
+      ),
+      mainButton: Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: TextButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+          child: const Text(
+            'DISMISS',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    ).show(context);
   }
 
   /// Shows an empathetic feedback message (special for your use case).

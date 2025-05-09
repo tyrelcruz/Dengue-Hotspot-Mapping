@@ -16,10 +16,21 @@ import 'package:http/http.dart' as http;
 import 'package:buzzmap/auth/config.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:buzzmap/errors/flushbar.dart';
+import 'package:buzzmap/widgets/location_notification.dart';
 
 class MappingScreen extends StatefulWidget {
-  const MappingScreen({super.key});
+  final double? initialLatitude;
+  final double? initialLongitude;
+  final double? initialZoom;
+  final String? reportId;
+
+  const MappingScreen({
+    super.key,
+    this.initialLatitude,
+    this.initialLongitude,
+    this.initialZoom,
+    this.reportId,
+  });
 
   @override
   State<MappingScreen> createState() => _MappingScreenState();
@@ -27,7 +38,7 @@ class MappingScreen extends StatefulWidget {
 
 class _MappingScreenState extends State<MappingScreen>
     with SingleTickerProviderStateMixin {
-  GoogleMapController? _mapController;
+  late GoogleMapController _mapController;
   String? selectedDistrict;
   String? selectedBarangay;
   Set<Circle> _circles = {};
@@ -47,7 +58,7 @@ class _MappingScreenState extends State<MappingScreen>
   MapType _currentMapType = MapType.normal;
 
   final CameraPosition _initialCameraPosition = const CameraPosition(
-    target: LatLng(14.6760, 121.0437),
+    target: LatLng(14.6760, 121.0437), // Center of Quezon City
     zoom: 11.4,
   );
 
@@ -217,7 +228,7 @@ class _MappingScreenState extends State<MappingScreen>
     super.initState();
 
     // Initialize the default layer to show Markers initially
-    _layerOptions['Markers'] = false;
+    _layerOptions['Markers'] = true;  // Set to true by default
 
     _bounceController = AnimationController(
       vsync: this,
@@ -242,6 +253,19 @@ class _MappingScreenState extends State<MappingScreen>
       _initializeLocationServices();
     });
 
+    // If we have initial coordinates from a notification, add a marker
+    if (widget.initialLatitude != null && widget.initialLongitude != null) {
+      setState(() {
+        _markers.add(
+          Marker(
+            markerId: const MarkerId('notification-marker'),
+            position: LatLng(widget.initialLatitude!, widget.initialLongitude!),
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          ),
+        );
+      });
+    }
+
     // Using a slight delay to ensure Google Maps is fully loaded
     Timer(const Duration(milliseconds: 500), () {
       _updateMapLayers();
@@ -251,6 +275,24 @@ class _MappingScreenState extends State<MappingScreen>
     });
 
     _fetchDengueData();
+  }
+
+  @override
+  void dispose() {
+    // Cancel the location check timer
+    _locationCheckTimer?.cancel();
+    _locationCheckTimer = null;
+    
+    // Dispose the map controller
+    _mapController.dispose();
+    
+    // Dispose the bounce controller
+    _bounceController.dispose();
+    
+    // Clear any existing notifications
+    LocationNotificationService.dismiss();
+    
+    super.dispose();
   }
 
   Future<void> _initializeLocationServices() async {
@@ -295,9 +337,12 @@ class _MappingScreenState extends State<MappingScreen>
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         if (mounted) {
-          AppFlushBar.showError(
-            context,
+          LocationNotificationService.show(
+            context: context,
+            title: 'Location Error',
             message: 'Location permissions are required to use this feature.',
+            backgroundColor: const Color(0xFFB8585B),
+            duration: const Duration(seconds: 4),
           );
         }
         return;
@@ -339,7 +384,11 @@ class _MappingScreenState extends State<MappingScreen>
 
     // Start periodic location check with a longer interval
     _locationCheckTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      _checkCurrentLocation();
+      if (mounted) {  // Only check location if the widget is still mounted
+        _checkCurrentLocation();
+      } else {
+        timer.cancel();  // Cancel the timer if the widget is disposed
+      }
     });
 
     // Initial location check
@@ -366,40 +415,87 @@ class _MappingScreenState extends State<MappingScreen>
           position.longitude >= qcMinLng &&
           position.longitude <= qcMaxLng;
 
-      // Only show notification if the status has changed
-      if (isInQC != _previousIsInQuezonCity) {
-        if (!mounted) return;
-        
-        if (!isInQC) {
-          AppFlushBar.showCustom(
-            context,
-            title: 'Location Alert',
-            message: 'You are currently outside Quezon City. Please select a location within Quezon City.',
-            backgroundColor: const Color(0xFFB8585B),
-            duration: const Duration(seconds: 4),
-          );
-        }
+      // Find which barangay the user is in
+      String? currentBarangay = _findBarangayFromLocation(position);
 
-        // Update both current and previous states
-        setState(() {
-          _isInQuezonCity = isInQC;
-          _previousIsInQuezonCity = isInQC;
-        });
-      } else {
-        // Just update the current position without showing notification
-        setState(() {
-          _currentPosition = position;
-        });
+      // Show notification if we're in QC and found a barangay
+      if (isInQC && currentBarangay != null) {
+        // Only show notification if we've moved to a different barangay
+        if (currentBarangay != selectedBarangay) {
+          final riskLevel = _barangayRiskLevels[currentBarangay]?.toLowerCase() ?? 'unknown';
+          final pattern = _barangayPatterns[currentBarangay]?.toLowerCase() ?? 'no data';
+          final color = _getColorForBarangay(currentBarangay);
+          
+          print('Showing notification for barangay: $currentBarangay');
+          print('Risk Level: $riskLevel, Pattern: $pattern');
+          
+          LocationNotificationService.show(
+            context: context,
+            title: 'Location Detected: $currentBarangay',
+            message: 'Risk Level: ${riskLevel.toUpperCase()}\nPattern: ${pattern.toUpperCase()}',
+            backgroundColor: color,
+            duration: const Duration(seconds: 5),
+          );
+
+          // Update the selected barangay
+          setState(() {
+            selectedBarangay = currentBarangay;
+          });
+        }
+      } else if (!isInQC && isInQC != _previousIsInQuezonCity) {
+        // Only show outside QC notification when status changes
+        LocationNotificationService.show(
+          context: context,
+          title: 'Location Alert',
+          message: 'You are currently outside Quezon City. Please select a location within Quezon City.',
+          backgroundColor: const Color(0xFFB8585B),
+          duration: const Duration(seconds: 4),
+        );
       }
+
+      // Update states
+      setState(() {
+        _isInQuezonCity = isInQC;
+        _previousIsInQuezonCity = isInQC;
+        _currentPosition = position;
+      });
     } catch (e) {
       print('Error getting location: $e');
       if (mounted) {
-        AppFlushBar.showError(
-          context,
+        LocationNotificationService.show(
+          context: context,
+          title: 'Location Error',
           message: 'Unable to get your location. Please check your location settings.',
+          backgroundColor: const Color(0xFFB8585B),
+          duration: const Duration(seconds: 4),
         );
       }
     }
+  }
+
+  String? _findBarangayFromLocation(Position position) {
+    for (var entry in barangayBoundaries.entries) {
+      if (_isPointInPolygon(position, entry.value)) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
+
+  bool _isPointInPolygon(Position point, List<LatLng> polygon) {
+    bool isInside = false;
+    int j = polygon.length - 1;
+
+    for (int i = 0; i < polygon.length; i++) {
+      if ((polygon[i].latitude > point.latitude) != (polygon[j].latitude > point.latitude) &&
+          (point.longitude < (polygon[j].longitude - polygon[i].longitude) * (point.latitude - polygon[i].latitude) /
+              (polygon[j].latitude - polygon[i].latitude) + polygon[i].longitude)) {
+        isInside = !isInside;
+      }
+      j = i;
+    }
+
+    return isInside;
   }
 
   // Call this function when Markers layer is enabled
@@ -643,7 +739,7 @@ class _MappingScreenState extends State<MappingScreen>
       minLat = min(minLat, point.latitude);
       maxLat = max(maxLat, point.latitude);
       minLng = min(minLng, point.longitude);
-      maxLng = max(maxLng, point.longitude);
+      minLng = max(maxLng, point.longitude);
     }
 
     // Handle edge case where all points might be the same
@@ -662,7 +758,7 @@ class _MappingScreenState extends State<MappingScreen>
     );
 
     // Add some padding and animate
-    _mapController?.animateCamera(
+    _mapController.animateCamera(
       CameraUpdate.newLatLngBounds(bounds, 100), // Increased padding to 100
     );
   }
@@ -691,18 +787,25 @@ class _MappingScreenState extends State<MappingScreen>
       });
     }
 
-    // Add polygons only if Borders are enabled
-    if (_layerOptions['Borders']!) {
-      polygons = polygons.union(_barangayPolygons);
-      // Disable Markers when Borders are enabled
-      _layerOptions['Markers'] = false;
-    }
-
-    // Add markers only if Markers are enabled
-    if (_layerOptions['Markers']!) {
-      _loadVerifiedReportMarkers(); // Only validated markers should be shown
-      // Disable Borders when Markers are enabled
-      _layerOptions['Borders'] = false; // Disable borders
+    // Add polygons if either Borders or Markers are enabled
+    if (_layerOptions['Borders']! || _layerOptions['Markers']!) {
+      if (_layerOptions['Markers']!) {
+        // When markers are enabled, show all polygons in green
+        for (var polygon in _barangayPolygons) {
+          polygons.add(Polygon(
+            polygonId: polygon.polygonId,
+            points: polygon.points,
+            strokeColor: const Color(0xFF388E3C), // Lighter green border
+            strokeWidth: 2,
+            fillColor: const Color(0xFF4CAF50).withOpacity(0.3),
+            consumeTapEvents: false,
+          ));
+        }
+        _loadVerifiedReportMarkers(); // Load markers
+      } else {
+        // When borders are enabled, show polygons with their risk level colors
+        polygons = polygons.union(_barangayPolygons);
+      }
     }
 
     // Apply the layers to the map
@@ -782,10 +885,14 @@ class _MappingScreenState extends State<MappingScreen>
                     // 1. Google Map
                     GoogleMap(
                       mapType: _currentMapType,
-                      initialCameraPosition: _initialCameraPosition,
-                      onMapCreated: (controller) {
-                        _mapController = controller;
-                      },
+                      initialCameraPosition: CameraPosition(
+                        target: LatLng(
+                          widget.initialLatitude ?? 14.6760, // Center of Quezon City
+                          widget.initialLongitude ?? 121.0437, // Center of Quezon City
+                        ),
+                        zoom: widget.initialZoom ?? 11.4,
+                      ),
+                      onMapCreated: (controller) => _mapController = controller,
                       circles: _circles,
                       markers: _markers,
                       polygons: _polygons,
@@ -1391,7 +1498,7 @@ class _MappingScreenState extends State<MappingScreen>
         zoomLevel = 15.5; // Small barangay 🔥 (NOT 16)
       }
     }
-    _mapController?.animateCamera(
+    _mapController.animateCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(
           target: location,
@@ -1610,20 +1717,24 @@ class _MappingScreenState extends State<MappingScreen>
         }
       } else {
         if (mounted) {
-          AppFlushBar.showError(
-            context,
+          LocationNotificationService.show(
+            context: context,
             title: 'API Error',
             message: 'Failed to fetch risk levels. Status code: ${response.statusCode}',
+            backgroundColor: const Color(0xFFB8585B),
+            duration: const Duration(seconds: 4),
           );
         }
       }
     } catch (e) {
       print('Error fetching risk levels: $e');
       if (mounted) {
-        AppFlushBar.showError(
-          context,
+        LocationNotificationService.show(
+          context: context,
           title: 'Connection Error',
           message: 'Unable to connect to the server. Please check your internet connection and try again.',
+          backgroundColor: const Color(0xFFB8585B),
+          duration: const Duration(seconds: 4),
         );
       }
     }
@@ -1712,12 +1823,5 @@ class _MappingScreenState extends State<MappingScreen>
       print('Error fetching dengue data: $e');
       setState(() => _isLoadingData = false);
     }
-  }
-
-  @override
-  void dispose() {
-    _mapController?.dispose();
-    _locationCheckTimer?.cancel();
-    super.dispose();
   }
 }

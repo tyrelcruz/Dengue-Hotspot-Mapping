@@ -254,7 +254,7 @@ class _PostScreenState extends State<PostScreen> {
         // Show the empathetic feedback notification on success
         await NotificationService.showEmpatheticFeedback(
           context,
-          NotificationTemplate.empatheticMessage,
+          "Thank you for reporting! We'll review your submission and notify you once verified."
         );
 
         final responseData = jsonDecode(response.body);

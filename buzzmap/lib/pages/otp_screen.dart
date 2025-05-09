@@ -5,6 +5,7 @@ import 'package:buzzmap/auth/config.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:another_flushbar/flushbar.dart';
+import 'package:buzzmap/errors/flushbar.dart';
 
 class OTPScreen extends StatefulWidget {
   final String email;
@@ -55,7 +56,10 @@ class _OTPScreenState extends State<OTPScreen> {
 
       if (response.statusCode == 200) {
         FocusScope.of(context).unfocus();
-        showCustomizeFlushbar(data['message'] ?? 'Verification successful');
+        await AppFlushBar.showSuccess(
+          context,
+          message: data['message'] ?? 'Account verified successfully!',
+        );
 
         // Use rootNavigator to ensure navigation works
         Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
@@ -66,7 +70,8 @@ class _OTPScreenState extends State<OTPScreen> {
         showCustomizeFlushbar(data['message'] ?? 'Verification failed');
       }
     } catch (e) {
-      showCustomizeFlushbar('Error: ${e.toString()}');
+      print('Password reset error: $e');
+      AppFlushBar.showNetworkError(context);
     } finally {
       if (mounted) {
         setState(() {

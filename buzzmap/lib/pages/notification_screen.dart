@@ -1,50 +1,134 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-
 import 'package:buzzmap/services/notification_service.dart';
+import 'package:buzzmap/widgets/utils/notification_template.dart';
+import 'package:buzzmap/pages/mapping_screen.dart';
 
 class NotificationScreen extends StatefulWidget {
-  const NotificationScreen({super.key});
+  const NotificationScreen({Key? key}) : super(key: key);
 
   @override
-  _NotificationScreenState createState() => _NotificationScreenState();
+  State<NotificationScreen> createState() => _NotificationScreenState();
 }
 
 class _NotificationScreenState extends State<NotificationScreen> {
-  List<dynamic> _notifications = [];
+  final NotificationService _notificationService = NotificationService();
+  List<Map<String, dynamic>> _notifications = [];
   bool _isLoading = true;
+  bool _showAllToday = false;
+  bool _showAllWeek = false;
+  String _selectedFilter = 'All';
 
   @override
   void initState() {
     super.initState();
-    _fetchNotifications();
+    _loadNotifications();
   }
 
-  Future<void> _fetchNotifications() async {
+  Future<void> _loadNotifications() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
-      final notificationService = NotificationService();
-      final notifications =
-          await notificationService.fetchNotifications(context);
+      final notifications = await NotificationService().fetchNotifications(context);
       setState(() {
-        _notifications =
-            notifications; // Update notifications list with fetched data
+        _notifications = notifications;
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
-      print('Error: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to load notifications'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  List<Map<String, dynamic>> _getFilteredNotifications() {
+    print('🔍 Filtering notifications with status: $_selectedFilter');
+    print('📱 Total notifications before filtering: ${_notifications.length}');
+
+    // First filter by status
+    List<Map<String, dynamic>> statusFiltered = _notifications;
+    if (_selectedFilter != 'All') {
+      statusFiltered = _notifications.where((notification) {
+        final report = notification['report'] as Map<String, dynamic>?;
+        final status = report?['status']?.toString().toLowerCase();
+        print('📄 Notification status: $status');
+        
+        // Handle "Reviewing" filter to match "pending" status
+        if (_selectedFilter.toLowerCase() == 'reviewing') {
+          return status == 'pending';
+        }
+        
+        // For other filters, do normal comparison
+        return status == _selectedFilter.toLowerCase();
+      }).toList();
+      print('✅ Notifications after status filter: ${statusFiltered.length}');
+    }
+
+    // Then filter by date - show last 7 days instead of just 24 hours
+    final now = DateTime.now();
+    final weekAgo = now.subtract(const Duration(days: 7));
+
+    final dateFiltered = statusFiltered.where((notification) {
+      final notificationDate = DateTime.parse(notification['createdAt']);
+      return notificationDate.isAfter(weekAgo);
+    }).toList();
+
+    print('📅 Notifications after date filter: ${dateFiltered.length}');
+    return dateFiltered;
+  }
+
+  void _handleNotificationTap(Map<String, dynamic> notification) {
+    final report = notification['report'] as Map<String, dynamic>?;
+    if (report == null) {
+      print('❌ No report data found in notification');
+      return;
+    }
+
+    print('🔍 Handling notification tap:');
+    print('📝 Report ID: ${report['_id']}');
+    print('📊 Status: ${report['status']}');
+    print('📍 Location data: ${notification['latitude']}, ${notification['longitude']}');
+    
+    if (report['status']?.toLowerCase() == 'validated' && 
+        notification['latitude'] != null && 
+        notification['longitude'] != null) {
+      print('✅ Validated report with location data, navigating to map...');
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MappingScreen(
+            initialLatitude: notification['latitude'].toDouble(),
+            initialLongitude: notification['longitude'].toDouble(),
+            initialZoom: 15.0,
+            reportId: report['_id'],
+          ),
+        ),
+      );
+    } else {
+      print('❌ Cannot navigate: Invalid status or missing location data');
+      print('Status: ${report['status']}');
+      print('Latitude: ${notification['latitude']}');
+      print('Longitude: ${notification['longitude']}');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final Color textColor = Theme.of(context).colorScheme.primary;
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textColor),
+          icon: Icon(Icons.arrow_back, color: Theme.of(context).colorScheme.primary),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -53,115 +137,198 @@ class _NotificationScreenState extends State<NotificationScreen> {
             fontSize: 18,
             fontFamily: 'Inter',
             fontWeight: FontWeight.w900,
-            color: textColor,
+            color: Theme.of(context).colorScheme.primary,
           ),
         ),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: _isLoading
-            ? Center(child: CircularProgressIndicator())
-            : ListView(
+      body: Column(
+        children: [
+          // Filter Section
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
                 children: [
-                  sectionTitle("Today"),
-                  ..._notifications.where((notification) {
-                    // Filter today's notifications
-                    return DateTime.parse(notification['createdAt'])
-                        .isAfter(DateTime.now().subtract(Duration(days: 1)));
-                  }).map((notification) {
-                    return notificationItem(
-                      notification['message'],
-                      notification['createdAt'],
-                      "assets/notifications/clean.png", // Adjust this image
-                    );
-                  }).toList(),
-                  notificationDivider(),
-                  sectionTitle("This Week"),
-                  ..._notifications.where((notification) {
-                    // Filter notifications for this week
-                    final notificationDate =
-                        DateTime.parse(notification['createdAt']);
-                    final now = DateTime.now();
-                    return notificationDate
-                            .isAfter(now.subtract(Duration(days: 7))) &&
-                        notificationDate.isBefore(now);
-                  }).map((notification) {
-                    return notificationItem(
-                      notification['message'],
-                      notification['createdAt'],
-                      "assets/notifications/clean.png", // Adjust this image
-                    );
-                  }).toList(),
+                  _buildFilterChip('All'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Validated'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Rejected'),
+                  const SizedBox(width: 8),
+                  _buildFilterChip('Reviewing'),
                 ],
               ),
-      ),
-    );
-  }
-
-  Widget sectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
-      child: Text(
-        title,
-        style: const TextStyle(
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
-            height: 15 / 14,
-            letterSpacing: 0,
-            color: Color.fromRGBO(96, 147, 175, 1)),
-      ),
-    );
-  }
-
-  Widget notificationItem(String title, String description, String imagePath) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8.0),
-            child: Image.asset(
-              imagePath,
-              width: 50,
-              height: 50,
-              fit: BoxFit.cover,
             ),
           ),
-          const SizedBox(width: 10),
+          // Notifications List
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.black54,
-                  ),
-                ),
-              ],
-            ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _getFilteredNotifications().isEmpty
+                    ? const Center(child: Text('No notifications yet'))
+                    : RefreshIndicator(
+                        onRefresh: _loadNotifications,
+                        child: ListView.builder(
+                          itemCount: _getFilteredNotifications().length,
+                          itemBuilder: (context, index) {
+                            final notification = _getFilteredNotifications()[index];
+                            final report = notification['report'] as Map<String, dynamic>?;
+                            
+                            // Debug the entire notification object
+                            print('🔍 Raw notification data:');
+                            print(json.encode(notification));
+                            
+                            // Extract location data from the notification
+                            double? latitude = notification['latitude'] as double?;
+                            double? longitude = notification['longitude'] as double?;
+                            
+                            if (report != null) {
+                              print('📄 Report data:');
+                              print(json.encode(report));
+                              
+                              // If coordinates not found in notification, try to get from report
+                              if (latitude == null || longitude == null) {
+                                if (report['specific_location'] != null) {
+                                  final location = report['specific_location'] as Map<String, dynamic>;
+                                  print('📍 Location data:');
+                                  print(json.encode(location));
+                                  
+                                  if (location['coordinates'] != null) {
+                                    final coordinates = location['coordinates'] as List;
+                                    print('🎯 Coordinates from specific_location: $coordinates');
+                                    
+                                    if (coordinates.length >= 2) {
+                                      latitude = coordinates[1].toDouble();
+                                      longitude = coordinates[0].toDouble();
+                                      print('✅ Extracted coordinates - Lat: $latitude, Long: $longitude');
+                                    }
+                                  }
+                                } else if (report['coordinates'] != null) {
+                                  final coordinates = report['coordinates'] as List;
+                                  print('🎯 Coordinates from report: $coordinates');
+                                  
+                                  if (coordinates.length >= 2) {
+                                    latitude = coordinates[1].toDouble();
+                                    longitude = coordinates[0].toDouble();
+                                    print('✅ Extracted coordinates - Lat: $latitude, Long: $longitude');
+                                  }
+                                }
+                              }
+                            }
+                            
+                            return NotificationTemplate(
+                              message: _formatNotificationMessage(notification),
+                              reportId: report?['_id'] as String?,
+                              barangay: report?['barangay'] as String?,
+                              status: report?['status'] as String?,
+                              reportType: report?['report_type'] as String?,
+                              isRead: notification['isRead'] as bool? ?? false,
+                              latitude: latitude,
+                              longitude: longitude,
+                              streetName: report?['street_name'] as String?,
+                            );
+                          },
+                        ),
+                      ),
           ),
         ],
       ),
     );
   }
 
-  Widget notificationDivider() {
-    return const Divider(color: Color.fromRGBO(219, 235, 243, 1), thickness: 1);
+  String _formatNotificationMessage(Map<String, dynamic> notification) {
+    final report = notification['report'] as Map<String, dynamic>?;
+    if (report == null) {
+      return notification['message'] as String? ?? 'No message';
+    }
+
+    final reportType = report['report_type'] as String? ?? 'Report';
+    final barangay = report['barangay'] as String? ?? 'Unknown Location';
+    final status = report['status'] as String? ?? 'Pending';
+
+    if (status == 'Validated') {
+      return 'Your $reportType report in $barangay has been validated.';
+    } else if (status == 'Rejected') {
+      return 'Your $reportType report in $barangay has been rejected.';
+    } else {
+      return 'Your $reportType report in $barangay is being reviewed.';
+    }
+  }
+
+  Widget _buildSeeAllButton(bool isToday) {
+    final totalCount = _notifications.where((notification) {
+      final notificationDate = DateTime.parse(notification['createdAt']);
+      final now = DateTime.now();
+      if (isToday) {
+        return notificationDate.isAfter(now.subtract(Duration(days: 1)));
+      } else {
+        final oneDayAgo = now.subtract(Duration(days: 1));
+        final sevenDaysAgo = now.subtract(Duration(days: 7));
+        return notificationDate.isAfter(sevenDaysAgo) && 
+               notificationDate.isBefore(oneDayAgo);
+      }
+    }).length;
+
+    print('🔢 ${isToday ? "Today" : "This Week"} total count: $totalCount');
+    
+    if (totalCount <= 10) return SizedBox.shrink();
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Center(
+        child: TextButton(
+          onPressed: () {
+            setState(() {
+              if (isToday) {
+                _showAllToday = !_showAllToday;
+              } else {
+                _showAllWeek = !_showAllWeek;
+              }
+            });
+          },
+          child: Text(
+            (isToday ? _showAllToday : _showAllWeek) ? 'Show Less' : 'See All',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label) {
+    final isSelected = _selectedFilter == label;
+    return FilterChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.white : Theme.of(context).colorScheme.primary,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+      selected: isSelected,
+      onSelected: (bool selected) {
+        print('🔘 Filter chip selected: $label');
+        setState(() {
+          _selectedFilter = selected ? label : 'All';
+        });
+      },
+      backgroundColor: Colors.white,
+      selectedColor: Theme.of(context).colorScheme.primary,
+      checkmarkColor: Colors.white,
+      side: BorderSide(
+        color: Theme.of(context).colorScheme.primary,
+        width: 1,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+    );
   }
 }

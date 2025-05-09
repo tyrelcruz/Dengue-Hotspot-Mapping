@@ -307,12 +307,35 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Dengue Risk Assessment',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
+                          Row(
+                            children: [
+                              Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: _getRiskColor(_patternData!.riskLevel).withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'i',
+                                    style: TextStyle(
+                                      color: _getRiskColor(_patternData!.riskLevel),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Dengue Risk Assessment',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -382,12 +405,35 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Weather Conditions',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                'i',
+                                style: TextStyle(
+                                  color: Colors.blue.shade700,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Weather Conditions',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
                       ),
                       if (_isWeatherExpanded) ...[
                         const SizedBox(height: 12),
