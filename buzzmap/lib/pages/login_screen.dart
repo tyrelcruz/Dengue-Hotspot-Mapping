@@ -84,6 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
         body: jsonEncode({
           'email': _emailController.text.trim(),
           'password': _passwordController.text,
+          'role': 'user',
         }),
       );
 
@@ -179,6 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
           'name': userCredential.user?.displayName,
           'googleId': userCredential.user?.uid,
           'idToken': googleAuth.idToken,
+          'role': 'user',
         }),
       );
       print('🔐 Raw login response: ${response.body}');

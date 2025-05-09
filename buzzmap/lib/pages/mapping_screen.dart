@@ -209,6 +209,9 @@ class _MappingScreenState extends State<MappingScreen>
   Map<String, String> _barangayPatterns = {};
   Map<String, String> _barangayAlerts = {};
 
+  Map<String, dynamic> _dengueData = {};
+  bool _isLoadingData = true;
+
   @override
   void initState() {
     super.initState();
@@ -229,7 +232,7 @@ class _MappingScreenState extends State<MappingScreen>
     );
 
     // Call the GeoJSON loading function for borders
-    _loadGeoJsonPolygons();
+    _loadGeoJSON();
 
     // Fetch risk levels from API
     _fetchRiskLevels();
@@ -246,6 +249,8 @@ class _MappingScreenState extends State<MappingScreen>
         _isLoading = false;
       });
     });
+
+    _fetchDengueData();
   }
 
   Future<void> _initializeLocationServices() async {
@@ -478,14 +483,15 @@ class _MappingScreenState extends State<MappingScreen>
 
   double _degToRad(double degree) => degree * pi / 180;
 
-  Future<void> _loadGeoJsonPolygons() async {
+  Future<void> _loadGeoJSON() async {
     try {
-      final String data =
-          await rootBundle.loadString('assets/geojson/barangays.geojson');
-      final geo = json.decode(data);
+      final String jsonString = await rootBundle.loadString('assets/geojson/barangays.geojson');
+      final Map<String, dynamic> jsonData = jsonDecode(jsonString);
+      final List<dynamic> features = jsonData['features'];
 
-      Set<Polygon> loadedPolygons = {};
-      for (final feature in geo['features']) {
+      List<Polygon> loadedPolygons = [];
+
+      for (var feature in features) {
         final properties = feature['properties'];
         final geometry = feature['geometry'];
 
@@ -496,7 +502,7 @@ class _MappingScreenState extends State<MappingScreen>
         final name = properties['name'] ?? properties['NAME_3'];
         if (name == null) continue;
 
-        final severity = dengueData[name]?['severity'] ?? 'Unknown';
+        final severity = _dengueData[name]?['severity'] ?? 'Unknown';
         final color = _getColorForSeverity(severity);
 
         final coords = geometry['coordinates'][0]
@@ -522,11 +528,11 @@ class _MappingScreenState extends State<MappingScreen>
       }
 
       setState(() {
-        _barangayPolygons = loadedPolygons;
+        _barangayPolygons = loadedPolygons.toSet();
         _isLoading = false;
       });
     } catch (e) {
-      print('Error loading GeoJSON: \$e');
+      print('Error loading GeoJSON: $e');
     }
   }
 
@@ -545,14 +551,18 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   Color _getColorForSeverity(String severity) {
-    switch (severity) {
-      case 'Low':
+    switch (severity.toLowerCase()) {
+      case 'stability':
         return Colors.green;
-      case 'Moderate':
-        return Colors.yellow;
-      case 'High':
+      case 'low':
+        return Colors.amber;
+      case 'decline':
+        return Colors.lightGreen;
+      case 'moderate':
         return Colors.orange;
-      case 'Severe':
+      case 'spike':
+        return Colors.deepOrange;
+      case 'high':
         return Colors.red;
       default:
         return Colors.grey;
@@ -663,17 +673,17 @@ class _MappingScreenState extends State<MappingScreen>
 
     // Check if Heatmap is enabled and add circles
     if (_layerOptions['Heatmap']!) {
-      dengueData.forEach((barangay, data) {
+      _dengueData.forEach((barangay, data) {
         final latLng = _barangayCentroids[barangay];
-        final cases = data['cases'] as int;
+        final severity = data['severity'] as String;
 
         if (latLng != null) {
           circles.add(
             Circle(
               circleId: CircleId(barangay),
               center: latLng,
-              radius: _getRadiusForCases(cases),
-              fillColor: _getColorForCases(cases),
+              radius: _getRadiusForCases(data['cases'] as int),
+              fillColor: _getColorForCases(data['cases'] as int),
               strokeWidth: 0,
             ),
           );
@@ -685,7 +695,7 @@ class _MappingScreenState extends State<MappingScreen>
     if (_layerOptions['Borders']!) {
       polygons = polygons.union(_barangayPolygons);
       // Disable Markers when Borders are enabled
-      _layerOptions['Markers'] = false; // Disable markers
+      _layerOptions['Markers'] = false;
     }
 
     // Add markers only if Markers are enabled
@@ -1165,12 +1175,12 @@ class _MappingScreenState extends State<MappingScreen>
           children: [
             _buildLegendRow(Colors.grey, 'No Data', 'Information not available'),
             const SizedBox(height: 8),
-            _buildLegendRow(Colors.green, 'Low Risk', 'Stable situation'),
-            _buildLegendRow(Colors.blue, 'Stability Pattern', 'No significant change'),
-            _buildLegendRow(Colors.green, 'Decline Pattern', 'Decreasing trend'),
+            _buildLegendRow(Colors.green, 'Stability Pattern', 'No significant change'),
+            _buildLegendRow(Colors.amber, 'Low Risk', 'Stable situation'),
+            _buildLegendRow(Colors.lightGreen, 'Decline Pattern', 'Decreasing trend'),
             const SizedBox(height: 8),
             _buildLegendRow(Colors.orange, 'Moderate Risk', 'Slight increase in cases'),
-            _buildLegendRow(Colors.orange, 'Spike Pattern', 'Sudden increase'),
+            _buildLegendRow(Colors.deepOrange, 'Spike Pattern', 'Sudden increase'),
             const SizedBox(height: 8),
             _buildLegendRow(Colors.red, 'High Risk', 'Critical situation'),
             const SizedBox(height: 16),
@@ -1262,9 +1272,9 @@ class _MappingScreenState extends State<MappingScreen>
           children: [
             _legendItem(Colors.grey, 'No Data'),
             const SizedBox(width: 8),
-            _legendItem(Colors.green, 'Low'),
+            _legendItem(Colors.green, 'Stable'),
             const SizedBox(width: 8),
-            _legendItem(Colors.blue, 'Stable'),
+            _legendItem(Colors.amber, 'Low'),
             const SizedBox(width: 8),
             _legendItem(Colors.orange, 'Moderate'),
             const SizedBox(width: 8),
@@ -1334,7 +1344,7 @@ class _MappingScreenState extends State<MappingScreen>
             if (value != null && _barangayCentroids.containsKey(value)) {
               _zoomToLocation(_barangayCentroids[value]!, barangay: value);
 
-              final data = dengueData[value];
+              final data = _dengueData[value];
               if (data != null) {
                 selectedSeverity = data['severity'] as String;
 
@@ -1531,8 +1541,8 @@ class _MappingScreenState extends State<MappingScreen>
                         streetName: streetName, // from reverse geocoding
                         latitude: location.latitude,
                         longitude: location.longitude,
-                        cases: dengueData[barangay]!['cases'],
-                        severity: dengueData[barangay]!['severity'],
+                        cases: _dengueData[barangay]?['cases'] as int,
+                        severity: _dengueData[barangay]?['severity'] as String,
                         district: selectedDistrict,
                       ),
                     ),
@@ -1619,15 +1629,15 @@ class _MappingScreenState extends State<MappingScreen>
 
     // If low risk, check pattern
     if (riskLevel == 'low') {
-      if (pattern == 'stability') return Colors.blue.shade600;
-      if (pattern == 'spike') return Colors.orange.shade600;
-      if (pattern == 'decline') return Colors.green.shade600;
-      return Colors.green.shade600; // Default for low risk without pattern
+      if (pattern == 'stability') return Colors.green.shade600;
+      if (pattern == 'spike') return Colors.deepOrange.shade600;
+      if (pattern == 'decline') return Colors.lightGreen.shade600;
+      return Colors.amber.shade600; // Default for low risk without pattern
     }
 
     // For moderate risk
     if (riskLevel == 'moderate') {
-      if (pattern == 'spike') return Colors.orange.shade600;
+      if (pattern == 'spike') return Colors.deepOrange.shade600;
       return Colors.orange.shade500; // Default for moderate risk
     }
 
@@ -1659,6 +1669,37 @@ class _MappingScreenState extends State<MappingScreen>
     setState(() {
       _barangayPolygons = updatedPolygons;
     });
+  }
+
+  Future<void> _fetchDengueData() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          setState(() {
+            _dengueData = Map.fromEntries(
+              (data['data'] as List).map((item) => MapEntry(
+                item['name'],
+                {
+                  'cases': 0, // Since the API doesn't provide cases, we'll use 0
+                  'severity': item['risk_level']?.toString().toLowerCase() ?? 'Unknown',
+                  'alert': item['alert'],
+                  'pattern': item['triggered_pattern'],
+                },
+              )),
+            );
+            _isLoadingData = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error fetching dengue data: $e');
+      setState(() => _isLoadingData = false);
+    }
   }
 
   @override
