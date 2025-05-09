@@ -1413,7 +1413,6 @@ class _MappingScreenState extends State<MappingScreen>
 
   Widget _buildBarangayDropdown(BuildContext context, ColorScheme colorScheme) {
     final allBarangays = _barangayCentroids.keys.toList()..sort();
-
     return SizedBox(
       width: double.infinity,
       height: 40,
