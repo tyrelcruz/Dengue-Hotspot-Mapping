@@ -7,6 +7,7 @@ const {
   getIntervention,
   updateIntervention,
   deleteIntervention,
+  getBarangayInterventionsInProgress,
 } = require("../controllers/interventionController");
 
 const auth = require("../middleware/authentication"); // Import auth middleware
@@ -27,5 +28,8 @@ router.patch("/:id", auth, updateIntervention);
 
 // Delete an intervention (requires authentication)
 router.delete("/:id", auth, deleteIntervention);
+
+// Get interventions in progress for a specific barangay (Scheduled or Ongoing)
+router.get("/in-progress/:barangay", auth, getBarangayInterventionsInProgress);
 
 module.exports = router;

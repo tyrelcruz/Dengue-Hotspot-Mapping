@@ -99,10 +99,48 @@ const deleteIntervention = asyncErrorHandler(async (req, res) => {
   res.status(200).json({ message: "Intervention deleted successfully." });
 });
 
+const getBarangayInterventionsInProgress = asyncErrorHandler(async (req, res) => {
+  let { barangay } = req.params;
+  if (!barangay || typeof barangay !== "string" || barangay.trim() === "") {
+    return res.status(400).json({ error: "Barangay is required as a URL parameter." });
+  }
+  // Normalize: lowercase, remove spaces, replace ñ with n
+  const normalizedBarangay = barangay.replace(/\s+/g, '').toLowerCase().replace(/ñ/g, 'n');
+
+  const interventions = await Intervention.aggregate([
+    {
+      $addFields: {
+        normalizedBarangay: {
+          $replaceAll: {
+            input: {
+              $replaceAll: {
+                input: { $toLower: "$barangay" },
+                find: "ñ",
+                replacement: "n"
+              }
+            },
+            find: " ",
+            replacement: ""
+          }
+        }
+      }
+    },
+    {
+      $match: {
+        normalizedBarangay: normalizedBarangay,
+        status: { $in: ["Scheduled", "Ongoing"] }
+      }
+    },
+    { $sort: { date: 1 } }
+  ]);
+  res.status(200).json(interventions);
+});
+
 module.exports = {
   createIntervention,
   getAllInterventions,
   getIntervention,
   updateIntervention,
   deleteIntervention,
+  getBarangayInterventionsInProgress,
 };

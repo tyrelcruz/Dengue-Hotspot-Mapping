@@ -4,6 +4,9 @@ const {
   submitCsvFile,
   retrievePatternRecognitionResults,
   getLocationRiskLevelByWeather,
+  getAllAlerts,
+  getAlertsByBarangay,
+  getAlertsByBarangayName,
 } = require("../controllers/analyticsController");
 const { detectClustersToday } = require("../services/clusterService");
 const router = express.Router();
@@ -28,5 +31,9 @@ router.get(
 );
 
 router.post("/get-location-weather-risk", getLocationRiskLevelByWeather);
+
+router.get('/alerts', getAllAlerts);
+router.get('/alerts/barangay/:barangayId', getAlertsByBarangay);
+router.get('/alerts/barangay/name', getAlertsByBarangayName);
 
 module.exports = router;

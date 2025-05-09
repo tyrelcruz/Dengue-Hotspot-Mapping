@@ -4,6 +4,7 @@ const asyncErrorHandler = require("../middleware/asyncErrorHandler");
 const { detectClusters } = require("../services/clusterService");
 const Barangay = require("../models/Barangays");
 const weatherAnalysis = require("../services/weatherRiskService");
+const Alert = require('../models/Alerts');
 
 const patternRecognitionAnalysis = asyncErrorHandler(async (req, res) => {
   try {
@@ -175,10 +176,128 @@ const getLocationRiskLevelByWeather = asyncErrorHandler(async (req, res) => {
   }
 });
 
+const sendDengueAlert = asyncErrorHandler(async (req, res) => {
+  const { barangayIds, message, severity, affectedAreas } = req.body;
+
+  try {
+    // Validate input
+    if (!barangayIds || !message || !severity) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: barangayIds, message, and severity are required"
+      });
+    }
+
+    // Find the specified barangays
+    const barangays = await Barangay.find({
+      _id: { $in: barangayIds }
+    });
+
+    if (barangays.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No barangays found with the provided IDs"
+      });
+    }
+
+    // Create and save alert record
+    const alert = await Alert.create({
+      message,
+      severity,
+      affectedAreas,
+      barangays: barangayIds,
+      timestamp: new Date(),
+      status: 'ACTIVE'
+    });
+
+    // TODO: Implement notification system
+    // For now, we'll just log the alert
+    console.log(`Alert created: ${alert._id} for barangays: ${barangays.map(b => b.name).join(', ')}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Dengue alert sent successfully",
+      data: {
+        alert,
+        affectedBarangays: barangays.map(b => b.name)
+      }
+    });
+  } catch (error) {
+    console.error("Error sending dengue alert:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to send dengue alert",
+      error: error.message
+    });
+  }
+});
+
+const getAllAlerts = asyncErrorHandler(async (req, res) => {
+  const alerts = await Alert.find()
+    .populate('barangays', 'name')
+    .sort({ timestamp: -1 });
+
+  res.status(200).json({
+    success: true,
+    count: alerts.length,
+    data: alerts
+  });
+});
+
+const getAlertsByBarangay = asyncErrorHandler(async (req, res) => {
+  const { barangayId } = req.params;
+  
+  const alerts = await Alert.find({ barangays: barangayId })
+    .populate('barangays', 'name')
+    .sort({ timestamp: -1 });
+
+  res.status(200).json({
+    success: true,
+    count: alerts.length,
+    data: alerts
+  });
+});
+
+const getAlertsByBarangayName = asyncErrorHandler(async (req, res) => {
+  const { name } = req.query;
+  
+  if (!name) {
+    return res.status(400).json({
+      success: false,
+      message: "Barangay name is required"
+    });
+  }
+
+  const barangay = await Barangay.findOne({ 
+    name: { $regex: new RegExp(name, 'i') } 
+  });
+
+  if (!barangay) {
+    return res.status(404).json({
+      success: false,
+      message: "Barangay not found"
+    });
+  }
+
+  const alerts = await Alert.find({ barangays: barangay._id })
+    .populate('barangays', 'name')
+    .sort({ timestamp: -1 });
+
+  res.status(200).json({
+    success: true,
+    count: alerts.length,
+    data: alerts
+  });
+});
+
 module.exports = {
   patternRecognitionAnalysis,
   detectReportedClusters,
   submitCsvFile,
   retrievePatternRecognitionResults,
   getLocationRiskLevelByWeather,
+  sendDengueAlert,
+  getAllAlerts,
+  getAlertsByBarangay,
+  getAlertsByBarangayName,
 };

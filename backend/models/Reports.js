@@ -59,7 +59,6 @@ const reportSchema = new Schema(
       required: true,
       enum: [
         "Breeding Site",
-        "Suspected Case",
         "Standing Water",
         "Infestation",
       ],
