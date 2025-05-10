@@ -43,174 +43,174 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return GlobalAlertOverlay(
       child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: CustomAppBar(
-          title: 'Home',
-          currentRoute: '/',
-          themeMode: 'dark',
-        ),
-        body: Stack(
-          children: [
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: MediaQuery.of(context).size.height * 0.335,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: colorScheme.primary,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.6),
-                      blurRadius: 6,
-                      offset: const Offset(0, 5),
+      backgroundColor: Colors.white,
+      appBar: CustomAppBar(
+        title: 'Home',
+        currentRoute: '/',
+        themeMode: 'dark',
+      ),
+      body: Stack(
+        children: [
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: MediaQuery.of(context).size.height * 0.335,
+            child: Container(
+              decoration: BoxDecoration(
+                color: colorScheme.primary,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.6),
+                    blurRadius: 6,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10.0),
+                      child: RichText(
+                        textAlign: TextAlign.center,
+                        text: TextSpan(
+                          style: TextStyle(
+                            fontSize: 51.sp,
+                            color: Colors.white,
+                            fontFamily: 'Koulen',
+                            letterSpacing: .5,
+                            height: .9,
+                          ),
+                          children: [
+                            TextSpan(text: 'STAY PROTECTED \nFROM '),
+                            TextSpan(
+                              text: 'DENGUE!',
+                              style: TextStyle(color: Colors.yellow),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
+                    const SizedBox(height: 1),
+                    _buildText(
+                      'Check Dengue Hotspots in Your Area:',
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        fontFamily: 'Inter',
+                        height: .2,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildLocationSelector(context, colorScheme),
                   ],
                 ),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 10.0),
-                        child: RichText(
-                          textAlign: TextAlign.center,
-                          text: TextSpan(
-                            style: TextStyle(
-                              fontSize: 51.sp,
-                              color: Colors.white,
-                              fontFamily: 'Koulen',
-                              letterSpacing: .5,
-                              height: .9,
-                            ),
-                            children: [
-                              TextSpan(text: 'STAY PROTECTED \nFROM '),
-                              TextSpan(
-                                text: 'DENGUE!',
-                                style: TextStyle(color: Colors.yellow),
+              ),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).size.height * 0.406,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'SPREAD ',
+                          style: TextStyle(
+                            fontFamily: 'Koulen',
+                            color: Color.fromRGBO(153, 192, 211, 1),
+                            fontSize: 43.sp,
+                            fontWeight: FontWeight.w400,
+                            letterSpacing: 1.2,
+                            height: 0.4,
+                          ),
+                        ),
+                        TextSpan(
+                          text: 'AWARENESS!',
+                          style: TextStyle(
+                            fontFamily: 'Koulen',
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 43.sp,
+                            fontWeight: FontWeight.w400,
+                            letterSpacing: 1.2,
+                            height: 0.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.zero,
+                    margin: EdgeInsets.zero,
+                    child: _buildText(
+                      'Report Cases, Raise Awareness, and \n Help Protect Your Community!',
+                      style: TextStyle(
+                          fontSize: 12.sp,
+                          color: colorScheme.primary,
+                          fontFamily: 'Inter-Regular',
+                          fontWeight: FontWeight.w600,
+                          height: 1.1),
+                    ),
+                  ),
+                  _buildAwarenessSection(context, colorScheme),
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'DENGUE ',
+                          style: TextStyle(
+                            fontSize: 36.sp,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1.2,
+                            color: colorScheme.primary,
+                            fontFamily: 'Koulen',
+                          ),
+                        ),
+                        TextSpan(
+                          text: 'PREVENTION ',
+                          style: TextStyle(
+                            fontSize: 36.sp,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1.2,
+                            color: const Color.fromARGB(255, 255, 222, 59),
+                            fontFamily: 'Koulen',
+                            shadows: [
+                              Shadow(
+                                color: Colors.black.withOpacity(.6),
+                                offset: Offset(1, 1),
+                                blurRadius: 2,
                               ),
                             ],
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 1),
-                      _buildText(
-                        'Check Dengue Hotspots in Your Area:',
-                        style: TextStyle(
-                          fontSize: 12.sp,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          fontFamily: 'Inter',
-                          height: .2,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildLocationSelector(context, colorScheme),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: MediaQuery.of(context).size.height * 0.406,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: 'SPREAD ',
-                            style: TextStyle(
-                              fontFamily: 'Koulen',
-                              color: Color.fromRGBO(153, 192, 211, 1),
-                              fontSize: 43.sp,
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: 1.2,
-                              height: 0.4,
-                            ),
-                          ),
-                          TextSpan(
-                            text: 'AWARENESS!',
-                            style: TextStyle(
-                              fontFamily: 'Koulen',
-                              color: Theme.of(context).colorScheme.primary,
-                              fontSize: 43.sp,
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: 1.2,
-                              height: 0.4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: EdgeInsets.zero,
-                      margin: EdgeInsets.zero,
-                      child: _buildText(
-                        'Report Cases, Raise Awareness, and \n Help Protect Your Community!',
-                        style: TextStyle(
-                            fontSize: 12.sp,
+                        TextSpan(
+                          text: 'TIPS',
+                          style: TextStyle(
+                            fontSize: 36.sp,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 1.2,
                             color: colorScheme.primary,
-                            fontFamily: 'Inter-Regular',
-                            fontWeight: FontWeight.w600,
-                            height: 1.1),
-                      ),
+                            fontFamily: 'Koulen',
+                          ),
+                        ),
+                      ],
                     ),
-                    _buildAwarenessSection(context, colorScheme),
-                    RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: 'DENGUE ',
-                            style: TextStyle(
-                              fontSize: 36.sp,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 1.2,
-                              color: colorScheme.primary,
-                              fontFamily: 'Koulen',
-                            ),
-                          ),
-                          TextSpan(
-                            text: 'PREVENTION ',
-                            style: TextStyle(
-                              fontSize: 36.sp,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 1.2,
-                              color: const Color.fromARGB(255, 255, 222, 59),
-                              fontFamily: 'Koulen',
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black.withOpacity(.6),
-                                  offset: Offset(1, 1),
-                                  blurRadius: 2,
-                                ),
-                              ],
-                            ),
-                          ),
-                          TextSpan(
-                            text: 'TIPS',
-                            style: TextStyle(
-                              fontSize: 36.sp,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 1.2,
-                              color: colorScheme.primary,
-                              fontFamily: 'Koulen',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _buildPreventionCards(context, colorScheme),
-                  ],
-                ),
+                  ),
+                  _buildPreventionCards(context, colorScheme),
+                ],
               ),
             ),
-          ],
+          ),
+        ],
         ),
       ),
     );
