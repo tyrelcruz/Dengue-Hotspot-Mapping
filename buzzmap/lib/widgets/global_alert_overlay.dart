@@ -26,19 +26,21 @@ class _GlobalAlertOverlayState extends State<GlobalAlertOverlay> {
 
   void _setupAlertListener() {
     AlertService().alertStream.listen((alert) {
-      setState(() {
-        _currentAlert = alert;
-        _isVisible = true;
-      });
+      if (alert != null && alert.isNotEmpty) {  // Only show if alert is not null and not empty
+        setState(() {
+          _currentAlert = alert;
+          _isVisible = true;
+        });
 
-      // Auto-hide after 10 seconds
-      Future.delayed(const Duration(seconds: 10), () {
-        if (mounted) {
-          setState(() {
-            _isVisible = false;
-          });
-        }
-      });
+        // Auto-hide after 10 seconds
+        Future.delayed(const Duration(seconds: 10), () {
+          if (mounted) {
+            setState(() {
+              _isVisible = false;
+            });
+          }
+        });
+      }
     });
   }
 
@@ -49,7 +51,7 @@ class _GlobalAlertOverlayState extends State<GlobalAlertOverlay> {
     return Stack(
       children: [
         widget.child,
-        if (_isVisible && _currentAlert != null)
+        if (_isVisible && _currentAlert != null && _currentAlert!.isNotEmpty)  // Additional check here
           Center(
             child: Material(
               color: Colors.black54,
@@ -67,28 +69,30 @@ class _GlobalAlertOverlayState extends State<GlobalAlertOverlay> {
                       children: [
                         // Header Row
                         Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Row(
+                          padding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
+                          child: Column(
                             children: [
                               SvgPicture.asset(
                                 'assets/icons/logo_ligthbg.svg',
                                 height: 40,
                                 width: 40,
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(height: 8),
                               Text(
-                                'Dengue Alert',
+                                'IMPORTANT',
                                 style: TextStyle(
                                   color: primaryColor,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 24,
+                                  fontSize: 37,
                                   fontFamily: 'Koulen',
+                                  letterSpacing: 1.8,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        // Separation Border
+                        // Admin Subheading
+                   
                         Divider(
                           height: 1,
                           thickness: 2,

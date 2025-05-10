@@ -57,23 +57,25 @@ class _NotificationScreenState extends State<NotificationScreen> {
     print('📱 Total notifications before filtering: ${_notifications.length}');
 
     // First filter by status
-    List<Map<String, dynamic>> statusFiltered = _notifications;
-    if (_selectedFilter != 'All') {
-      statusFiltered = _notifications.where((notification) {
-        final report = notification['report'] as Map<String, dynamic>?;
-        final status = report?['status']?.toString().toLowerCase();
-        print('📄 Notification status: $status');
-        
-        // Handle "Reviewing" filter to match "pending" status
-        if (_selectedFilter.toLowerCase() == 'reviewing') {
-          return status == 'pending';
-        }
-        
-        // For other filters, do normal comparison
-        return status == _selectedFilter.toLowerCase();
-      }).toList();
-      print('✅ Notifications after status filter: ${statusFiltered.length}');
-    }
+    List<Map<String, dynamic>> statusFiltered = _notifications.where((notification) {
+      final report = notification['report'] as Map<String, dynamic>?;
+      final status = report?['status']?.toString().toLowerCase();
+      print('📄 Notification status: $status');
+      
+      // Skip notifications with unknown status
+      if (status == null || status == 'unknown') {
+        return false;
+      }
+      
+      // Handle "Reviewing" filter to match "pending" status
+      if (_selectedFilter.toLowerCase() == 'reviewing') {
+        return status == 'pending';
+      }
+      
+      // For other filters, do normal comparison
+      return status == _selectedFilter.toLowerCase();
+    }).toList();
+    print('✅ Notifications after status filter: ${statusFiltered.length}');
 
     // Then filter by date - show last 7 days instead of just 24 hours
     final now = DateTime.now();

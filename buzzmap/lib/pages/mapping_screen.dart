@@ -66,7 +66,6 @@ class _MappingScreenState extends State<MappingScreen>
 
   // Layer control options
   final Map<String, bool> _layerOptions = {
-    'Heatmap': false,
     'Borders': true,
     'Markers': false,
   };
@@ -233,8 +232,9 @@ class _MappingScreenState extends State<MappingScreen>
   void initState() {
     super.initState();
 
-    // Initialize the default layer to show Markers initially
-    _layerOptions['Markers'] = true;  // Set to true by default
+    // Initialize the default layer to show Risk Levels initially
+    _layerOptions['Borders'] = true;  // Set to true by default
+    _layerOptions['Markers'] = false; // Set to false by default
 
     _bounceController = AnimationController(
       vsync: this,
@@ -284,16 +284,14 @@ class _MappingScreenState extends State<MappingScreen>
 
     // Start listening for alerts
     _alertService.alertStream.listen((alert) {
-      debugPrint('Received new alert in mapping screen: $alert');
       if (mounted) {
         setState(() {
           _currentAlert = alert;
           _showAlert = true;
-          debugPrint('Alert state updated: _showAlert = $_showAlert, _currentAlert = $_currentAlert');
         });
       }
     }, onError: (error) {
-      debugPrint('Error in alert stream: $error');
+      print('Error in alert stream: $error');
     });
 
     // Start polling for alerts
@@ -443,8 +441,9 @@ class _MappingScreenState extends State<MappingScreen>
       // Find which barangay the user is in
       String? currentBarangay = _findBarangayFromLocation(position);
 
-      // Show notification if we're in QC and found a barangay
-      if (isInQC && currentBarangay != null) {
+      // Only show notification if we're in QC and found a barangay
+      // AND if no barangay is currently selected by the user
+      if (isInQC && currentBarangay != null && selectedBarangay == null) {
         // Only show notification if we've moved to a different barangay
         if (currentBarangay != selectedBarangay) {
           final riskLevel = _barangayRiskLevels[currentBarangay]?.toLowerCase() ?? 'unknown';
@@ -462,7 +461,7 @@ class _MappingScreenState extends State<MappingScreen>
             duration: const Duration(seconds: 5),
           );
 
-          // Update the selected barangay
+          // Update the selected barangay only if none is selected
           setState(() {
             selectedBarangay = currentBarangay;
           });
@@ -789,30 +788,10 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   void _updateMapLayers() {
-    Set<Circle> circles = {};
     Set<Polygon> polygons = {};
+    Set<Marker> markers = {};
 
-    // Check if Heatmap is enabled and add circles
-    if (_layerOptions['Heatmap']!) {
-      _dengueData.forEach((barangay, data) {
-        final latLng = _barangayCentroids[barangay];
-        final severity = data['severity'] as String;
-
-        if (latLng != null) {
-          circles.add(
-            Circle(
-              circleId: CircleId(barangay),
-              center: latLng,
-              radius: _getRadiusForCases(data['cases'] as int),
-              fillColor: _getColorForCases(data['cases'] as int),
-              strokeWidth: 0,
-            ),
-          );
-        }
-      });
-    }
-
-    // Add polygons if either Borders or Markers are enabled
+    // Add polygons if Borders is enabled or if Markers is enabled
     if (_layerOptions['Borders']! || _layerOptions['Markers']!) {
       if (_layerOptions['Markers']!) {
         // When markers are enabled, show all polygons in green
@@ -826,17 +805,24 @@ class _MappingScreenState extends State<MappingScreen>
             consumeTapEvents: false,
           ));
         }
-        _loadVerifiedReportMarkers(); // Load markers
       } else {
-        // When borders are enabled, show polygons with their risk level colors
+        // When only borders are enabled, show polygons with their risk level colors
         polygons = polygons.union(_barangayPolygons);
       }
     }
 
+    // Add markers if Markers is enabled
+    if (_layerOptions['Markers']!) {
+      _loadVerifiedReportMarkers();
+    } else {
+      // Clear markers when Markers layer is disabled
+      markers = {};
+    }
+
     // Apply the layers to the map
     setState(() {
-      _circles = circles;
       _polygons = polygons;
+      _markers = markers;
     });
   }
 
@@ -856,8 +842,6 @@ class _MappingScreenState extends State<MappingScreen>
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    debugPrint('Building mapping screen. Alert state: _showAlert = $_showAlert, _currentAlert = $_currentAlert');
-
     return Scaffold(
       backgroundColor: colorScheme.primary,
       appBar: const PreferredSize(
@@ -1138,7 +1122,7 @@ class _MappingScreenState extends State<MappingScreen>
               ),
             ],
           ),
-          // Global Alert Overlay
+          // Global Alert Overlay - Only build if alert is active
           if (_showAlert && _currentAlert != null)
             Positioned.fill(
               child: GlobalAlert(
@@ -1148,7 +1132,6 @@ class _MappingScreenState extends State<MappingScreen>
                     ? List<Map<String, dynamic>>.from(_currentAlert!['barangays'])
                     : null,
                 onDismiss: () {
-                  debugPrint('Alert dismissed');
                   setState(() {
                     _showAlert = false;
                   });
@@ -1163,16 +1146,12 @@ class _MappingScreenState extends State<MappingScreen>
   String _getInteractionText() {
     List<String> interactionElements = [];
 
-    // if (_layerOptions['Markers']!) {
-    //   interactionElements.add('MARKERS');
-    // }
-
-    if (_layerOptions['Borders']!) {
+    if (_layerOptions['Borders'] == true) {
       interactionElements.add('BORDERED AREAS');
     }
 
-    if (_layerOptions['Heatmap']!) {
-      interactionElements.add('COLORED AREAS');
+    if (_layerOptions['Markers'] == true) {
+      interactionElements.add('REPORT MARKERS');
     }
 
     if (interactionElements.isEmpty) {
@@ -1248,20 +1227,14 @@ class _MappingScreenState extends State<MappingScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildLayerSwitch(
-                  'Heatmap Overlay',
-                  'Colored circles showing density',
-                  'Heatmap',
-                  setState,
-                ),
-                _buildLayerSwitch(
-                  'Barangay Borders',
-                  'Outlines of each barangay',
+                  'Risk Levels',
+                  'Shows risk levels of each barangay',
                   'Borders',
                   setState,
                 ),
                 _buildLayerSwitch(
-                  'Location Markers',
-                  'Pins showing user reports',
+                  'Report Markers',
+                  'Shows locations of reported cases',
                   'Markers',
                   setState,
                 ),
@@ -1295,15 +1268,20 @@ class _MappingScreenState extends State<MappingScreen>
         value: _layerOptions[optionKey]!,
         onChanged: (value) {
           setState(() {
-            _layerOptions[optionKey] = value;
-
-            // When one option is toggled on, the other one will be toggled off automatically
-            if (optionKey == 'Borders') {
-              _layerOptions['Markers'] =
-                  false; // Disable Markers when Borders are enabled
-            } else if (optionKey == 'Markers') {
-              _layerOptions['Borders'] =
-                  false; // Disable Borders when Markers are enabled
+            // If turning on this option, turn off all others
+            if (value) {
+              _layerOptions.forEach((key, _) {
+                _layerOptions[key] = key == optionKey;
+              });
+            } else {
+              // If turning off the last active option, don't allow it
+              if (_layerOptions.values.where((v) => v).length <= 1) {
+                // Instead of preventing the turn off, turn on a default layer
+                _layerOptions['Heatmap'] = true;
+                _layerOptions[optionKey] = false;
+              } else {
+                _layerOptions[optionKey] = false;
+              }
             }
           });
         },
@@ -1321,9 +1299,8 @@ class _MappingScreenState extends State<MappingScreen>
           children: [
             _buildLegendRow(Colors.grey, 'No Data', 'Information not available'),
             const SizedBox(height: 8),
-            _buildLegendRow(Colors.green, 'Stability Pattern', 'No significant change'),
-            _buildLegendRow(Colors.amber, 'Low Risk', 'Stable situation'),
-            _buildLegendRow(Colors.lightGreen, 'Decline Pattern', 'Decreasing trend'),
+            _buildLegendRow(Colors.green, 'Stable', 'No significant change'),
+            _buildLegendRow(Colors.lightBlue, 'Decline Pattern', 'Decreasing trend'),
             const SizedBox(height: 8),
             _buildLegendRow(Colors.orange, 'Moderate Risk', 'Slight increase in cases'),
             _buildLegendRow(Colors.deepOrange, 'Spike Pattern', 'Sudden increase'),
@@ -1419,8 +1396,6 @@ class _MappingScreenState extends State<MappingScreen>
             _legendItem(Colors.grey, 'No Data'),
             const SizedBox(width: 8),
             _legendItem(Colors.green, 'Stable'),
-            const SizedBox(width: 8),
-            _legendItem(Colors.amber, 'Low'),
             const SizedBox(width: 8),
             _legendItem(Colors.orange, 'Moderate'),
             const SizedBox(width: 8),
@@ -1787,8 +1762,8 @@ class _MappingScreenState extends State<MappingScreen>
     if (riskLevel == 'low') {
       if (pattern == 'stability') return Colors.green.shade600;
       if (pattern == 'spike') return Colors.deepOrange.shade600;
-      if (pattern == 'decline') return Colors.lightGreen.shade600;
-      return Colors.amber.shade600; // Default for low risk without pattern
+      if (pattern == 'decline') return Colors.lightBlue.shade600;
+      return Colors.green.shade600; // Default for low risk without pattern
     }
 
     // For moderate risk
@@ -1805,16 +1780,62 @@ class _MappingScreenState extends State<MappingScreen>
     
     for (var polygon in _barangayPolygons) {
       final barangayName = polygon.polygonId.value;
-      final color = _getColorForBarangay(barangayName);
+      final riskLevel = _barangayRiskLevels[barangayName]?.toLowerCase();
+      final pattern = _barangayPatterns[barangayName]?.toLowerCase();
+      
+      Color polygonColor;
+      Color borderColor;
+
+      // If no data is available, use gray
+      if (riskLevel == null || pattern == null) {
+        polygonColor = Colors.grey.shade700;
+        borderColor = Colors.grey.shade800;
+      }
+      // If high risk, always use red
+      else if (riskLevel == 'high') {
+        polygonColor = Colors.red.shade700;
+        borderColor = Colors.red.shade900;
+      }
+      // If low risk, check pattern
+      else if (riskLevel == 'low') {
+        if (pattern == 'stability') {
+          polygonColor = Colors.green.shade600;
+          borderColor = Colors.green.shade800;
+        } else if (pattern == 'spike') {
+          polygonColor = Colors.deepOrange.shade600;
+          borderColor = Colors.deepOrange.shade800;
+        } else if (pattern == 'decline') {
+          polygonColor = Colors.lightBlue.shade600;
+          borderColor = Colors.lightBlue.shade800;
+        } else {
+          polygonColor = Colors.green.shade600;
+          borderColor = Colors.green.shade800;
+        }
+      }
+      // For moderate risk
+      else if (riskLevel == 'moderate') {
+        if (pattern == 'spike') {
+          polygonColor = Colors.deepOrange.shade600;
+          borderColor = Colors.deepOrange.shade800;
+        } else {
+          polygonColor = Colors.orange.shade500;
+          borderColor = Colors.orange.shade700;
+        }
+      }
+      // Default fallback
+      else {
+        polygonColor = Colors.grey.shade700;
+        borderColor = Colors.grey.shade800;
+      }
       
       updatedPolygons.add(Polygon(
         polygonId: polygon.polygonId,
         points: polygon.points,
         strokeColor: _selectedPolygonId == polygon.polygonId 
           ? Colors.redAccent 
-          : color.withOpacity(0.8),
+          : borderColor,
         strokeWidth: _selectedPolygonId == polygon.polygonId ? 4 : 2,
-        fillColor: color.withOpacity(0.2),
+        fillColor: polygonColor.withOpacity(0.3),
         consumeTapEvents: true,
         onTap: () {
           _onBarangayPolygonTapped(barangayName);
