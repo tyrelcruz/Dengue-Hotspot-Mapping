@@ -325,7 +325,12 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       style: theme.textTheme.titleSmall,
                     ),
                     const SizedBox(height: 18),
-                    const AnnouncementCard(),
+                    AnnouncementCard(
+                      onRefresh: () {
+                        // Refresh the reports when announcement is refreshed
+                        _loadReports();
+                      },
+                    ),
                   ],
                   if (_isLoading || _isUsernameLoading)
                     const Padding(

@@ -15,6 +15,7 @@ class AlertService {
   Timer? _pollingTimer;
   Map<String, dynamic>? _lastAlert;
   bool _isPolling = false;
+  bool _isInitialLoad = true;  // Add flag to track initial load
 
   void startPolling() {
     if (_isPolling) return;
@@ -67,18 +68,24 @@ class AlertService {
           
           // Check if this is a new alert
           if (_lastAlert == null || _lastAlert!['_id'] != latestAlert['_id']) {
-            debugPrint('New alert detected! Broadcasting...');
             _lastAlert = latestAlert;
             
-            // Format the alert data for the UI
-            final formattedAlert = {
-              'messages': latestAlert['messages'] ?? [],
-              'severity': latestAlert['severity'],
-              'barangays': latestAlert['barangays'] ?? [],
-            };
-            
-            debugPrint('Formatted alert for UI: $formattedAlert');
-            _alertController.add(formattedAlert);
+            // Only broadcast if it's not the initial load
+            if (!_isInitialLoad) {
+              debugPrint('New alert detected! Broadcasting...');
+              // Format the alert data for the UI
+              final formattedAlert = {
+                'messages': latestAlert['messages'] ?? [],
+                'severity': latestAlert['severity'],
+                'barangays': latestAlert['barangays'] ?? [],
+              };
+              
+              debugPrint('Formatted alert for UI: $formattedAlert');
+              _alertController.add(formattedAlert);
+            } else {
+              debugPrint('Initial load - not broadcasting alert');
+              _isInitialLoad = false;  // Set to false after first load
+            }
           } else {
             debugPrint('No new alerts');
           }

@@ -337,20 +337,24 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
                               ),
                             ],
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _getRiskColor(_patternData!.riskLevel).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: _getRiskColor(_patternData!.riskLevel).withOpacity(0.3),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _getRiskColor(_patternData!.riskLevel).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: _getRiskColor(_patternData!.riskLevel).withOpacity(0.3),
+                                ),
                               ),
-                            ),
-                            child: Text(
-                              _patternData!.riskLevel.toUpperCase(),
-                              style: TextStyle(
-                                color: _getRiskColor(_patternData!.riskLevel),
-                                fontWeight: FontWeight.bold,
+                              child: Text(
+                                _patternData!.riskLevel.toUpperCase(),
+                                style: TextStyle(
+                                  color: _getRiskColor(_patternData!.riskLevel),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
@@ -652,11 +656,13 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
               color: Colors.grey.shade700,
             ),
             const SizedBox(width: 8),
-            Text(
-              'Last Analyzed: ${_formatDate(_patternData!.lastAnalysisTime!)}',
-              style: TextStyle(
-                color: Colors.grey.shade700,
-                fontWeight: FontWeight.w500,
+            Expanded(
+              child: Text(
+                'Last Analyzed: ${_formatDate(_patternData!.lastAnalysisTime!)}',
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ],
@@ -668,7 +674,11 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
   String _formatDate(String dateString) {
     try {
       final date = DateTime.parse(dateString);
-      return '${date.day}/${date.month}/${date.year}';
+      final months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      return '${months[date.month - 1]} ${date.day}, ${date.year}';
     } catch (e) {
       return dateString;
     }
