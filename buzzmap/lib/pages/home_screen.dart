@@ -41,8 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDarkMode ? Colors.white : colorScheme.primary;
 
-    return GlobalAlertOverlay(
-      child: Scaffold(
+    return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
         title: 'Home',
@@ -211,7 +210,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ],
-        ),
       ),
     );
   }

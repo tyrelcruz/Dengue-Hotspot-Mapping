@@ -18,7 +18,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:buzzmap/widgets/location_notification.dart';
 import 'package:buzzmap/services/alert_service.dart';
-import 'package:buzzmap/widgets/global_alert.dart';
 
 class MappingScreen extends StatefulWidget {
   final double? initialLatitude;
@@ -214,7 +213,8 @@ class _MappingScreenState extends State<MappingScreen>
   Timer? _locationCheckTimer;
 
   // Add this property to track previous state
-  bool _previousIsInQuezonCity = true; // Default to true to avoid initial notification
+  bool _previousIsInQuezonCity =
+      true; // Default to true to avoid initial notification
 
   // Add these maps to store API data
   Map<String, String> _barangayRiskLevels = {};
@@ -225,15 +225,13 @@ class _MappingScreenState extends State<MappingScreen>
   bool _isLoadingData = true;
 
   final AlertService _alertService = AlertService();
-  bool _showAlert = false;
-  Map<String, dynamic>? _currentAlert;
 
   @override
   void initState() {
     super.initState();
 
     // Initialize the default layer to show Risk Levels initially
-    _layerOptions['Borders'] = true;  // Set to true by default
+    _layerOptions['Borders'] = true; // Set to true by default
     _layerOptions['Markers'] = false; // Set to false by default
 
     _bounceController = AnimationController(
@@ -266,7 +264,8 @@ class _MappingScreenState extends State<MappingScreen>
           Marker(
             markerId: const MarkerId('notification-marker'),
             position: LatLng(widget.initialLatitude!, widget.initialLongitude!),
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            icon:
+                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           ),
         );
       });
@@ -282,18 +281,6 @@ class _MappingScreenState extends State<MappingScreen>
 
     _fetchDengueData();
 
-    // Start listening for alerts
-    _alertService.alertStream.listen((alert) {
-      if (mounted) {
-        setState(() {
-          _currentAlert = alert;
-          _showAlert = true;
-        });
-      }
-    }, onError: (error) {
-      print('Error in alert stream: $error');
-    });
-
     // Start polling for alerts
     _alertService.startPolling();
   }
@@ -303,18 +290,18 @@ class _MappingScreenState extends State<MappingScreen>
     // Cancel the location check timer
     _locationCheckTimer?.cancel();
     _locationCheckTimer = null;
-    
+
     // Dispose the map controller
     _mapController.dispose();
-    
+
     // Dispose the bounce controller
     _bounceController.dispose();
-    
+
     // Clear any existing notifications
     LocationNotificationService.dismiss();
-    
+
     _alertService.dispose();
-    
+
     super.dispose();
   }
 
@@ -407,10 +394,11 @@ class _MappingScreenState extends State<MappingScreen>
 
     // Start periodic location check with a longer interval
     _locationCheckTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      if (mounted) {  // Only check location if the widget is still mounted
+      if (mounted) {
+        // Only check location if the widget is still mounted
         _checkCurrentLocation();
       } else {
-        timer.cancel();  // Cancel the timer if the widget is disposed
+        timer.cancel(); // Cancel the timer if the widget is disposed
       }
     });
 
@@ -424,7 +412,7 @@ class _MappingScreenState extends State<MappingScreen>
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 5),
       );
-      
+
       if (!mounted) return;
 
       // Check if the location is within Quezon City bounds
@@ -446,17 +434,20 @@ class _MappingScreenState extends State<MappingScreen>
       if (isInQC && currentBarangay != null && selectedBarangay == null) {
         // Only show notification if we've moved to a different barangay
         if (currentBarangay != selectedBarangay) {
-          final riskLevel = _barangayRiskLevels[currentBarangay]?.toLowerCase() ?? 'unknown';
-          final pattern = _barangayPatterns[currentBarangay]?.toLowerCase() ?? 'no data';
+          final riskLevel =
+              _barangayRiskLevels[currentBarangay]?.toLowerCase() ?? 'unknown';
+          final pattern =
+              _barangayPatterns[currentBarangay]?.toLowerCase() ?? 'no data';
           final color = _getColorForBarangay(currentBarangay);
-          
+
           print('Showing notification for barangay: $currentBarangay');
           print('Risk Level: $riskLevel, Pattern: $pattern');
-          
+
           LocationNotificationService.show(
             context: context,
             title: 'Location Detected: $currentBarangay',
-            message: 'Risk Level: ${riskLevel.toUpperCase()}\nPattern: ${pattern.toUpperCase()}',
+            message:
+                'Risk Level: ${riskLevel.toUpperCase()}\nPattern: ${pattern.toUpperCase()}',
             backgroundColor: color,
             duration: const Duration(seconds: 5),
           );
@@ -471,7 +462,8 @@ class _MappingScreenState extends State<MappingScreen>
         LocationNotificationService.show(
           context: context,
           title: 'Location Alert',
-          message: 'You are currently outside Quezon City. Please select a location within Quezon City.',
+          message:
+              'You are currently outside Quezon City. Please select a location within Quezon City.',
           backgroundColor: const Color(0xFFB8585B),
           duration: const Duration(seconds: 4),
         );
@@ -489,7 +481,8 @@ class _MappingScreenState extends State<MappingScreen>
         LocationNotificationService.show(
           context: context,
           title: 'Location Error',
-          message: 'Unable to get your location. Please check your location settings.',
+          message:
+              'Unable to get your location. Please check your location settings.',
           backgroundColor: const Color(0xFFB8585B),
           duration: const Duration(seconds: 4),
         );
@@ -511,9 +504,13 @@ class _MappingScreenState extends State<MappingScreen>
     int j = polygon.length - 1;
 
     for (int i = 0; i < polygon.length; i++) {
-      if ((polygon[i].latitude > point.latitude) != (polygon[j].latitude > point.latitude) &&
-          (point.longitude < (polygon[j].longitude - polygon[i].longitude) * (point.latitude - polygon[i].latitude) /
-              (polygon[j].latitude - polygon[i].latitude) + polygon[i].longitude)) {
+      if ((polygon[i].latitude > point.latitude) !=
+              (polygon[j].latitude > point.latitude) &&
+          (point.longitude <
+              (polygon[j].longitude - polygon[i].longitude) *
+                      (point.latitude - polygon[i].latitude) /
+                      (polygon[j].latitude - polygon[i].latitude) +
+                  polygon[i].longitude)) {
         isInside = !isInside;
       }
       j = i;
@@ -605,7 +602,8 @@ class _MappingScreenState extends State<MappingScreen>
 
   Future<void> _loadGeoJSON() async {
     try {
-      final String jsonString = await rootBundle.loadString('assets/geojson/barangays.geojson');
+      final String jsonString =
+          await rootBundle.loadString('assets/geojson/barangays.geojson');
       final Map<String, dynamic> jsonData = jsonDecode(jsonString);
       final List<dynamic> features = jsonData['features'];
 
@@ -720,7 +718,8 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   void _onBarangayPolygonTapped(String barangayName) {
-    final riskLevel = _barangayRiskLevels[barangayName]?.toLowerCase() ?? 'no data';
+    final riskLevel =
+        _barangayRiskLevels[barangayName]?.toLowerCase() ?? 'no data';
     final pattern = _barangayPatterns[barangayName]?.toLowerCase() ?? '';
 
     setState(() {
@@ -888,7 +887,8 @@ class _MappingScreenState extends State<MappingScreen>
               _buildHeatmapLegend(),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12.0, vertical: 12),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: Stack(
@@ -902,7 +902,8 @@ class _MappingScreenState extends State<MappingScreen>
                             ),
                             zoom: widget.initialZoom ?? 11.4,
                           ),
-                          onMapCreated: (controller) => _mapController = controller,
+                          onMapCreated: (controller) =>
+                              _mapController = controller,
                           circles: _circles,
                           markers: _markers,
                           polygons: _polygons,
@@ -973,7 +974,8 @@ class _MappingScreenState extends State<MappingScreen>
                                                       style: TextStyle(
                                                         fontFamily: 'Koulen',
                                                         fontSize: 16,
-                                                        fontWeight: FontWeight.bold,
+                                                        fontWeight:
+                                                            FontWeight.bold,
                                                         height: 1.2,
                                                         letterSpacing: 1.0,
                                                       ),
@@ -982,7 +984,8 @@ class _MappingScreenState extends State<MappingScreen>
                                                           text:
                                                               'Broad Urban Zone and Zeroing\n',
                                                           style: TextStyle(
-                                                            color: Theme.of(context)
+                                                            color: Theme.of(
+                                                                    context)
                                                                 .primaryColor,
                                                           ),
                                                         ),
@@ -1046,12 +1049,25 @@ class _MappingScreenState extends State<MappingScreen>
 
                                             // Call the method to get recommendations based on severity
                                             RecommendationsWidget(
-                                              severity: selectedSeverity ?? 'Unknown',
-                                              hazardRiskLevels: hazardRiskLevels,
-                                              latitude: _barangayCentroids[selectedBarangay ?? '']?.latitude ?? 14.6760,
-                                              longitude: _barangayCentroids[selectedBarangay ?? '']?.longitude ?? 121.0437,
-                                              selectedBarangay: selectedBarangay ?? '',
-                                              barangayColor: _getColorForBarangay(selectedBarangay ?? ''),
+                                              severity:
+                                                  selectedSeverity ?? 'Unknown',
+                                              hazardRiskLevels:
+                                                  hazardRiskLevels,
+                                              latitude: _barangayCentroids[
+                                                          selectedBarangay ??
+                                                              '']
+                                                      ?.latitude ??
+                                                  14.6760,
+                                              longitude: _barangayCentroids[
+                                                          selectedBarangay ??
+                                                              '']
+                                                      ?.longitude ??
+                                                  121.0437,
+                                              selectedBarangay:
+                                                  selectedBarangay ?? '',
+                                              barangayColor:
+                                                  _getColorForBarangay(
+                                                      selectedBarangay ?? ''),
                                             ),
                                             // Prescriptive logic here
                                           ],
@@ -1083,7 +1099,8 @@ class _MappingScreenState extends State<MappingScreen>
                                           _isCardVisible = true;
                                         });
                                       },
-                                      child: const Icon(Icons.keyboard_arrow_up),
+                                      child:
+                                          const Icon(Icons.keyboard_arrow_up),
                                     ),
                                   );
                                 },
@@ -1096,7 +1113,8 @@ class _MappingScreenState extends State<MappingScreen>
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 5),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 8.0, horizontal: 5),
                 child: RichText(
                   textAlign: TextAlign.center,
                   text: TextSpan(
@@ -1123,19 +1141,52 @@ class _MappingScreenState extends State<MappingScreen>
             ],
           ),
           // Global Alert Overlay - Only build if alert is active
-          if (_showAlert && _currentAlert != null)
+          if (_isCardVisible)
             Positioned.fill(
-              child: GlobalAlert(
-                messages: List<String>.from(_currentAlert!['messages'] ?? []),
-                severity: _currentAlert!['severity'],
-                barangays: _currentAlert!['barangays'] != null
-                    ? List<Map<String, dynamic>>.from(_currentAlert!['barangays'])
-                    : null,
-                onDismiss: () {
-                  setState(() {
-                    _showAlert = false;
-                  });
-                },
+              child: Material(
+                color: Colors.black.withOpacity(0.5),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Dengue Situation Overview',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Recent dengue cases are rising. Follow health precautions.',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Call the method to get recommendations based on severity
+                        RecommendationsWidget(
+                          severity: selectedSeverity ?? 'Unknown',
+                          hazardRiskLevels: hazardRiskLevels,
+                          latitude: _barangayCentroids[selectedBarangay ?? '']
+                                  ?.latitude ??
+                              14.6760,
+                          longitude: _barangayCentroids[selectedBarangay ?? '']
+                                  ?.longitude ??
+                              121.0437,
+                          selectedBarangay: selectedBarangay ?? '',
+                          barangayColor:
+                              _getColorForBarangay(selectedBarangay ?? ''),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
         ],
@@ -1297,13 +1348,17 @@ class _MappingScreenState extends State<MappingScreen>
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildLegendRow(Colors.grey, 'No Data', 'Information not available'),
+            _buildLegendRow(
+                Colors.grey, 'No Data', 'Information not available'),
             const SizedBox(height: 8),
             _buildLegendRow(Colors.green, 'Stable', 'No significant change'),
-            _buildLegendRow(Colors.lightBlue, 'Decline Pattern', 'Decreasing trend'),
+            _buildLegendRow(
+                Colors.lightBlue, 'Decline Pattern', 'Decreasing trend'),
             const SizedBox(height: 8),
-            _buildLegendRow(Colors.orange, 'Moderate Risk', 'Slight increase in cases'),
-            _buildLegendRow(Colors.deepOrange, 'Spike Pattern', 'Sudden increase'),
+            _buildLegendRow(
+                Colors.orange, 'Moderate Risk', 'Slight increase in cases'),
+            _buildLegendRow(
+                Colors.deepOrange, 'Spike Pattern', 'Sudden increase'),
             const SizedBox(height: 8),
             _buildLegendRow(Colors.red, 'High Risk', 'Critical situation'),
             const SizedBox(height: 16),
@@ -1696,7 +1751,8 @@ class _MappingScreenState extends State<MappingScreen>
   Future<void> _fetchRiskLevels() async {
     try {
       final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
+        Uri.parse(
+            '${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
       );
 
       if (response.statusCode == 200) {
@@ -1706,14 +1762,16 @@ class _MappingScreenState extends State<MappingScreen>
             _barangayRiskLevels = {};
             _barangayPatterns = {};
             _barangayAlerts = {};
-            
+
             for (var item in data['data'] as List) {
               final name = item['name'];
               if (item['risk_level'] != null) {
-                _barangayRiskLevels[name] = item['risk_level'].toString().toLowerCase();
+                _barangayRiskLevels[name] =
+                    item['risk_level'].toString().toLowerCase();
               }
               if (item['triggered_pattern'] != null) {
-                _barangayPatterns[name] = item['triggered_pattern'].toString().toLowerCase();
+                _barangayPatterns[name] =
+                    item['triggered_pattern'].toString().toLowerCase();
               }
               if (item['alert'] != null) {
                 _barangayAlerts[name] = item['alert'].toString();
@@ -1728,7 +1786,8 @@ class _MappingScreenState extends State<MappingScreen>
           LocationNotificationService.show(
             context: context,
             title: 'API Error',
-            message: 'Failed to fetch risk levels. Status code: ${response.statusCode}',
+            message:
+                'Failed to fetch risk levels. Status code: ${response.statusCode}',
             backgroundColor: const Color(0xFFB8585B),
             duration: const Duration(seconds: 4),
           );
@@ -1740,7 +1799,8 @@ class _MappingScreenState extends State<MappingScreen>
         LocationNotificationService.show(
           context: context,
           title: 'Connection Error',
-          message: 'Unable to connect to the server. Please check your internet connection and try again.',
+          message:
+              'Unable to connect to the server. Please check your internet connection and try again.',
           backgroundColor: const Color(0xFFB8585B),
           duration: const Duration(seconds: 4),
         );
@@ -1777,12 +1837,12 @@ class _MappingScreenState extends State<MappingScreen>
 
   void _updatePolygonsWithRiskLevels() {
     Set<Polygon> updatedPolygons = {};
-    
+
     for (var polygon in _barangayPolygons) {
       final barangayName = polygon.polygonId.value;
       final riskLevel = _barangayRiskLevels[barangayName]?.toLowerCase();
       final pattern = _barangayPatterns[barangayName]?.toLowerCase();
-      
+
       Color polygonColor;
       Color borderColor;
 
@@ -1827,13 +1887,13 @@ class _MappingScreenState extends State<MappingScreen>
         polygonColor = Colors.grey.shade700;
         borderColor = Colors.grey.shade800;
       }
-      
+
       updatedPolygons.add(Polygon(
         polygonId: polygon.polygonId,
         points: polygon.points,
-        strokeColor: _selectedPolygonId == polygon.polygonId 
-          ? Colors.redAccent 
-          : borderColor,
+        strokeColor: _selectedPolygonId == polygon.polygonId
+            ? Colors.redAccent
+            : borderColor,
         strokeWidth: _selectedPolygonId == polygon.polygonId ? 4 : 2,
         fillColor: polygonColor.withOpacity(0.3),
         consumeTapEvents: true,
@@ -1851,7 +1911,8 @@ class _MappingScreenState extends State<MappingScreen>
   Future<void> _fetchDengueData() async {
     try {
       final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
+        Uri.parse(
+            '${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
       );
 
       if (response.statusCode == 200) {
@@ -1860,14 +1921,17 @@ class _MappingScreenState extends State<MappingScreen>
           setState(() {
             _dengueData = Map.fromEntries(
               (data['data'] as List).map((item) => MapEntry(
-                item['name'],
-                {
-                  'cases': 0, // Since the API doesn't provide cases, we'll use 0
-                  'severity': item['risk_level']?.toString().toLowerCase() ?? 'Unknown',
-                  'alert': item['alert'],
-                  'pattern': item['triggered_pattern'],
-                },
-              )),
+                    item['name'],
+                    {
+                      'cases':
+                          0, // Since the API doesn't provide cases, we'll use 0
+                      'severity':
+                          item['risk_level']?.toString().toLowerCase() ??
+                              'Unknown',
+                      'alert': item['alert'],
+                      'pattern': item['triggered_pattern'],
+                    },
+                  )),
             );
             _isLoadingData = false;
           });

@@ -168,6 +168,11 @@ class MyApp extends StatelessWidget {
                 ),
               ],
             ),
+            builder: (context, child) {
+              return GlobalAlertOverlay(
+                child: child!,
+              );
+            },
             initialRoute: '/',
             routes: {
               '/': (context) => const SplashScreen(),

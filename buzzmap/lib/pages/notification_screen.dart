@@ -32,7 +32,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
     });
 
     try {
-      final notifications = await NotificationService().fetchNotifications(context);
+      final notifications =
+          await NotificationService().fetchNotifications(context);
       setState(() {
         _notifications = notifications;
         _isLoading = false;
@@ -56,38 +57,34 @@ class _NotificationScreenState extends State<NotificationScreen> {
     print('🔍 Filtering notifications with status: $_selectedFilter');
     print('📱 Total notifications before filtering: ${_notifications.length}');
 
-    // First filter by status
-    List<Map<String, dynamic>> statusFiltered = _notifications.where((notification) {
+    // Filter by status only
+    List<Map<String, dynamic>> statusFiltered =
+        _notifications.where((notification) {
       final report = notification['report'] as Map<String, dynamic>?;
       final status = report?['status']?.toString().toLowerCase();
       print('📄 Notification status: $status');
-      
+
       // Skip notifications with unknown status
       if (status == null || status == 'unknown') {
         return false;
       }
-      
+
       // Handle "Reviewing" filter to match "pending" status
       if (_selectedFilter.toLowerCase() == 'reviewing') {
         return status == 'pending';
       }
-      
+
+      // For "All" filter, show all notifications
+      if (_selectedFilter.toLowerCase() == 'all') {
+        return true;
+      }
+
       // For other filters, do normal comparison
       return status == _selectedFilter.toLowerCase();
     }).toList();
     print('✅ Notifications after status filter: ${statusFiltered.length}');
 
-    // Then filter by date - show last 7 days instead of just 24 hours
-    final now = DateTime.now();
-    final weekAgo = now.subtract(const Duration(days: 7));
-
-    final dateFiltered = statusFiltered.where((notification) {
-      final notificationDate = DateTime.parse(notification['createdAt']);
-      return notificationDate.isAfter(weekAgo);
-    }).toList();
-
-    print('📅 Notifications after date filter: ${dateFiltered.length}');
-    return dateFiltered;
+    return statusFiltered;
   }
 
   void _handleNotificationTap(Map<String, dynamic> notification) {
@@ -100,10 +97,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
     print('🔍 Handling notification tap:');
     print('📝 Report ID: ${report['_id']}');
     print('📊 Status: ${report['status']}');
-    print('📍 Location data: ${notification['latitude']}, ${notification['longitude']}');
-    
-    if (report['status']?.toLowerCase() == 'validated' && 
-        notification['latitude'] != null && 
+    print(
+        '📍 Location data: ${notification['latitude']}, ${notification['longitude']}');
+
+    if (report['status']?.toLowerCase() == 'validated' &&
+        notification['latitude'] != null &&
         notification['longitude'] != null) {
       print('✅ Validated report with location data, navigating to map...');
       Navigator.push(
@@ -130,7 +128,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Theme.of(context).colorScheme.primary),
+          icon: Icon(Icons.arrow_back,
+              color: Theme.of(context).colorScheme.primary),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -177,51 +176,38 @@ class _NotificationScreenState extends State<NotificationScreen> {
                         child: ListView.builder(
                           itemCount: _getFilteredNotifications().length,
                           itemBuilder: (context, index) {
-                            final notification = _getFilteredNotifications()[index];
-                            final report = notification['report'] as Map<String, dynamic>?;
-                            
-                            // Debug the entire notification object
-                            print('🔍 Raw notification data:');
-                            print(json.encode(notification));
-                            
+                            final notification =
+                                _getFilteredNotifications()[index];
+                            final report =
+                                notification['report'] as Map<String, dynamic>?;
+
                             // Extract location data from the notification
-                            double? latitude = notification['latitude'] as double?;
-                            double? longitude = notification['longitude'] as double?;
-                            
+                            double? latitude =
+                                notification['latitude'] as double?;
+                            double? longitude =
+                                notification['longitude'] as double?;
+
                             if (report != null) {
-                              print('📄 Report data:');
-                              print(json.encode(report));
-                              
-                              // If coordinates not found in notification, try to get from report
-                              if (latitude == null || longitude == null) {
-                                if (report['specific_location'] != null) {
-                                  final location = report['specific_location'] as Map<String, dynamic>;
-                                  print('📍 Location data:');
-                                  print(json.encode(location));
-                                  
-                                  if (location['coordinates'] != null) {
-                                    final coordinates = location['coordinates'] as List;
-                                    print('🎯 Coordinates from specific_location: $coordinates');
-                                    
-                                    if (coordinates.length >= 2) {
-                                      latitude = coordinates[1].toDouble();
-                                      longitude = coordinates[0].toDouble();
-                                      print('✅ Extracted coordinates - Lat: $latitude, Long: $longitude');
-                                    }
-                                  }
-                                } else if (report['coordinates'] != null) {
-                                  final coordinates = report['coordinates'] as List;
-                                  print('🎯 Coordinates from report: $coordinates');
-                                  
-                                  if (coordinates.length >= 2) {
+                              if (report['specific_location'] != null) {
+                                final location = report['specific_location'];
+                                if (location['coordinates'] != null) {
+                                  final coordinates = location['coordinates'];
+                                  if (coordinates is List &&
+                                      coordinates.length >= 2) {
                                     latitude = coordinates[1].toDouble();
                                     longitude = coordinates[0].toDouble();
-                                    print('✅ Extracted coordinates - Lat: $latitude, Long: $longitude');
                                   }
+                                }
+                              } else if (report['coordinates'] != null) {
+                                final coordinates =
+                                    report['coordinates'] as List;
+                                if (coordinates.length >= 2) {
+                                  latitude = coordinates[1].toDouble();
+                                  longitude = coordinates[0].toDouble();
                                 }
                               }
                             }
-                            
+
                             return NotificationTemplate(
                               message: _formatNotificationMessage(notification),
                               reportId: report?['_id'] as String?,
@@ -270,15 +256,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
       } else {
         final oneDayAgo = now.subtract(Duration(days: 1));
         final sevenDaysAgo = now.subtract(Duration(days: 7));
-        return notificationDate.isAfter(sevenDaysAgo) && 
-               notificationDate.isBefore(oneDayAgo);
+        return notificationDate.isAfter(sevenDaysAgo) &&
+            notificationDate.isBefore(oneDayAgo);
       }
     }).length;
 
     print('🔢 ${isToday ? "Today" : "This Week"} total count: $totalCount');
-    
+
     if (totalCount <= 10) return SizedBox.shrink();
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Center(
@@ -310,7 +296,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
       label: Text(
         label,
         style: TextStyle(
-          color: isSelected ? Colors.white : Theme.of(context).colorScheme.primary,
+          color:
+              isSelected ? Colors.white : Theme.of(context).colorScheme.primary,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         ),
       ),
