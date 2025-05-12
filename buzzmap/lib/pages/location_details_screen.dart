@@ -84,7 +84,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         final DateTime reportDate = DateTime.parse(report['date_and_time']);
         final DateTime now = DateTime.now();
         final Duration difference = now.difference(reportDate);
-        
+
         String whenPosted;
         if (difference.inDays > 0) {
           whenPosted = '${difference.inDays} days ago';
@@ -102,7 +102,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           'location': report['barangay'] ?? 'Unknown Location',
           'barangay': report['barangay'],
           'date': '${reportDate.month}/${reportDate.day}/${reportDate.year}',
-          'time': '${reportDate.hour.toString().padLeft(2, '0')}:${reportDate.minute.toString().padLeft(2, '0')}',
+          'time':
+              '${reportDate.hour.toString().padLeft(2, '0')}:${reportDate.minute.toString().padLeft(2, '0')}',
           'reportType': report['report_type'],
           'description': report['description'],
           'images': report['images'] != null
@@ -110,6 +111,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
               : <String>[],
           'iconUrl': 'assets/icons/person_1.svg',
           'status': report['status'],
+          'id': report['id'],
         };
       }).toList();
     }
@@ -178,7 +180,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
           children: [
             // Colored background (taller to cover card + map)
             Container(
-              height: MediaQuery.of(context).size.height * 0.44, // Increased height
+              height:
+                  MediaQuery.of(context).size.height * 0.44, // Increased height
               decoration: BoxDecoration(
                 color: const Color.fromRGBO(36, 82, 97, 1),
                 boxShadow: [
@@ -198,7 +201,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Container(
                     // 📦 Main white container with badges inside
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 20),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
@@ -247,7 +251,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                           children: [
                             Expanded(
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFFE066),
                                   borderRadius: BorderRadius.circular(32),
@@ -255,7 +260,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.insert_drive_file, color: Color(0xFF35505A), size: 16),
+                                    const Icon(Icons.insert_drive_file,
+                                        color: Color(0xFF35505A), size: 16),
                                     const SizedBox(width: 4),
                                     Flexible(
                                       child: Text(
@@ -275,7 +281,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: _getSeverityColor(severity),
                                   borderRadius: BorderRadius.circular(32),
@@ -283,7 +290,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 16),
+                                    const Icon(Icons.warning_amber_rounded,
+                                        color: Colors.white, size: 16),
                                     const SizedBox(width: 4),
                                     Flexible(
                                       child: Text(
@@ -357,7 +365,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                             Center(
                               child: Text(
                                 'WHAT OTHERS ARE REPORTING...',
-                                style: Theme.of(context).textTheme.headlineLarge,
+                                style:
+                                    Theme.of(context).textTheme.headlineLarge,
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -365,9 +374,10 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                               const Center(child: CircularProgressIndicator())
                             else if (_barangayPosts.isEmpty)
                               const Center(
-                                  child: Text('No reports for this barangay yet.'))
+                                  child:
+                                      Text('No reports for this barangay yet.'))
                             else
-                              ..._barangayPosts.map((post) => Container(
+                              ..._barangayPosts.map((report) => Container(
                                     margin: const EdgeInsets.only(bottom: 16),
                                     decoration: BoxDecoration(
                                       color: Colors.white,
@@ -384,18 +394,21 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 16, horizontal: 16),
                                       child: PostCard(
-                                        username: post['username'],
-                                        whenPosted: post['whenPosted'],
-                                        location: post['location'],
-                                        date: post['date'],
-                                        time: post['time'],
-                                        reportType: post['reportType'],
-                                        description: post['description'],
-                                        images: List<String>.from(post['images']),
-                                        iconUrl: post['iconUrl'],
-                                        numUpvotes: post['numUpvotes'] ?? 0,
-                                        numDownvotes: post['numDownvotes'] ?? 0,
+                                        username: report['username'],
+                                        whenPosted: report['whenPosted'],
+                                        location: report['location'],
+                                        date: report['date'],
+                                        time: report['time'],
+                                        reportType: report['reportType'],
+                                        description: report['description'],
+                                        numUpvotes: report['numUpvotes'] ?? 0,
+                                        numDownvotes:
+                                            report['numDownvotes'] ?? 0,
+                                        images:
+                                            List<String>.from(report['images']),
+                                        iconUrl: report['iconUrl'],
                                         type: 'bordered',
+                                        postId: report['id'],
                                       ),
                                     ),
                                   )),
@@ -410,7 +423,8 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
             // Back to Maps button (bottom left over the map)
             Positioned(
               left: 34,
-              bottom: MediaQuery.of(context).size.height * 0.43, // Adjust as needed
+              bottom:
+                  MediaQuery.of(context).size.height * 0.43, // Adjust as needed
               child: SizedBox(
                 width: 116,
                 height: 31,

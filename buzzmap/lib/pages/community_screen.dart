@@ -416,6 +416,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                         onReport: () => _reportPost(post),
                         onDelete: () => _deletePost(post),
                         isOwner: isOwner,
+                        postId: post['id'],
                       );
                     }),
                 ],
