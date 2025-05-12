@@ -2,6 +2,7 @@ import 'package:buzzmap/main.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:buzzmap/widgets/user_info_row.dart';
 import 'package:flutter/material.dart';
+import 'package:buzzmap/widgets/engagement_row.dart';
 
 class PostCard extends StatelessWidget {
   final String username;
@@ -19,6 +20,7 @@ class PostCard extends StatelessWidget {
   final VoidCallback? onReport;
   final VoidCallback? onDelete;
   final bool isOwner;
+  final String postId;
 
   const PostCard({
     super.key,
@@ -37,6 +39,7 @@ class PostCard extends StatelessWidget {
     this.onReport,
     this.onDelete,
     this.isOwner = false,
+    required this.postId,
   });
 
   @override
@@ -46,21 +49,26 @@ class PostCard extends StatelessWidget {
     final borderedType = type == 'bordered';
 
     return Container(
-      decoration: borderedType
-          ? BoxDecoration(
-              border: Border.all(
-                color: customColors?.surfaceLight ?? Colors.grey,
-                width: 1.5,
-              ),
-              borderRadius: BorderRadius.circular(10),
-            )
-          : null,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: Border.all(
+          color: customColors?.surfaceLight ?? Colors.grey.shade200,
+          width: 1,
+        ),
+      ),
       child: Column(
         children: [
           Padding(
-            padding: !borderedType
-                ? EdgeInsets.symmetric(vertical: 30, horizontal: 20)
-                : EdgeInsets.symmetric(vertical: 20, horizontal: 15),
+            padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -73,9 +81,9 @@ class PostCard extends StatelessWidget {
                   onDelete: onDelete,
                   isOwner: isOwner,
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 12),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -142,11 +150,11 @@ class PostCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           _buildImageGrid(images, context),
                         ],
                       ),
@@ -156,12 +164,21 @@ class PostCard extends StatelessWidget {
               ],
             ),
           ),
-          !borderedType
-              ? Divider(
-                  thickness: 8,
-                  color: Colors.grey[300],
-                )
-              : SizedBox.shrink(),
+          Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(12),
+                bottomRight: Radius.circular(12),
+              ),
+            ),
+            child: EngagementRow(
+              numUpvotes: numUpvotes,
+              numDownvotes: numDownvotes,
+              postId: postId,
+              themeMode: type == 'bordered' ? 'dark' : 'light',
+            ),
+          ),
         ],
       ),
     );

@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:buzzmap/pages/menu_screen.dart';
 import 'package:buzzmap/pages/notification_screen.dart';
+import 'package:buzzmap/services/notification_service.dart';
+import 'package:provider/provider.dart';
+import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
+class CustomAppBar extends StatefulWidget implements PreferredSizeWidget {
   final String title;
   final String currentRoute;
   final String themeMode;
@@ -20,9 +24,101 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
+  State<CustomAppBar> createState() => _CustomAppBarState();
+
+  @override
+  Size get preferredSize =>
+      Size.fromHeight(56.0 + (bannerTitle != null ? 50.0 : 0.0));
+}
+
+class _CustomAppBarState extends State<CustomAppBar> {
+  int _unreadCount = 0;
+  bool _isLoading = true;
+  Timer? _refreshTimer;
+  static const String _lastViewedKey = 'last_notification_view';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUnreadCount();
+    // Set up periodic refresh every 30 seconds
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      _loadUnreadCount();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _updateLastViewedTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now().toUtc();
+    await prefs.setString(_lastViewedKey, now.toIso8601String());
+    print('📅 Updated last viewed time: $now');
+    // Immediately update the count after setting the last viewed time
+    _loadUnreadCount();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    if (!mounted) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastViewedStr = prefs.getString(_lastViewedKey);
+      final lastViewed = lastViewedStr != null
+          ? DateTime.parse(lastViewedStr).toUtc()
+          : DateTime.now().toUtc().subtract(
+              const Duration(days: 365)); // Default to old date if never viewed
+
+      final notifications =
+          await NotificationService().fetchNotifications(context);
+      if (!mounted) return;
+
+      setState(() {
+        // Count notifications that are newer than the last viewed time
+        _unreadCount = notifications.where((n) {
+          try {
+            // Try to get the timestamp from the notification
+            final timestamp =
+                n['timestamp'] ?? n['createdAt'] ?? n['created_at'];
+            if (timestamp == null) return false;
+
+            final notificationDate =
+                DateTime.parse(timestamp.toString()).toUtc();
+            final status = n['status']?.toString().toLowerCase();
+
+            // Count notifications that are newer than last viewed and not archived
+            final isNewer = notificationDate.isAfter(lastViewed);
+            print(
+                '📅 Notification date: $notificationDate, Last viewed: $lastViewed, Is newer: $isNewer');
+            return isNewer && status != 'archived';
+          } catch (e) {
+            print('❌ Error parsing notification date: $e');
+            return false;
+          }
+        }).length;
+        _isLoading = false;
+      });
+
+      print('📊 Unread notifications count: $_unreadCount');
+      print('⏰ Last viewed: $lastViewed');
+    } catch (e) {
+      print('❌ Error loading notification count: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bool isDarkMode = themeMode == "dark";
+    final bool isDarkMode = widget.themeMode == "dark";
 
     final Color backgroundColor =
         isDarkMode ? theme.colorScheme.primary : Colors.white;
@@ -76,19 +172,52 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
-        IconButton(
-          icon: SvgPicture.asset(
-            'assets/icons/notif.svg',
-            width: 24,
-            height: 24,
-            colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
-          ),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => NotificationScreen()),
-            );
-          },
+        Stack(
+          children: [
+            IconButton(
+              icon: SvgPicture.asset(
+                'assets/icons/notif.svg',
+                width: 24,
+                height: 24,
+                colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+              ),
+              onPressed: () async {
+                // Update last viewed time before navigating
+                await _updateLastViewedTime();
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => NotificationScreen()),
+                );
+                // Reload unread count when returning from notification screen
+                _loadUnreadCount();
+              },
+            ),
+            if (!_isLoading && _unreadCount > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    _unreadCount > 99 ? '99+' : _unreadCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
         ),
         const SizedBox(width: 8),
         IconButton(
@@ -100,7 +229,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                 transitionDuration: const Duration(milliseconds: 300),
                 reverseTransitionDuration: const Duration(milliseconds: 300),
                 pageBuilder: (context, animation, secondaryAnimation) {
-                  return MenuScreen(currentRoute: currentRoute);
+                  return MenuScreen(currentRoute: widget.currentRoute);
                 },
                 transitionsBuilder:
                     (context, animation, secondaryAnimation, child) {
@@ -126,7 +255,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
         const SizedBox(width: 8),
       ],
       // Optional banner below the AppBar
-      bottom: bannerTitle != null
+      bottom: widget.bannerTitle != null
           ? PreferredSize(
               preferredSize: const Size.fromHeight(50.0),
               child: Container(
@@ -137,8 +266,8 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                     // X icon inside a white circle
                     IconButton(
                       onPressed: () {
-                        if (onBannerClose != null) {
-                          onBannerClose!();
+                        if (widget.onBannerClose != null) {
+                          widget.onBannerClose!();
                         } else {
                           Navigator.pop(context);
                         }
@@ -164,7 +293,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                     Expanded(
                       child: Center(
                         child: Text(
-                          bannerTitle!,
+                          widget.bannerTitle!,
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: theme.colorScheme.onPrimary,
                           ),
@@ -180,8 +309,4 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
           : null,
     );
   }
-
-  @override
-  Size get preferredSize =>
-      Size.fromHeight(56.0 + (bannerTitle != null ? 50.0 : 0.0));
 }
