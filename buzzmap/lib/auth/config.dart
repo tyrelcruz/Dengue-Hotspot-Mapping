@@ -17,6 +17,7 @@ class Config {
   static String get googleLoginUrl => '$baseUrl/api/v1/auth/google-login';
   static String get createPostUrl => '$baseUrl/api/v1/reports';
   static String get createPostwImageUrl => '$baseUrl/api/v1/posts';
+  static String get userProfileUrl => '$baseUrl/api/v1/auth/me';
 }
 
 //AuthService

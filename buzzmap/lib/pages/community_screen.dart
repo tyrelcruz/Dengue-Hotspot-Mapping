@@ -46,17 +46,60 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Future<void> _initializePrefs() async {
     try {
       _prefs = await SharedPreferences.getInstance();
-      final email = _prefs.getString('email');
+      String? username = _prefs.getString('username');
+      String? email = _prefs.getString('email');
+      print(
+          '👤 Loading username from SharedPreferences: $username'); // Debug log
       print('📧 Loading email from SharedPreferences: $email'); // Debug log
-      
+
+      if (username == null ||
+          username.isEmpty ||
+          email == null ||
+          email.isEmpty) {
+        // Fetch from backend if missing
+        final token = _prefs.getString('authToken');
+        if (token != null && token.isNotEmpty) {
+          try {
+            final response = await http.get(
+              Uri.parse(Config.userProfileUrl),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+              },
+            );
+            if (response.statusCode == 200) {
+              final data = jsonDecode(response.body);
+              // Try both 'username' and 'name' keys
+              final fetchedUsername = data['username'] ?? data['name'] ?? '';
+              final fetchedEmail = data['email'] ?? '';
+              if (fetchedUsername.isNotEmpty) {
+                username = fetchedUsername;
+                await _prefs.setString('username', fetchedUsername);
+                print(
+                    '👤 Username fetched from backend and saved: $fetchedUsername');
+              }
+              if (fetchedEmail.isNotEmpty) {
+                email = fetchedEmail;
+                await _prefs.setString('email', fetchedEmail);
+                print('📧 Email fetched from backend and saved: $fetchedEmail');
+              }
+            } else {
+              print('❌ Failed to fetch user profile: ${response.body}');
+            }
+          } catch (e) {
+            print('❌ Error fetching user profile: $e');
+          }
+        }
+      }
+
       if (mounted) {
         setState(() {
-          _currentUsername = email; // Store email instead of username
+          _currentUsername = username;
           _isUsernameLoading = false;
         });
       }
     } catch (e) {
-      print('❌ Error loading email: $e');
+      print('❌ Error loading username: $e');
       if (mounted) {
         setState(() {
           _isUsernameLoading = false;
@@ -69,7 +112,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('authToken');
     final currentEmail = prefs.getString('email');
-    print('📧 Current email from SharedPreferences: $currentEmail'); // Debug log
+    print(
+        '📧 Current email from SharedPreferences: $currentEmail'); // Debug log
 
     final response = await http.get(
       Uri.parse('${Config.baseUrl}/api/v1/reports'),
@@ -89,7 +133,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
         final DateTime reportDate = DateTime.parse(report['date_and_time']);
         final DateTime now = DateTime.now();
         final Duration difference = now.difference(reportDate);
-        
+
         String whenPosted;
         if (difference.inDays > 0) {
           whenPosted = '${difference.inDays} days ago';
@@ -115,7 +159,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
           'location': '${report['barangay']}, Quezon City',
           'barangay': report['barangay'],
           'date': '${reportDate.month}/${reportDate.day}/${reportDate.year}',
-          'time': '${reportDate.hour.toString().padLeft(2, '0')}:${reportDate.minute.toString().padLeft(2, '0')}',
+          'time':
+              '${reportDate.hour.toString().padLeft(2, '0')}:${reportDate.minute.toString().padLeft(2, '0')}',
           'reportType': report['report_type'],
           'description': report['description'],
           'images': report['images'] != null
@@ -158,13 +203,17 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
     if (selectedIndex == 2) {
       print('🔍 Filtering for My Posts'); // Debug log
-      print('📧 Current email: $_currentUsername'); // Debug log
+      final currentEmail = _prefs.getString('email')?.toLowerCase() ?? '';
+      print('📧 Current email: $currentEmail'); // Debug log
+
       final myPosts = filtered.where((post) {
-        final isMyPost = post['email'] == _currentUsername;
-        print('📧 Post email: ${post['email']}'); // Debug log
-        print('🔒 Is my post? $isMyPost'); // Debug log
+        final postEmail = (post['email'] ?? '').toString().toLowerCase();
+        final isMyPost = postEmail == currentEmail;
+        print('📧 Post email: $postEmail');
+        print('🔒 Is my post? $isMyPost');
         return isMyPost;
       }).toList();
+
       print('📱 Found ${myPosts.length} of my posts'); // Debug log
       return myPosts;
     }
@@ -350,7 +399,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       print('📧 Current email: $_currentUsername');
                       print('🔒 Is owner: $isOwner');
                       print('🔍 Post data: $post'); // Debug log
-                      
+
                       return PostCard(
                         username: post['username'],
                         whenPosted: post['whenPosted'],
