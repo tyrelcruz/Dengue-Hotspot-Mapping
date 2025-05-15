@@ -7,12 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
-import 'package:buzzmap/widgets/webs/street_view_screen.dart';
 import 'package:buzzmap/errors/flushbar.dart'; // Import the new AppFlushBar utility
-
-//Firebase Imports
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 //Share preferences for saving local instances
 import 'package:shared_preferences/shared_preferences.dart';
@@ -32,15 +27,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscureText = true;
   bool _rememberMe = false;
   bool _isLoading = false;
-
-  // Google Sign-In instance
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  // Button Dimensions
-  static const double buttonWidth = 200;
-  static const double buttonHeight = 45;
-  static const double buttonRadius = 30;
 
   @override
   void initState() {
@@ -149,73 +135,6 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       print('❌ Login error: $e');
       _showError('Network error. Please check your connection.');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  // Handle Google Sign-In
-  Future<void> _signInWithGoogle() async {
-    try {
-      setState(() => _isLoading = true);
-
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return;
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in with Firebase first
-      final UserCredential userCredential =
-          await _auth.signInWithCredential(credential);
-
-      // Then send to your backend
-      final response = await http.post(
-        Uri.parse('${Config.baseUrl}/api/v1/auth/google-login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': userCredential.user?.email,
-          'name': userCredential.user?.displayName,
-          'googleId': userCredential.user?.uid,
-          'idToken': googleAuth.idToken,
-          'role': 'user',
-        }),
-      );
-      print('🔐 Raw login response: ${response.body}');
-      final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-
-        if (responseData['user']?['verified'] == false) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  OTPScreen(email: userCredential.user?.email ?? ''),
-            ),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => HomeScreen()),
-          );
-        }
-      } else {
-        await _auth.signOut(); // Sign out from Firebase if backend fails
-        await _googleSignIn.signOut();
-        final errorData = jsonDecode(response.body);
-        _showError(errorData['message'] ?? 'Google login failed');
-      }
-    } catch (e) {
-      _showError('Google sign-in failed. Please try again.');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -373,10 +292,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                     });
                                   },
                                   fillColor:
-                                      MaterialStateProperty.resolveWith<Color>(
-                                          (Set<MaterialState> states) {
-                                    if (states
-                                        .contains(MaterialState.selected)) {
+                                      WidgetStateProperty.resolveWith<Color>(
+                                          (Set<WidgetState> states) {
+                                    if (states.contains(WidgetState.selected)) {
                                       return Colors.blue;
                                     }
                                     return const Color.fromARGB(
@@ -401,7 +319,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: () async {
                               // Show dialog to enter email
                               final TextEditingController
-                                  _forgotEmailController =
+                                  forgotEmailController =
                                   TextEditingController();
                               final result = await showDialog<String>(
                                 context: context,
@@ -421,7 +339,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     content: SizedBox(
                                       width: 340,
                                       child: TextField(
-                                        controller: _forgotEmailController,
+                                        controller: forgotEmailController,
                                         keyboardType:
                                             TextInputType.emailAddress,
                                         decoration: const InputDecoration(
@@ -438,7 +356,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         onPressed: () {
                                           Navigator.pop(
                                               context,
-                                              _forgotEmailController.text
+                                              forgotEmailController.text
                                                   .trim());
                                         },
                                         child: const Text('Submit'),
@@ -467,13 +385,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                           'Password reset email sent!',
                                     );
                                     // Show dialog to enter OTP and new password
-                                    final TextEditingController _otpController =
+                                    final TextEditingController otpController =
                                         TextEditingController();
                                     final TextEditingController
-                                        _newPasswordController =
+                                        newPasswordController =
                                         TextEditingController();
                                     final TextEditingController
-                                        _confirmPasswordController =
+                                        confirmPasswordController =
                                         TextEditingController();
                                     final resetResult = await showDialog<bool>(
                                       context: context,
@@ -499,7 +417,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
                                                 TextField(
-                                                  controller: _otpController,
+                                                  controller: otpController,
                                                   keyboardType:
                                                       TextInputType.number,
                                                   decoration:
@@ -510,7 +428,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 const SizedBox(height: 12),
                                                 TextField(
                                                   controller:
-                                                      _newPasswordController,
+                                                      newPasswordController,
                                                   obscureText: true,
                                                   decoration:
                                                       const InputDecoration(
@@ -520,7 +438,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 const SizedBox(height: 12),
                                                 TextField(
                                                   controller:
-                                                      _confirmPasswordController,
+                                                      confirmPasswordController,
                                                   obscureText: true,
                                                   decoration:
                                                       const InputDecoration(
@@ -540,11 +458,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                             TextButton(
                                               onPressed: () async {
                                                 final otp =
-                                                    _otpController.text.trim();
+                                                    otpController.text.trim();
                                                 final newPassword =
-                                                    _newPasswordController.text;
+                                                    newPasswordController.text;
                                                 final confirmPassword =
-                                                    _confirmPasswordController
+                                                    confirmPasswordController
                                                         .text;
                                                 if (otp.isEmpty ||
                                                     newPassword.isEmpty ||
@@ -670,8 +588,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 20),
                       Center(
                         child: SizedBox(
-                          width: buttonWidth,
-                          height: buttonHeight,
+                          width: 200,
+                          height: 45,
                           child: _isLoading
                               ? const Center(
                                   child: CircularProgressIndicator(
@@ -680,8 +598,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 )
                               : Material(
-                                  borderRadius:
-                                      BorderRadius.circular(buttonRadius),
+                                  borderRadius: BorderRadius.circular(30),
                                   color: Colors.transparent,
                                   child: Ink(
                                     decoration: BoxDecoration(
@@ -693,8 +610,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           begin: Alignment.centerLeft,
                                           end: Alignment.centerRight,
                                         ),
-                                        borderRadius:
-                                            BorderRadius.circular(buttonRadius),
+                                        borderRadius: BorderRadius.circular(30),
                                         boxShadow: [
                                           BoxShadow(
                                             color:
@@ -706,8 +622,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ]),
                                     child: InkWell(
                                       onTap: _handleLogin,
-                                      borderRadius:
-                                          BorderRadius.circular(buttonRadius),
+                                      borderRadius: BorderRadius.circular(30),
                                       child: const Center(
                                         child: Text(
                                           "Login",
@@ -733,34 +648,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           Expanded(child: Divider(color: Colors.grey[400])),
                         ],
-                      ),
-                      const SizedBox(height: 20),
-                      Center(
-                        child: SizedBox(
-                          width: buttonWidth,
-                          height: buttonHeight,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(buttonRadius),
-                                side: const BorderSide(color: Colors.grey),
-                              ),
-                            ),
-                            onPressed: _isLoading ? null : _signInWithGoogle,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Image.asset(
-                                  'assets/icons/google_logo.png',
-                                  height: buttonHeight * 1.7,
-                                ),
-                                const SizedBox(width: 10),
-                              ],
-                            ),
-                          ),
-                        ),
                       ),
                       const SizedBox(height: 20),
                       Center(
