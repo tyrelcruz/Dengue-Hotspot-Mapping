@@ -20,9 +20,10 @@ class LocationDetailsScreen extends StatefulWidget {
   final int? cases; // 🔥 ADD THIS
   final String? severity; // 🔥 ADD THIS
   final String streetName; // 🔥 ADD THIS
+  final String source; // Add source parameter
 
   const LocationDetailsScreen({
-    Key? key,
+    super.key,
     required this.location,
     required this.latitude,
     required this.longitude,
@@ -30,7 +31,8 @@ class LocationDetailsScreen extends StatefulWidget {
     this.severity, // 🔥 not required anymore
     required this.streetName,
     this.district,
-  }) : super(key: key);
+    this.source = 'maps', // Default to 'maps' if not specified
+  });
 
   @override
   State<LocationDetailsScreen> createState() => _LocationDetailsScreenState();
@@ -394,21 +396,27 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 16, horizontal: 16),
                                       child: PostCard(
-                                        username: report['username'],
-                                        whenPosted: report['whenPosted'],
-                                        location: report['location'],
-                                        date: report['date'],
-                                        time: report['time'],
-                                        reportType: report['reportType'],
-                                        description: report['description'],
+                                        username:
+                                            report['username'] ?? 'Anonymous',
+                                        whenPosted:
+                                            report['whenPosted'] ?? 'Just now',
+                                        location: report['location'] ??
+                                            'Unknown Location',
+                                        date: report['date'] ?? 'N/A',
+                                        time: report['time'] ?? 'N/A',
+                                        reportType:
+                                            report['reportType'] ?? 'Unknown',
+                                        description: report['description'] ??
+                                            'No description provided',
                                         numUpvotes: report['numUpvotes'] ?? 0,
                                         numDownvotes:
                                             report['numDownvotes'] ?? 0,
-                                        images:
-                                            List<String>.from(report['images']),
-                                        iconUrl: report['iconUrl'],
+                                        images: List<String>.from(
+                                            report['images'] ?? []),
+                                        iconUrl: report['iconUrl'] ??
+                                            'assets/icons/person_1.svg',
                                         type: 'bordered',
-                                        postId: report['id'],
+                                        postId: report['id'] ?? '',
                                       ),
                                     ),
                                   )),
@@ -422,43 +430,54 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
             ),
             // Back to Maps button (bottom left over the map)
             Positioned(
-              left: 34,
-              bottom:
-                  MediaQuery.of(context).size.height * 0.43, // Adjust as needed
-              child: SizedBox(
-                width: 116,
-                height: 31,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color.fromRGBO(248, 169, 0, 1),
-                        Color.fromRGBO(250, 221, 55, 1),
-                      ],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ),
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
+              left: 23,
+              bottom: MediaQuery.of(context).size.height * 0.46,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: SizedBox(
+                  width: 116,
+                  height: 31,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color.fromRGBO(248, 169, 0, 1),
+                          Color.fromRGBO(250, 221, 55, 1),
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
                       ),
-                      padding: EdgeInsets.zero,
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    child: const Text(
-                      "Back to Maps",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontStyle: FontStyle.italic,
-                        fontSize: 14,
-                        color: Color.fromRGBO(36, 82, 97, 1),
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        padding: EdgeInsets.zero,
+                      ),
+                      child: Text(
+                        widget.source == 'notifications'
+                            ? 'Back to Notifications'
+                            : 'Back to Maps',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontStyle: FontStyle.italic,
+                          fontSize: 14,
+                          color: Color.fromRGBO(36, 82, 97, 1),
+                        ),
                       ),
                     ),
                   ),

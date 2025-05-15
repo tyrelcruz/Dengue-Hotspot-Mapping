@@ -232,7 +232,8 @@ class _MappingScreenState extends State<MappingScreen>
 
     // Initialize the default layer to show Risk Levels initially
     _layerOptions['Borders'] = true; // Set to true by default
-    _layerOptions['Markers'] = false; // Set to false by default
+    _layerOptions['Markers'] =
+        widget.reportId != null; // Enable markers if coming from notification
 
     _bounceController = AnimationController(
       vsync: this,
@@ -1662,6 +1663,7 @@ class _MappingScreenState extends State<MappingScreen>
                         cases: _dengueData[barangay]?['cases'] as int,
                         severity: _dengueData[barangay]?['severity'] as String,
                         district: selectedDistrict,
+                        source: 'maps',
                       ),
                     ),
                   );

@@ -8,14 +8,15 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/config.dart';
 
 class AnnouncementCard extends StatefulWidget {
   final VoidCallback? onRefresh;
 
   const AnnouncementCard({
-    Key? key,
+    super.key,
     this.onRefresh,
-  }) : super(key: key);
+  });
 
   @override
   State<AnnouncementCard> createState() => _AnnouncementCardState();
@@ -25,7 +26,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
   bool _isLoading = true;
   bool _showFullContent = false;
   Map<String, dynamic>? _announcement;
-  String _error = '';
+  final String _error = '';
 
   @override
   void initState() {
@@ -62,21 +63,21 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
       }
 
       final response = await http.get(
-        Uri.parse('http://localhost:4000/api/v1/adminposts'),
+        Uri.parse('${Config.baseUrl}/api/v1/adminposts'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
       );
-      
+
       print('🔍 Fetching announcements from backend...');
       print('📡 Response status: ${response.statusCode}');
       print('📦 Response body: ${response.body}');
-      
+
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         print('📊 Number of posts: ${data.length}');
-        
+
         if (data.isNotEmpty) {
           // Filter for announcements only (not tips)
           final announcements = data.where((post) {
@@ -84,32 +85,41 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
             print('🔍 Checking post category: $category');
             return category == 'announcement';
           }).toList();
-          
+
           print('📢 Number of announcements: ${announcements.length}');
-          print('📝 Announcements: ${announcements.map((a) => a['title']).toList()}');
-          
+          print(
+              '📝 Announcements: ${announcements.map((a) => a['title']).toList()}');
+
           if (announcements.isNotEmpty) {
             // Sort announcements by createdAt to get the latest
             announcements.sort((a, b) {
               try {
                 // Parse createdAt dates and handle potential null values
-                final createdAtA = a['createdAt'] != null ? DateTime.parse(a['createdAt']) : DateTime(1970);
-                final createdAtB = b['createdAt'] != null ? DateTime.parse(b['createdAt']) : DateTime(1970);
-                
+                final createdAtA = a['createdAt'] != null
+                    ? DateTime.parse(a['createdAt'])
+                    : DateTime(1970);
+                final createdAtB = b['createdAt'] != null
+                    ? DateTime.parse(b['createdAt'])
+                    : DateTime(1970);
+
                 print('📅 Comparing creation dates:');
                 print('Created At A: $createdAtA (${a['title']})');
                 print('Created At B: $createdAtB (${b['title']})');
-                
+
                 // Compare by createdAt (newest first)
                 final createdAtComparison = createdAtB.compareTo(createdAtA);
                 if (createdAtComparison != 0) {
                   print('📊 CreatedAt comparison result: $createdAtComparison');
                   return createdAtComparison;
                 }
-                
+
                 // If createdAt is the same, compare by publishDate as secondary criteria
-                final dateA = a['publishDate'] != null ? DateTime.parse(a['publishDate']) : DateTime(1970);
-                final dateB = b['publishDate'] != null ? DateTime.parse(b['publishDate']) : DateTime(1970);
+                final dateA = a['publishDate'] != null
+                    ? DateTime.parse(a['publishDate'])
+                    : DateTime(1970);
+                final dateB = b['publishDate'] != null
+                    ? DateTime.parse(b['publishDate'])
+                    : DateTime(1970);
                 final dateComparison = dateB.compareTo(dateA);
                 print('📊 PublishDate comparison result: $dateComparison');
                 return dateComparison;
@@ -118,7 +128,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                 return 0;
               }
             });
-            
+
             // Log all announcements with their dates for debugging
             print('📊 Sorted announcements:');
             for (var announcement in announcements) {
@@ -127,14 +137,14 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
               print('Publish Date: ${announcement['publishDate']}');
               print('---');
             }
-            
+
             // Get the latest announcement (first in the sorted list)
             final latestAnnouncement = announcements[0];
             print('📢 Latest announcement: ${latestAnnouncement['title']}');
             print('📅 Publish date: ${latestAnnouncement['publishDate']}');
             print('📄 Content: ${latestAnnouncement['content']}');
             print('🖼️ Images: ${latestAnnouncement['images']}');
-            
+
             // Update the announcement
             setState(() {
               _announcement = {
@@ -142,7 +152,8 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                 'content': latestAnnouncement['content'],
                 'publishDate': latestAnnouncement['publishDate'],
                 'images': latestAnnouncement['images'] ?? [],
-                'references': latestAnnouncement['references'] ?? 'Quezon City Surveillance and Epidemiology Division',
+                'references': latestAnnouncement['references'] ??
+                    'Quezon City Surveillance and Epidemiology Division',
                 'category': latestAnnouncement['category'] ?? 'announcement',
               };
               _isLoading = false;
@@ -245,7 +256,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
               iconUrl: 'assets/icons/surveillance_logo.svg',
             ),
             const SizedBox(height: 16),
-            
+
             // Title with emoji
             Text.rich(
               TextSpan(
@@ -278,7 +289,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
               ),
             ),
             const SizedBox(height: 12),
-            
+
             // Content with show more/less
             Text(
               content,
@@ -306,7 +317,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                 ),
               ),
             ],
-            
+
             // References
             if (references.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -319,7 +330,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                 ),
               ),
             ],
-            
+
             // Images
             if (images.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -342,7 +353,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                   ),
                 ),
             ],
-            
+
             // Date
             const SizedBox(height: 12),
             Text(
@@ -368,7 +379,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
     }
 
     print('🖼️ Loading image from URL: $fixedUrl');
-    
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: CachedNetworkImage(

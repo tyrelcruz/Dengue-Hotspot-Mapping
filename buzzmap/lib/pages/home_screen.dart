@@ -676,6 +676,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       latitude: coordinates.latitude,
                       longitude: coordinates.longitude,
                       district: null,
+                      source: 'maps',
                     ),
                   ),
                 );

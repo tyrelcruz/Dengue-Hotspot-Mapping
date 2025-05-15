@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:buzzmap/pages/mapping_screen.dart';
+import 'package:buzzmap/pages/location_details_screen.dart';
 import 'package:buzzmap/widgets/utils/notification_popup.dart';
 
 class NotificationTemplate extends StatelessWidget {
@@ -14,7 +15,7 @@ class NotificationTemplate extends StatelessWidget {
   final String? streetName;
 
   const NotificationTemplate({
-    Key? key,
+    super.key,
     required this.message,
     this.reportId,
     this.barangay,
@@ -24,7 +25,7 @@ class NotificationTemplate extends StatelessWidget {
     this.latitude,
     this.longitude,
     this.streetName,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -36,11 +37,12 @@ class NotificationTemplate extends StatelessWidget {
           print('📝 Message: $message');
           print('📍 Location: $latitude, $longitude');
           print('📊 Status: $status');
-          
-          if (status?.toLowerCase() == 'validated' && 
-              latitude != null && 
+
+          if (status?.toLowerCase() == 'validated' &&
+              latitude != null &&
               longitude != null) {
-            print('✅ Validated report with location data, navigating to map...');
+            print(
+                '✅ Validated report with location data, navigating to map...');
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -63,6 +65,18 @@ class NotificationTemplate extends StatelessWidget {
             print('Status: $status');
             print('Latitude: $latitude');
             print('Longitude: $longitude');
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => LocationDetailsScreen(
+                  location: barangay ?? 'Unknown Location',
+                  streetName: streetName ?? 'Unknown Street',
+                  latitude: latitude!,
+                  longitude: longitude!,
+                  source: 'notifications',
+                ),
+              ),
+            );
           }
         },
         child: Container(
@@ -105,7 +119,8 @@ class NotificationTemplate extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[800],
-                        fontWeight: isRead ? FontWeight.normal : FontWeight.w500,
+                        fontWeight:
+                            isRead ? FontWeight.normal : FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 4),
