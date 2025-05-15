@@ -64,7 +64,8 @@ class NotificationService with ChangeNotifier {
         print(json.encode(report));
         return report;
       } else {
-        print('❌ Failed to fetch report details. Status: ${response.statusCode}');
+        print(
+            '❌ Failed to fetch report details. Status: ${response.statusCode}');
         print('❌ Response body: ${response.body}');
         return null;
       }
@@ -74,85 +75,104 @@ class NotificationService with ChangeNotifier {
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchNotifications(BuildContext context) async {
+  Future<List<Map<String, dynamic>>> fetchNotifications(
+      BuildContext context) async {
     try {
+      print('🔑 Starting to fetch notifications...');
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('authToken');
+      print(
+          '🔑 Retrieved token: ${token != null ? 'Token exists' : 'No token found'}');
 
       if (token == null) {
+        print('❌ No auth token found in SharedPreferences');
         throw Exception('No auth token found');
       }
 
+      print('🔑 Using token for API request');
       // First, clean up notifications for deleted reports
       await cleanupDeletedReports(token);
 
       // Then fetch the updated notifications
+      final url = '${Config.baseUrl}/api/v1/notifications';
+      print('🌐 Fetching notifications from: $url');
+
       final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/notifications'),
+        Uri.parse(url),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
       );
 
+      print('📡 API Response Status: ${response.statusCode}');
+      print('📡 API Response Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final List<dynamic> rawNotifications = jsonDecode(response.body);
         print('📱 Fetched notifications: ${rawNotifications.length}');
-        
+
         // Process notifications to include location data and ensure proper typing
-        final List<Map<String, dynamic>> processedNotifications = await Future.wait(
-          rawNotifications.map((notification) async {
-            final Map<String, dynamic> typedNotification = Map<String, dynamic>.from(notification);
-            print('🔍 Processing notification: ${typedNotification['_id']}');
-            
-            if (typedNotification['report'] != null) {
-              final report = Map<String, dynamic>.from(typedNotification['report']);
-              print('📄 Report data:');
-              print(json.encode(report));
-              print('📊 Report status: ${report['status']}');
-              
-              typedNotification['report'] = report;
-              
-              // If the report is validated, fetch its full details to get location data
-              if (report['status']?.toLowerCase() == 'validated') {
-                print('✅ Found validated report, fetching details...');
-                final reportDetails = await fetchReportDetails(report['_id']);
-                if (reportDetails != null) {
-                  print('✅ Successfully fetched report details');
-                  // Update the report with full details
-                  typedNotification['report'] = reportDetails;
-                  
-                  // Extract location data
-                  if (reportDetails['specific_location'] != null) {
-                    final location = reportDetails['specific_location'];
-                    print('📍 Found specific_location: $location');
-                    if (location['coordinates'] != null) {
-                      final coordinates = location['coordinates'];
-                      print('📍 Found coordinates: $coordinates');
-                      if (coordinates is List && coordinates.length >= 2) {
-                        typedNotification['latitude'] = coordinates[1].toDouble();
-                        typedNotification['longitude'] = coordinates[0].toDouble();
-                        print('✅ Extracted coordinates - Lat: ${typedNotification['latitude']}, Long: ${typedNotification['longitude']}');
-                      }
+        final List<Map<String, dynamic>> processedNotifications =
+            await Future.wait(rawNotifications.map((notification) async {
+          final Map<String, dynamic> typedNotification =
+              Map<String, dynamic>.from(notification);
+          print('🔍 Processing notification: ${typedNotification['_id']}');
+
+          if (typedNotification['report'] != null) {
+            final report =
+                Map<String, dynamic>.from(typedNotification['report']);
+            print('📄 Report data:');
+            print(json.encode(report));
+            print('📊 Report status: ${report['status']}');
+
+            typedNotification['report'] = report;
+
+            // If the report is validated, fetch its full details to get location data
+            if (report['status']?.toLowerCase() == 'validated') {
+              print('✅ Found validated report, fetching details...');
+              final reportDetails = await fetchReportDetails(report['_id']);
+              if (reportDetails != null) {
+                print('✅ Successfully fetched report details');
+                // Update the report with full details
+                typedNotification['report'] = reportDetails;
+
+                // Extract location data
+                if (reportDetails['specific_location'] != null) {
+                  final location = reportDetails['specific_location'];
+                  print('📍 Found specific_location: $location');
+                  if (location['coordinates'] != null) {
+                    final coordinates = location['coordinates'];
+                    print('📍 Found coordinates: $coordinates');
+                    if (coordinates is List && coordinates.length >= 2) {
+                      typedNotification['latitude'] = coordinates[1].toDouble();
+                      typedNotification['longitude'] =
+                          coordinates[0].toDouble();
+                      print(
+                          '✅ Extracted coordinates - Lat: ${typedNotification['latitude']}, Long: ${typedNotification['longitude']}');
                     }
-                  } else {
-                    print('❌ No specific_location found in report details');
                   }
                 } else {
-                  print('❌ Failed to fetch report details');
+                  print('❌ No specific_location found in report details');
                 }
+              } else {
+                print('❌ Failed to fetch report details');
               }
-              
-              typedNotification['streetName'] = report['street_name'] ?? 'Unknown Street';
-              print('📍 Street name: ${typedNotification['streetName']}');
             }
-            
-            return typedNotification;
-          })
-        );
-        
+
+            typedNotification['streetName'] =
+                report['street_name'] ?? 'Unknown Street';
+            print('📍 Street name: ${typedNotification['streetName']}');
+          }
+
+          return typedNotification;
+        }));
+
         return processedNotifications;
       } else {
+        print(
+            '❌ Failed to fetch notifications. Status code: ${response.statusCode}');
+        print('❌ Response body: ${response.body}');
         throw Exception('Failed to fetch notifications');
       }
     } catch (e) {
@@ -173,7 +193,8 @@ class NotificationService with ChangeNotifier {
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        print('🧹 Cleaned up ${result['deletedCount']} notifications with deleted reports');
+        print(
+            '🧹 Cleaned up ${result['deletedCount']} notifications with deleted reports');
       }
     } catch (e) {
       print('❌ Error cleaning up notifications: $e');
@@ -192,7 +213,8 @@ class NotificationService with ChangeNotifier {
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        print('🧹 Deleted ${result['deletedCount']} notifications for user $username');
+        print(
+            '🧹 Deleted ${result['deletedCount']} notifications for user $username');
       }
     } catch (e) {
       print('❌ Error deleting user notifications: $e');
