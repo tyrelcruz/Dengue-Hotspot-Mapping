@@ -2070,7 +2070,7 @@ class _MappingScreenState extends State<MappingScreen>
 
     // Single API call for all health facilities
     final url =
-        'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=500&type=health&key=$apiKey';
+        'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=1000&type=hospital&key=$apiKey';
     final response = await http.get(Uri.parse(url));
     final data = jsonDecode(response.body);
 
@@ -2081,17 +2081,17 @@ class _MappingScreenState extends State<MappingScreen>
         String facilityType = '';
         final nameLower = place['name'].toString().toLowerCase();
 
-        // Exclude drug stores and pharmacies
-        if (types.contains('pharmacy') ||
-            types.contains('drugstore') ||
-            nameLower.contains('pharmacy') ||
-            nameLower.contains('drugstore')) {
-          facilityType = 'Other';
-        } else if (types.contains('hospital')) {
+        // Check if it's a valid medical facility
+        if (types.contains('hospital')) {
           facilityType = 'Hospital';
         } else if (nameLower.contains('health center')) {
           facilityType = 'Health Center';
-        } else if (types.contains('doctor') || nameLower.contains('clinic')) {
+        } else if (types.contains('doctor') ||
+            (nameLower.contains('clinic') &&
+                !nameLower.contains('animal') &&
+                !nameLower.contains('pet') &&
+                !nameLower.contains('veterinary') &&
+                !nameLower.contains('vet'))) {
           facilityType = 'Clinic';
         } else {
           facilityType = 'Other';
