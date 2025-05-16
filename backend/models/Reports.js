@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const crypto = require("crypto");
 const barangaysData = require("../data/barangays.json");
 
 const Schema = mongoose.Schema;
@@ -10,11 +11,18 @@ const list_of_barangays = barangaysData.features
 
 const reportSchema = new Schema(
   {
-    // No Report ID, yet, or never
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Account",
       required: true,
+    },
+    isAnonymous: {
+      type: Boolean,
+      default: false,
+    },
+    anonymousId: {
+      type: String,
+      default: null,
     },
     barangay: {
       type: String,
@@ -76,6 +84,20 @@ const reportSchema = new Schema(
 
 // Create a 2dsphere index for geospatial queries
 reportSchema.index({ specific_location: "2dsphere" });
+
+// Add a pre-save middleware to generate anonymousId
+reportSchema.pre('save', function(next) {
+  if (this.isAnonymous && !this.anonymousId) {
+    // Create a hash of the report's _id
+    const hash = crypto.createHash('sha256')
+      .update(this._id.toString())
+      .digest('hex');
+    
+    // Take first 8 characters of the hash for a shorter ID
+    this.anonymousId = `ANON-${hash.substring(0, 8)}`;
+  }
+  next();
+});
 
 // Export the Report model
 module.exports = mongoose.model("Report", reportSchema);

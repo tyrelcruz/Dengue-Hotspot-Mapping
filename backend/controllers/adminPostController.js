@@ -188,10 +188,21 @@ const deleteAdminPost = asyncErrorHandler(async (req, res) => {
   res.status(200).json({ message: "AdminPost deleted successfully." });
 });
 
+const deleteAllAdminPosts = async (req, res) => {
+  try {
+    await AdminPost.deleteMany({});
+    res.json({ message: "All admin posts have been deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting admin posts:", error);
+    res.status(500).json({ error: "Failed to delete admin posts" });
+  }
+};
+
 module.exports = {
   createAdminPost,
   getAllAdminPosts,
   getAdminPost,
   updateAdminPost,
   deleteAdminPost,
+  deleteAllAdminPosts
 };

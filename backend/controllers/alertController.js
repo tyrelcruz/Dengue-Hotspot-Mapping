@@ -287,27 +287,15 @@ const deleteAlert = asyncErrorHandler(async (req, res) => {
   }
 });
 
-const deleteAllAlerts = asyncErrorHandler(async (req, res) => {
+const deleteAllAlerts = async (req, res) => {
   try {
-    // Delete all alerts
-    const result = await Alert.deleteMany({});
-    
-    res.status(200).json({
-      success: true,
-      message: "All alerts deleted successfully",
-      data: {
-        deletedCount: result.deletedCount
-      }
-    });
+    await Alert.deleteMany({});
+    res.json({ message: "All alerts have been deleted successfully" });
   } catch (error) {
-    console.error("Error deleting all alerts:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to delete all alerts",
-      error: error.message
-    });
+    console.error("Error deleting alerts:", error);
+    res.status(500).json({ error: "Failed to delete alerts" });
   }
-});
+};
 
 module.exports = {
   sendDengueAlert,

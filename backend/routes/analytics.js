@@ -7,8 +7,12 @@ const {
   getAllAlerts,
   getAlertsByBarangay,
   getAlertsByBarangayName,
+  retrieveTrendsAndPatterns,
+  analyzeInterventionEffectivity,
+  getPriorityByCaseDeath,
 } = require("../controllers/analyticsController");
 const { detectClustersToday } = require("../services/clusterService");
+
 const router = express.Router();
 
 router.get("/pattern-recognition", patternRecognitionAnalysis);
@@ -32,8 +36,13 @@ router.get(
 
 router.post("/get-location-weather-risk", getLocationRiskLevelByWeather);
 
-router.get('/alerts', getAllAlerts);
-router.get('/alerts/barangay/:barangayId', getAlertsByBarangay);
-router.get('/alerts/barangay/name', getAlertsByBarangayName);
+router.post("/get-barangay-weekly-trends", retrieveTrendsAndPatterns);
+
+router.post(
+  "/analyze-intervention-effectivity",
+  analyzeInterventionEffectivity
+);
+
+router.get("/case-death-priority", getPriorityByCaseDeath);
 
 module.exports = router;

@@ -19,6 +19,7 @@
     "express": "^4.21.2",
     "express-fileupload": "^1.5.1",
     "express-validator": "^7.2.1",
+    "form-data": "^4.0.2",
     "geojson": "^0.5.0",
     "http-status-codes": "^2.3.0",
     "jsonwebtoken": "^9.0.2",

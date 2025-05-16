@@ -1,11 +1,16 @@
 const express = require("express");
 const router = express.Router();
-const { MongoClient } = require("mongodb");
 
-require("dotenv").config();
-
-const { getAllBarangays } = require("../controllers/barangayController");
+const {
+  getAllBarangays,
+  getRecentReportsForBarangay,
+  retrieveSpecificBarangayInfo,
+} = require("../controllers/barangayController");
 
 router.get("/get-all-barangays", getAllBarangays);
+
+router.post("/get-recent-reports-for-barangay", getRecentReportsForBarangay);
+
+router.get("/specific-barangay-info", retrieveSpecificBarangayInfo);
 
 module.exports = router;
