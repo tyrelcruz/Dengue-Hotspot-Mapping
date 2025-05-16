@@ -246,63 +246,42 @@ class _PreventionScreenState extends State<PreventionScreen> {
                             ),
                           ),
                           Positioned(
-                            bottom: -80,
-                            left: -45,
+                            bottom: -90,
+                            left: -50,
                             child: SvgPicture.asset(
                               'assets/icons/tipcard2.svg',
-                              width: 250,
-                              height: 250,
+                              width: 300,
+                              height: 270,
                             ),
                           ),
                           Positioned(
-                            top: 0,
-                            right: 10,
-                            child: Container(
-                              width: 150,
-                              height: 80,
-                              color: Colors.transparent,
-                              alignment: Alignment.centerRight,
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          '4S',
-                                          textAlign: TextAlign.right,
-                                          style: const TextStyle(
-                                            fontSize: 27,
-                                            color: Colors.red,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        Text(
-                                          ' Against Dengue',
-                                          textAlign: TextAlign.right,
-                                          style: const TextStyle(
-                                            fontSize: 27,
-                                            color: onPrimaryColor,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 1),
-                                    const Text(
-                                      'Search and destroy \nmosquito breeding sites',
-                                      textAlign: TextAlign.right,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: onPrimaryColor,
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                    ),
-                                  ],
+                            top: 10,
+                            right: 20,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '4S Against Dengue',
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontFamily: 'Inter-Bold',
+                                    color: onPrimaryColor,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.1,
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(height: 5),
+                                const Text(
+                                  'Learn the 4S strategy\nto prevent dengue',
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: onPrimaryColor,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           Positioned(
@@ -317,15 +296,11 @@ class _PreventionScreenState extends State<PreventionScreen> {
                                       builder: (context) => TipDetailsScreen(
                                         tip: AdminPost(
                                           id: '4s-against-dengue',
-                                          title: 'Mag 4S kontra DENGUE!',
-                                          content:
-                                              '', // Content will be handled in the details screen
-                                          images: [
-                                            'assets/images/4s_1.png',
-                                            'assets/images/4s_2.png',
-                                          ],
+                                          title: '4S AGAINST DENGUE',
+                                          content: '',
+                                          images: [],
                                           publishDate: DateTime.now(),
-                                          category: '4s',
+                                          category: 'tip',
                                           references: '',
                                           adminId: 'static',
                                           createdAt: DateTime.now(),
@@ -373,40 +348,33 @@ class _PreventionScreenState extends State<PreventionScreen> {
                             ),
                           ),
                           Positioned(
-                            top: 0,
-                            right: 10,
-                            child: Container(
-                              width: 150,
-                              height: 80,
-                              color: Colors.transparent,
-                              alignment: Alignment.center,
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      'Symptoms',
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontSize: 17,
-                                        color: onPrimaryColor,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 1),
-                                    const Text(
-                                      'Recognize early signs\nand symptoms of dengue',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 9,
-                                        color: onPrimaryColor,
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                    ),
-                                  ],
+                            top: 10,
+                            right: 30,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Symptoms',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontFamily: 'Inter-Bold',
+                                    color: onPrimaryColor,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.1,
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(height: 5),
+                                const Text(
+                                  'Recognize early signs\nand symptoms of dengue',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: onPrimaryColor,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           Positioned(
@@ -422,8 +390,7 @@ class _PreventionScreenState extends State<PreventionScreen> {
                                         tip: AdminPost(
                                           id: 'symptoms',
                                           title: 'MGA SINTOMAS',
-                                          content:
-                                              '', // Content will be handled in the details screen
+                                          content: '',
                                           images: [
                                             'assets/images/symptoms.png',
                                           ],

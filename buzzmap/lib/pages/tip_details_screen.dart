@@ -28,54 +28,329 @@ class TipDetailsScreen extends StatelessWidget {
           children: [
             const SizedBox(height: 15),
             if (tip.id == '4s-against-dengue') ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20.0),
-                child: Image.asset(
-                  'assets/images/4s_1.png',
-                  width: double.infinity,
-                  height: 250,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              const SizedBox(height: 20),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20.0),
-                child: Image.asset(
-                  'assets/images/4s_2.png',
-                  width: double.infinity,
-                  height: 250,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              const SizedBox(height: 20),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 27.0),
+                padding: const EdgeInsets.symmetric(horizontal: 10.0),
                 child: Text(
-                  tip.title,
+                  '5S KONTRA DENGUE',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 22,
+                    fontSize: 24,
                     color: primaryColor,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
-              _build4SSection(
-                'Suyurin at sirain ang pinamumugaran ng mga lamok',
-                'o ang paghahanap ng mga lugar na pwedeng pangitlugan ng mga lamok tulad ng balde, tansan, gulong, plorera at iba pang lalagyan ng maaaring maipunan ng malinis na tubig.',
+              const SizedBox(height: 24),
+              // 1S Card
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF5F7FA),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Image.asset('assets/images/1S.png',
+                          width: 48, height: 48),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            RichText(
+                              text: const TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: 'S',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: 'earch and destroy\n',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Suyurin at alisin ang mga pinamumugaran ng mga lamok na pwedeng pangitlogan ng mga ito. Palaging linisin ang kapaligiran.',
+                              style:
+                                  TextStyle(fontSize: 14, color: primaryColor),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              _build4SSection(
-                'Sumangguni agad sa pagamutan kapag may sintomas ng DENGUE',
-                'o ang agarang pagpapakonsulta sa doktor kapag may karamdaman, iwasan din ang pag-inom ng gamot ng walang reseta mula sa doctor.',
+              // 2S Card
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF5F7FA),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Image.asset('assets/images/2S.png',
+                          width: 48, height: 48),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            RichText(
+                              text: const TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: 'S',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: 'elf Protection Measures\n',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Sarili ay protektahan laban sa mga lamok. Magsuot ng mahabang manggas; gumamit ng mosquito repellant.',
+                              style:
+                                  TextStyle(fontSize: 14, color: primaryColor),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              _build4SSection(
-                'Sarili ay protektahan laban sa lamok',
-                'o ang pagprotekta sa sarili upang hindi makagat ng lamok sa pamamagitan ng pagsuot ng mga damit na may mahahabang manggas, pagpapahid ng insect repellant sa mga bahagi ng balat na walang takip, at paggamit ng kulambo sa pagtulog.',
+              // 3S Card
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF5F7FA),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Image.asset('assets/images/3S.png',
+                          width: 48, height: 48),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            RichText(
+                              text: const TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: 'S',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: 'eek Early Consultation\n',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Sumangguni sa pinakamalapit na Health Center o Ospital lalo na kapag may sintomas ng Dengue.',
+                              style:
+                                  TextStyle(fontSize: 14, color: primaryColor),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              _build4SSection(
-                'Sumuporta sa fogging/spraying kapag may banta na ng outbreak',
-                'o ang pagpapausok pero ito ay gawin lamang sa mga panahong maaaring biglang lumitaw o dumami ang mga lamok.',
+              // 4S Card
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF5F7FA),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Image.asset('assets/images/4S.png',
+                          width: 48, height: 48),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            RichText(
+                              text: const TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: 'S',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text:
+                                        'upport fogging/spraying to prevent further outbreaks\n',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Sumuporta sa spraying at fogging sa inyong komunidad kapag may banta ng outbreak.',
+                              style:
+                                  TextStyle(fontSize: 14, color: primaryColor),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // 5S Card
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Color(0xFFF5F7FA),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Image.asset('assets/images/5S.png',
+                          width: 48, height: 48),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            RichText(
+                              text: const TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: 'S',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: 'ustain Hydration\n',
+                                    style: TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Uminom ng hindi bababa sa dalawang (2) litro ng tubig kada araw, lalo na kung may lagnat.',
+                              style:
+                                  TextStyle(fontSize: 14, color: primaryColor),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 30),
             ] else if (tip.id == 'symptoms') ...[
@@ -278,47 +553,6 @@ class TipDetailsScreen extends StatelessWidget {
               ),
             )
           : null,
-    );
-  }
-
-  Widget _build4SSection(String title, String content) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        RichText(
-          text: TextSpan(
-            children: [
-              TextSpan(
-                text: title.substring(0, 1),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 22,
-                  color: Colors.red,
-                ),
-              ),
-              TextSpan(
-                text: title.substring(1),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                  color: primaryColor,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          content,
-          textAlign: TextAlign.justify,
-          style: const TextStyle(
-            fontSize: 12,
-            color: primaryColor,
-            height: 1.5,
-          ),
-        ),
-      ],
     );
   }
 

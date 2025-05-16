@@ -19,7 +19,7 @@ class LocationDetailsScreen extends StatefulWidget {
   final double longitude;
   final int? cases; // 🔥 ADD THIS
   final String? severity; // 🔥 ADD THIS
-  final String streetName; // 🔥 ADD THIS
+  final String? streetName; // 🔥 Made optional
 
   const LocationDetailsScreen({
     Key? key,
@@ -28,7 +28,7 @@ class LocationDetailsScreen extends StatefulWidget {
     required this.longitude,
     this.cases, // 🔥 not required anymore
     this.severity, // 🔥 not required anymore
-    required this.streetName,
+    this.streetName, // 🔥 Made optional
     this.district,
   }) : super(key: key);
 
@@ -233,7 +233,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                         ),
                         // Street name (big bold)
                         AutoSizeText(
-                          widget.streetName,
+                          widget.streetName ?? '',
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           minFontSize: 14,
@@ -394,21 +394,27 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 16, horizontal: 16),
                                       child: PostCard(
-                                        username: report['username'],
-                                        whenPosted: report['whenPosted'],
-                                        location: report['location'],
-                                        date: report['date'],
-                                        time: report['time'],
-                                        reportType: report['reportType'],
-                                        description: report['description'],
+                                        username:
+                                            report['username'] ?? 'Anonymous',
+                                        whenPosted:
+                                            report['whenPosted'] ?? 'Just now',
+                                        location: report['location'] ??
+                                            'Unknown Location',
+                                        date: report['date'] ?? 'N/A',
+                                        time: report['time'] ?? 'N/A',
+                                        reportType:
+                                            report['reportType'] ?? 'General',
+                                        description: report['description'] ??
+                                            'No description provided',
                                         numUpvotes: report['numUpvotes'] ?? 0,
                                         numDownvotes:
                                             report['numDownvotes'] ?? 0,
-                                        images:
-                                            List<String>.from(report['images']),
-                                        iconUrl: report['iconUrl'],
+                                        images: List<String>.from(
+                                            report['images'] ?? []),
+                                        iconUrl: report['iconUrl'] ??
+                                            'assets/icons/person_1.svg',
                                         type: 'bordered',
-                                        postId: report['id'],
+                                        postId: report['id'] ?? '',
                                       ),
                                     ),
                                   )),

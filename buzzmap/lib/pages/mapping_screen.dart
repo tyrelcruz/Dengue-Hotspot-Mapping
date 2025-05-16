@@ -18,6 +18,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:buzzmap/widgets/location_notification.dart';
 import 'package:buzzmap/services/alert_service.dart';
+import 'dart:io' show Platform;
 
 class MappingScreen extends StatefulWidget {
   final double? initialLatitude;
@@ -1515,14 +1516,14 @@ class _MappingScreenState extends State<MappingScreen>
     LatLng location,
   ) async {
     // 🔥 Reverse geocode to get street name
-    String streetName = '';
+    String streetName = 'Unknown Street';
     try {
       List<Placemark> placemarks = await placemarkFromCoordinates(
         location.latitude,
         location.longitude,
       );
       if (placemarks.isNotEmpty) {
-        streetName = placemarks.first.street ?? '';
+        streetName = placemarks.first.street ?? 'Unknown Street';
       }
     } catch (e) {
       print('Reverse geocoding failed: $e');
@@ -1531,156 +1532,307 @@ class _MappingScreenState extends State<MappingScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white, // or any color you want
-
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 🔥 Clean Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
+      builder: (context) {
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: fetchNearbyHealthFacilities(
+              location.latitude, location.longitude),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(
+                  child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(),
+              ));
+            }
+            final facilities = snapshot.data!;
+            int _currentFacilityPage = 0;
+            final PageController _pageController = PageController();
+            return StatefulBuilder(
+              builder: (context, setState) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        streetName.isNotEmpty ? streetName : barangay,
-                        style: const TextStyle(
-                          fontSize: 22,
+                      // 🔥 Clean Header
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  streetName.isNotEmpty ? streetName : barangay,
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${barangay.toUpperCase()}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _getColorForSeverity(severity),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              severity,
+                              style: TextStyle(
+                                color: severity == 'Low'
+                                    ? Colors.black
+                                    : Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Cases
+                      Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded),
+                          const SizedBox(width: 8),
+                          Text(
+                            '$cases community reports',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Coordinates
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Coordinates: ${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Recommendations
+                      const Text(
+                        'Recommendations:',
+                        style: TextStyle(
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '${barangay.toUpperCase()}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _getColorForSeverity(severity),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    severity,
-                    style: TextStyle(
-                      color: severity == 'Low' ? Colors.black : Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Cases
-            Row(
-              children: [
-                const Icon(Icons.warning_amber_rounded),
-                const SizedBox(width: 8),
-                Text(
-                  '$cases reported cases',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Coordinates
-            Row(
-              children: [
-                const Icon(Icons.location_on),
-                const SizedBox(width: 8),
-                Text(
-                  'Coordinates: ${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Recommendations
-            const Text(
-              'Recommendations:',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            RecommendationsWidget(
-              severity: severity,
-              hazardRiskLevels: hazardRiskLevels,
-              latitude: location.latitude,
-              longitude: location.longitude,
-              selectedBarangay: barangay,
-              barangayColor: _getColorForBarangay(barangay),
-            ),
-
-            const SizedBox(height: 20), // 🔥 SMALL controlled space
-
-            // View Detailed Report Button - flows after recommendations naturally
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => LocationDetailsScreen(
-                        location: barangay,
-                        streetName: streetName, // from reverse geocoding
+                      RecommendationsWidget(
+                        severity: severity,
+                        hazardRiskLevels: hazardRiskLevels,
                         latitude: location.latitude,
                         longitude: location.longitude,
-                        cases: _dengueData[barangay]?['cases'] as int,
-                        severity: _dengueData[barangay]?['severity'] as String,
-                        district: selectedDistrict,
+                        selectedBarangay: barangay,
+                        barangayColor: _getColorForBarangay(barangay),
                       ),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                      const SizedBox(height: 20),
+                      // --- Critical Facilities Carousel ---
+                      const Text(
+                        'Health Care Facilities Nearby:',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (facilities.isEmpty)
+                        const Text('No nearby health facilities found.'),
+                      if (facilities.isNotEmpty)
+                        SizedBox(
+                          height: 120,
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.arrow_left,
+                                    size: 32, color: Colors.blue),
+                                onPressed: () {
+                                  if (_currentFacilityPage > 0) {
+                                    setState(() {
+                                      _currentFacilityPage--;
+                                      _pageController.animateToPage(
+                                        _currentFacilityPage,
+                                        duration:
+                                            const Duration(milliseconds: 300),
+                                        curve: Curves.easeInOut,
+                                      );
+                                    });
+                                  }
+                                },
+                              ),
+                              Expanded(
+                                child: PageView.builder(
+                                  controller: _pageController,
+                                  itemCount: facilities.length,
+                                  onPageChanged: (index) {
+                                    setState(() {
+                                      _currentFacilityPage = index;
+                                    });
+                                  },
+                                  itemBuilder: (context, index) {
+                                    final facility = facilities[index];
+                                    return Card(
+                                      elevation: 2,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              facility['name'],
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              facility['type'],
+                                              style: const TextStyle(
+                                                color: Colors.blue,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              facility['vicinity'],
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.black54,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.arrow_right,
+                                    size: 32, color: Colors.blue),
+                                onPressed: () {
+                                  if (_currentFacilityPage <
+                                      facilities.length - 1) {
+                                    setState(() {
+                                      _currentFacilityPage++;
+                                      _pageController.animateToPage(
+                                        _currentFacilityPage,
+                                        duration:
+                                            const Duration(milliseconds: 300),
+                                        curve: Curves.easeInOut,
+                                      );
+                                    });
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (facilities.isNotEmpty)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(facilities.length, (index) {
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              width: _currentFacilityPage == index ? 16 : 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: _currentFacilityPage == index
+                                    ? Colors.blue
+                                    : Colors.blue.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            );
+                          }),
+                        ),
+                      const SizedBox(height: 20),
+                      // View Detailed Report Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => LocationDetailsScreen(
+                                  location: barangay,
+                                  streetName:
+                                      streetName, // from reverse geocoding
+                                  latitude: location.latitude,
+                                  longitude: location.longitude,
+                                  cases: _dengueData[barangay]?['cases'] as int,
+                                  severity: _dengueData[barangay]?['severity']
+                                      as String,
+                                  district: selectedDistrict,
+                                ),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                Theme.of(context).colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(double.infinity, 50),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('View Detailed Report'),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                   ),
-                ),
-                child: const Text('View Detailed Report'),
-              ),
-            ),
-            const SizedBox(height: 8), // small bottom space
-          ],
-        ),
-      ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1877,5 +2029,47 @@ class _MappingScreenState extends State<MappingScreen>
       print('Error fetching dengue data: $e');
       setState(() => _isLoadingData = false);
     }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchNearbyHealthFacilities(
+      double lat, double lng) async {
+    final apiKey = Platform.isAndroid
+        ? 'AIzaSyBRDnkMNTXau6B_3BFjPaFfmyi-f7oYfW4'
+        : 'AIzaSyAjVcilPoaJHytTgyBnLiW2oH7NKCLOmvk';
+
+    Future<List<Map<String, dynamic>>> fetchType(String type) async {
+      final url =
+          'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=5000&type=$type&key=$apiKey';
+      final response = await http.get(Uri.parse(url));
+      final data = jsonDecode(response.body);
+      print('Places API ($type) status: \\${data['status']}');
+      print('Places API ($type) response: \\${data}');
+      if (data['status'] == 'OK') {
+        return (data['results'] as List)
+            .map((place) => {
+                  'name': place['name'],
+                  'type': type == 'hospital' ? 'Hospital' : 'Health Center',
+                  'vicinity': place['vicinity'] ?? '',
+                })
+            .toList();
+      } else {
+        return [];
+      }
+    }
+
+    final hospitals = await fetchType('hospital');
+    final healthCenters = await fetchType('health');
+
+    // Remove duplicates by name+vicinity
+    final seen = <String>{};
+    final all = <Map<String, dynamic>>[];
+    for (final facility in [...hospitals, ...healthCenters]) {
+      final key = facility['name'] + facility['vicinity'];
+      if (!seen.contains(key)) {
+        seen.add(key);
+        all.add(facility);
+      }
+    }
+    return all;
   }
 }
