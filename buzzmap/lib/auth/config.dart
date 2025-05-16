@@ -4,12 +4,7 @@ import 'package:http/http.dart' as http;
 
 //Login
 class Config {
-  static String get baseUrl {
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:4000';
-    }
-    return 'http://localhost:4000';
-  }
+  static const String baseUrl = 'http://192.168.1.38:4000';
 
   // Add these URLs
   static String get verifyOtpUrl => '$baseUrl/api/v1/auth/verify-otp';

@@ -1676,7 +1676,7 @@ class _MappingScreenState extends State<MappingScreen>
                         const Text('No nearby health facilities found.'),
                       if (facilities.isNotEmpty)
                         SizedBox(
-                          height: 120,
+                          height: 170,
                           child: Row(
                             children: [
                               IconButton(
@@ -1709,41 +1709,57 @@ class _MappingScreenState extends State<MappingScreen>
                                     final facility = facilities[index];
                                     return Card(
                                       elevation: 2,
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 13, vertical: 8),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(16),
                                       ),
+                                      color: Colors.white,
                                       child: Padding(
                                         padding: const EdgeInsets.all(16),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              facility['name'],
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 16,
+                                        child: SingleChildScrollView(
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                facility['name'],
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                  color: Colors.black87,
+                                                ),
                                               ),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Text(
-                                              facility['type'],
-                                              style: const TextStyle(
-                                                color: Colors.blue,
-                                                fontSize: 14,
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                facility['type'],
+                                                style: const TextStyle(
+                                                  color: Colors.blue,
+                                                  fontSize: 14,
+                                                ),
                                               ),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Text(
-                                              facility['vicinity'],
-                                              style: const TextStyle(
-                                                fontSize: 13,
-                                                color: Colors.black54,
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                facility['vicinity'],
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.black54,
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                              const SizedBox(height: 6),
+                                              if (facility['distance_km'] !=
+                                                  null)
+                                                Text(
+                                                  'Distance: ${facility['distance_km'].toStringAsFixed(2)} km',
+                                                  style: const TextStyle(
+                                                    fontSize: 13,
+                                                    color: Colors.black87,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     );
@@ -2031,45 +2047,90 @@ class _MappingScreenState extends State<MappingScreen>
     }
   }
 
+  // Add this helper function to calculate distance between two lat/lng points in km
+  // Haversine formula
+
+  double calculateDistanceKm(
+      double lat1, double lon1, double lat2, double lon2) {
+    const earthRadius = 6371; // km
+    final dLat = (lat2 - lat1) * pi / 180.0;
+    final dLon = (lon2 - lon1) * pi / 180.0;
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1 * pi / 180.0) *
+            cos(lat2 * pi / 180.0) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return earthRadius * c;
+  }
+
   Future<List<Map<String, dynamic>>> fetchNearbyHealthFacilities(
       double lat, double lng) async {
-    final apiKey = Platform.isAndroid
-        ? 'AIzaSyBRDnkMNTXau6B_3BFjPaFfmyi-f7oYfW4'
-        : 'AIzaSyAjVcilPoaJHytTgyBnLiW2oH7NKCLOmvk';
+    final apiKey = 'AIzaSyC1qJ8pzXVWuWOEyc7svbEKDa_HEPE2EL0';
 
-    Future<List<Map<String, dynamic>>> fetchType(String type) async {
-      final url =
-          'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=5000&type=$type&key=$apiKey';
-      final response = await http.get(Uri.parse(url));
-      final data = jsonDecode(response.body);
-      print('Places API ($type) status: \\${data['status']}');
-      print('Places API ($type) response: \\${data}');
-      if (data['status'] == 'OK') {
-        return (data['results'] as List)
-            .map((place) => {
-                  'name': place['name'],
-                  'type': type == 'hospital' ? 'Hospital' : 'Health Center',
-                  'vicinity': place['vicinity'] ?? '',
-                })
-            .toList();
-      } else {
-        return [];
+    // Single API call for all health facilities
+    final url =
+        'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=500&type=health&key=$apiKey';
+    final response = await http.get(Uri.parse(url));
+    final data = jsonDecode(response.body);
+
+    if (data['status'] == 'OK') {
+      final List<Map<String, dynamic>> facilities =
+          (data['results'] as List).map((place) {
+        final List types = place['types'] ?? [];
+        String facilityType = '';
+        final nameLower = place['name'].toString().toLowerCase();
+
+        // Exclude drug stores and pharmacies
+        if (types.contains('pharmacy') ||
+            types.contains('drugstore') ||
+            nameLower.contains('pharmacy') ||
+            nameLower.contains('drugstore')) {
+          facilityType = 'Other';
+        } else if (types.contains('hospital')) {
+          facilityType = 'Hospital';
+        } else if (nameLower.contains('health center')) {
+          facilityType = 'Health Center';
+        } else if (types.contains('doctor') || nameLower.contains('clinic')) {
+          facilityType = 'Clinic';
+        } else {
+          facilityType = 'Other';
+        }
+
+        return {
+          'name': place['name'],
+          'type': facilityType,
+          'vicinity': place['vicinity'] ?? '',
+          'lat': place['geometry']['location']['lat'],
+          'lng': place['geometry']['location']['lng'],
+        };
+      }).toList();
+
+      // Remove duplicates and filter by type
+      final seen = <String>{};
+      final all = <Map<String, dynamic>>[];
+
+      for (final facility in facilities) {
+        final key = facility['name'] + facility['vicinity'];
+        if (!seen.contains(key)) {
+          if (facility['type'] == 'Hospital' ||
+              facility['type'] == 'Health Center' ||
+              facility['type'] == 'Clinic') {
+            // Calculate distance from report location to facility
+            final distance = calculateDistanceKm(
+              lat,
+              lng,
+              facility['lat'],
+              facility['lng'],
+            );
+            facility['distance_km'] = distance;
+            seen.add(key);
+            all.add(facility);
+          }
+        }
       }
+      return all;
     }
-
-    final hospitals = await fetchType('hospital');
-    final healthCenters = await fetchType('health');
-
-    // Remove duplicates by name+vicinity
-    final seen = <String>{};
-    final all = <Map<String, dynamic>>[];
-    for (final facility in [...hospitals, ...healthCenters]) {
-      final key = facility['name'] + facility['vicinity'];
-      if (!seen.contains(key)) {
-        seen.add(key);
-        all.add(facility);
-      }
-    }
-    return all;
+    return [];
   }
 }
