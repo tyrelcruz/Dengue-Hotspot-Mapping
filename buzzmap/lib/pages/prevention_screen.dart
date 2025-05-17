@@ -13,6 +13,7 @@ import 'package:buzzmap/data/articles_data.dart';
 import 'package:buzzmap/models/admin_post.dart';
 import 'package:intl/intl.dart';
 import 'package:buzzmap/pages/news_details_screen.dart';
+import 'package:buzzmap/config/config.dart';
 
 class PreventionScreen extends StatefulWidget {
   const PreventionScreen({super.key});
@@ -28,12 +29,7 @@ class _PreventionScreenState extends State<PreventionScreen> {
 
   // Get the appropriate base URL based on platform
   String get baseUrl {
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:4000';
-    } else if (Platform.isIOS) {
-      return 'http://localhost:4000';
-    }
-    return 'http://localhost:4000';
+    return Config.baseUrl;
   }
 
   String formatDate(String dateStr) {

@@ -1707,58 +1707,241 @@ class _MappingScreenState extends State<MappingScreen>
                                   },
                                   itemBuilder: (context, index) {
                                     final facility = facilities[index];
-                                    return Card(
-                                      elevation: 2,
-                                      margin: const EdgeInsets.symmetric(
-                                          horizontal: 13, vertical: 8),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      color: Colors.white,
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: SingleChildScrollView(
-                                          child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                facility['name'],
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 16,
-                                                  color: Colors.black87,
-                                                ),
+                                    return GestureDetector(
+                                      onTap: () {
+                                        // Close the bottom sheet
+                                        Navigator.pop(context);
+
+                                        // First zoom out slightly to show context
+                                        _mapController.animateCamera(
+                                          CameraUpdate.newCameraPosition(
+                                            CameraPosition(
+                                              target: LatLng(
+                                                facility['lat'],
+                                                facility['lng'],
                                               ),
-                                              const SizedBox(height: 6),
-                                              Text(
-                                                facility['type'],
-                                                style: const TextStyle(
-                                                  color: Colors.blue,
-                                                  fontSize: 14,
-                                                ),
+                                              zoom:
+                                                  14.0, // Slightly zoomed out for context
+                                            ),
+                                          ),
+                                        );
+
+                                        // Add a marker for the facility
+                                        setState(() {
+                                          // Remove any existing facility markers
+                                          _markers.removeWhere((marker) =>
+                                              marker.markerId.value
+                                                  .startsWith('facility-'));
+
+                                          // Add new marker
+                                          _markers.add(
+                                            Marker(
+                                              markerId: MarkerId(
+                                                  'facility-${facility['name']}'),
+                                              position: LatLng(
+                                                facility['lat'],
+                                                facility['lng'],
                                               ),
-                                              const SizedBox(height: 6),
-                                              Text(
-                                                facility['vicinity'],
-                                                style: const TextStyle(
-                                                  fontSize: 13,
-                                                  color: Colors.black54,
-                                                ),
+                                              icon: BitmapDescriptor
+                                                  .defaultMarkerWithHue(
+                                                BitmapDescriptor.hueBlue,
                                               ),
-                                              const SizedBox(height: 6),
-                                              if (facility['distance_km'] !=
-                                                  null)
-                                                Text(
-                                                  'Distance: ${facility['distance_km'].toStringAsFixed(2)} km',
-                                                  style: const TextStyle(
-                                                    fontSize: 13,
-                                                    color: Colors.black87,
+                                              infoWindow: InfoWindow(
+                                                title: facility['name'],
+                                                snippet:
+                                                    '${facility['type']} • ${facility['distance_km'].toStringAsFixed(1)} km away',
+                                              ),
+                                            ),
+                                          );
+                                        });
+
+                                        // After a short delay, zoom in closer
+                                        Future.delayed(
+                                            const Duration(milliseconds: 800),
+                                            () {
+                                          _mapController.animateCamera(
+                                            CameraUpdate.newCameraPosition(
+                                              CameraPosition(
+                                                target: LatLng(
+                                                  facility['lat'],
+                                                  facility['lng'],
+                                                ),
+                                                zoom:
+                                                    16.5, // Closer zoom for facility detail
+                                                tilt:
+                                                    45.0, // Add some tilt for better perspective
+                                              ),
+                                            ),
+                                          );
+                                        });
+
+                                        // Show a snackbar with facility info
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Row(
+                                              children: [
+                                                const Icon(
+                                                  Icons.location_on,
+                                                  color: Colors.white,
+                                                  size: 20,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Viewing ${facility['name']}',
+                                                    style: const TextStyle(
+                                                        color: Colors.white),
                                                   ),
                                                 ),
-                                            ],
+                                              ],
+                                            ),
+                                            backgroundColor:
+                                                Theme.of(context).primaryColor,
+                                            duration:
+                                                const Duration(seconds: 3),
+                                            behavior: SnackBarBehavior.floating,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: Card(
+                                        elevation: 2,
+                                        margin: const EdgeInsets.symmetric(
+                                            horizontal: 13, vertical: 8),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                        ),
+                                        color: Colors.white,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: SingleChildScrollView(
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text(
+                                                        facility['name'],
+                                                        style: const TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 16,
+                                                          color: Colors.black87,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Container(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.blue
+                                                            .withOpacity(0.1),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(12),
+                                                      ),
+                                                      child: Text(
+                                                        facility['type'],
+                                                        style: const TextStyle(
+                                                          color: Colors.blue,
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Row(
+                                                  children: [
+                                                    const Icon(
+                                                      Icons.location_on,
+                                                      size: 14,
+                                                      color: Colors.black54,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Expanded(
+                                                      child: Text(
+                                                        facility['vicinity'],
+                                                        style: const TextStyle(
+                                                          fontSize: 13,
+                                                          color: Colors.black54,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                                if (facility['distance_km'] !=
+                                                    null)
+                                                  Row(
+                                                    children: [
+                                                      const Icon(
+                                                        Icons.directions_walk,
+                                                        size: 14,
+                                                        color: Colors.black54,
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      Text(
+                                                        '${facility['distance_km'].toStringAsFixed(1)} km away',
+                                                        style: const TextStyle(
+                                                          fontSize: 13,
+                                                          color: Colors.black87,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                const SizedBox(height: 12),
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 6,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.blue
+                                                        .withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            20),
+                                                  ),
+                                                  child: const Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.touch_app,
+                                                        color: Colors.blue,
+                                                        size: 16,
+                                                      ),
+                                                      SizedBox(width: 4),
+                                                      Text(
+                                                        'Tap to view on map',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: Colors.blue,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -2081,20 +2264,54 @@ class _MappingScreenState extends State<MappingScreen>
         String facilityType = '';
         final nameLower = place['name'].toString().toLowerCase();
 
-        // Check if it's a valid medical facility
+        // Strict filtering for admitting facilities
         if (types.contains('hospital')) {
-          facilityType = 'Hospital';
-        } else if (nameLower.contains('health center')) {
-          facilityType = 'Health Center';
-        } else if (types.contains('doctor') ||
-            (nameLower.contains('clinic') &&
-                !nameLower.contains('animal') &&
-                !nameLower.contains('pet') &&
-                !nameLower.contains('veterinary') &&
-                !nameLower.contains('vet'))) {
-          facilityType = 'Clinic';
-        } else {
-          facilityType = 'Other';
+          // Check for specific hospital types that can admit patients
+          if (nameLower.contains('general hospital') ||
+              nameLower.contains('medical center') ||
+              nameLower.contains('regional hospital') ||
+              nameLower.contains('provincial hospital') ||
+              nameLower.contains('city hospital') ||
+              nameLower.contains('university hospital') ||
+              nameLower.contains('specialty hospital') ||
+              nameLower.contains('tertiary hospital') ||
+              nameLower.contains('secondary hospital')) {
+            facilityType = 'Hospital';
+          }
+        } else if (nameLower.contains('health center') ||
+            nameLower.contains('healthcare')) {
+          // Only include major health centers that can admit patients
+          if (nameLower.contains('regional') ||
+              nameLower.contains('provincial') ||
+              nameLower.contains('city') ||
+              nameLower.contains('district')) {
+            facilityType = 'Health Center';
+          }
+        }
+
+        // Exclude facilities that are clearly not admitting facilities
+        if (nameLower.contains('clinic') ||
+            nameLower.contains('diagnostic') ||
+            nameLower.contains('laboratory') ||
+            nameLower.contains('imaging') ||
+            nameLower.contains('radiology') ||
+            nameLower.contains('outpatient') ||
+            nameLower.contains('ambulatory') ||
+            nameLower.contains('animal') ||
+            nameLower.contains('pet') ||
+            nameLower.contains('veterinary') ||
+            nameLower.contains('vet') ||
+            nameLower.contains('airgun') ||
+            nameLower.contains('shooting') ||
+            nameLower.contains('dental') ||
+            nameLower.contains('optical') ||
+            nameLower.contains('eye') ||
+            nameLower.contains('vision') ||
+            nameLower.contains('skin') ||
+            nameLower.contains('dermatology') ||
+            nameLower.contains('wellness') ||
+            nameLower.contains('spa')) {
+          facilityType = '';
         }
 
         return {
@@ -2112,23 +2329,24 @@ class _MappingScreenState extends State<MappingScreen>
 
       for (final facility in facilities) {
         final key = facility['name'] + facility['vicinity'];
-        if (!seen.contains(key)) {
-          if (facility['type'] == 'Hospital' ||
-              facility['type'] == 'Health Center' ||
-              facility['type'] == 'Clinic') {
-            // Calculate distance from report location to facility
-            final distance = calculateDistanceKm(
-              lat,
-              lng,
-              facility['lat'],
-              facility['lng'],
-            );
-            facility['distance_km'] = distance;
-            seen.add(key);
-            all.add(facility);
-          }
+        if (!seen.contains(key) && facility['type'].isNotEmpty) {
+          // Calculate distance from report location to facility
+          final distance = calculateDistanceKm(
+            lat,
+            lng,
+            facility['lat'],
+            facility['lng'],
+          );
+          facility['distance_km'] = distance;
+          seen.add(key);
+          all.add(facility);
         }
       }
+
+      // Sort facilities by distance
+      all.sort((a, b) =>
+          (a['distance_km'] as double).compareTo(b['distance_km'] as double));
+
       return all;
     }
     return [];

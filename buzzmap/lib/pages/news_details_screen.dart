@@ -6,6 +6,7 @@ import 'package:buzzmap/widgets/appbar/custom_app_bar.dart';
 import 'package:buzzmap/main.dart';
 import 'package:intl/intl.dart';
 import 'dart:io' show Platform;
+import 'package:buzzmap/config/config.dart';
 
 class NewsDetailsScreen extends StatefulWidget {
   final String postId;
@@ -25,12 +26,7 @@ class _NewsDetailsScreenState extends State<NewsDetailsScreen> {
   bool hasError = false;
 
   String get baseUrl {
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:4000';
-    } else if (Platform.isIOS) {
-      return 'http://localhost:4000';
-    }
-    return 'http://localhost:4000';
+    return Config.baseUrl;
   }
 
   @override
