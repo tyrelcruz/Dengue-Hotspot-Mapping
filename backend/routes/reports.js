@@ -7,6 +7,10 @@ const {
   deleteReport,
   updateReportStatus,
   getNearbyReports,
+  getComments,
+  createComment,
+  upvoteReport,
+  downvoteReport,
 } = require("../controllers/reportController");
 
 const router = express.Router();
@@ -21,5 +25,13 @@ router.use(auth);
 router.post("/", createReport);
 router.delete("/:id", deleteReport);
 router.patch("/:id", updateReportStatus);
+
+// Comment routes
+router.get("/:postId/comments", getComments);
+router.post("/:postId/comments", createComment);
+
+// Vote routes
+router.post("/:id/upvote", upvoteReport);
+router.post("/:id/downvote", downvoteReport);
 
 module.exports = router;

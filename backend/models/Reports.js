@@ -65,11 +65,7 @@ const reportSchema = new Schema(
     report_type: {
       type: String,
       required: true,
-      enum: [
-        "Breeding Site",
-        "Standing Water",
-        "Infestation",
-      ],
+      enum: ["Breeding Site", "Standing Water", "Infestation"],
     },
     description: { type: String },
     images: [{ type: String }],
@@ -78,6 +74,18 @@ const reportSchema = new Schema(
       default: "Pending",
       enum: ["Pending", "Rejected", "Validated"],
     },
+    upvotes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Account",
+      },
+    ],
+    downvotes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Account",
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -86,13 +94,14 @@ const reportSchema = new Schema(
 reportSchema.index({ specific_location: "2dsphere" });
 
 // Add a pre-save middleware to generate anonymousId
-reportSchema.pre('save', function(next) {
+reportSchema.pre("save", function (next) {
   if (this.isAnonymous && !this.anonymousId) {
     // Create a hash of the report's _id
-    const hash = crypto.createHash('sha256')
+    const hash = crypto
+      .createHash("sha256")
       .update(this._id.toString())
-      .digest('hex');
-    
+      .digest("hex");
+
     // Take first 8 characters of the hash for a shorter ID
     this.anonymousId = `ANON-${hash.substring(0, 8)}`;
   }

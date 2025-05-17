@@ -7,6 +7,7 @@ const Notification = require("../models/Notifications");
 const axios = require("axios");
 const FormData = require("form-data");
 const path = require("path");
+const Comment = require("../models/Comments");
 
 // ImgBB Configuration
 const IMGBB_API_KEY = "f9a3cbc450ac4599f046c41d84ad5799"; // Get from imgbb.com
@@ -49,61 +50,67 @@ const getAllReports = asyncErrorHandler(async (req, res) => {
     status,
     startDate,
     endDate,
-    sortBy = 'createdAt',
-    sortOrder = 'desc',
+    sortBy = "createdAt",
+    sortOrder = "desc",
     username,
     description,
-    search
+    search,
   } = req.query;
 
   // Build the filter object
   const filter = {};
 
   // Only apply filters if at least one query parameter is provided
-  const hasQueryParams = barangay || report_type || status || startDate || endDate || username || description || search;
-  
+  const hasQueryParams =
+    barangay ||
+    report_type ||
+    status ||
+    startDate ||
+    endDate ||
+    username ||
+    description ||
+    search;
+
   if (hasQueryParams) {
     // Handle specific filters first (these take precedence)
     if (barangay) {
-      const searchTerm = barangay.replace(/\s+/g, '');
-      filter.barangay = { 
-        $regex: new RegExp(`^${searchTerm.split('').join('\\s*')}$`, 'i') 
+      const searchTerm = barangay.replace(/\s+/g, "");
+      filter.barangay = {
+        $regex: new RegExp(`^${searchTerm.split("").join("\\s*")}$`, "i"),
       };
     }
 
     if (username) {
-      const User = mongoose.model('Account');
-      const users = await User.find({ username: { $regex: username, $options: 'i' } });
-      const userIds = users.map(user => user._id);
-      
+      const User = mongoose.model("Account");
+      const users = await User.find({
+        username: { $regex: username, $options: "i" },
+      });
+      const userIds = users.map((user) => user._id);
+
       // Only search by username if the report is not anonymous
-      filter.$and = [
-        { user: { $in: userIds } },
-        { isAnonymous: false }
-      ];
+      filter.$and = [{ user: { $in: userIds } }, { isAnonymous: false }];
     }
 
     if (description) {
-      filter.description = { $regex: description, $options: 'i' };
+      filter.description = { $regex: description, $options: "i" };
     }
 
     // Handle general search only if no specific filters are provided
     if (search && !barangay && !username && !description) {
       const searchConditions = [
-        { barangay: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+        { barangay: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
       ];
 
       // For username search in general search, only include non-anonymous reports
-      const User = mongoose.model('Account');
-      const users = await User.find({ username: { $regex: search, $options: 'i' } });
-      const userIds = users.map(user => user._id);
+      const User = mongoose.model("Account");
+      const users = await User.find({
+        username: { $regex: search, $options: "i" },
+      });
+      const userIds = users.map((user) => user._id);
       if (userIds.length > 0) {
         searchConditions.push({
-          $and: [
-            { user: { $in: userIds } },
-            { isAnonymous: false }
-          ]
+          $and: [{ user: { $in: userIds } }, { isAnonymous: false }],
         });
       }
 
@@ -111,8 +118,8 @@ const getAllReports = asyncErrorHandler(async (req, res) => {
       searchConditions.push({
         $and: [
           { isAnonymous: true },
-          { anonymousId: { $regex: search, $options: 'i' } }
-        ]
+          { anonymousId: { $regex: search, $options: "i" } },
+        ],
       });
 
       filter.$or = searchConditions;
@@ -139,22 +146,29 @@ const getAllReports = asyncErrorHandler(async (req, res) => {
   }
 
   // Validate sort parameters
-  const allowedSortFields = ['createdAt', 'date_and_time', 'status', 'report_type'];
-  const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
-  const sortDirection = sortOrder === 'asc' ? 1 : -1;
+  const allowedSortFields = [
+    "createdAt",
+    "date_and_time",
+    "status",
+    "report_type",
+  ];
+  const sortField = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
+  const sortDirection = sortOrder === "asc" ? 1 : -1;
 
   const reports = await Report.find(filter)
     .sort({ [sortField]: sortDirection })
-    .populate("user", "username");
+    .populate("user", "username")
+    .populate("upvotes", "_id")
+    .populate("downvotes", "_id");
 
   // Transform the response to show anonymousId instead of username for anonymous reports
-  const transformedReports = reports.map(report => {
+  const transformedReports = reports.map((report) => {
     const reportObj = report.toObject();
     if (report.isAnonymous) {
       // For anonymous reports, create a user object with anonymousId
-      reportObj.user = { 
+      reportObj.user = {
         _id: report._id, // Use report's _id instead of user._id
-        username: report.anonymousId 
+        username: report.anonymousId,
       };
     }
     return reportObj;
@@ -169,7 +183,11 @@ const getReport = asyncErrorHandler(async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(404).json({ error: "No such post!" });
   }
-  const report = await Report.findById(id).populate("user", "username");
+  const report = await Report.findById(id)
+    .populate("user", "username")
+    .populate("upvotes", "_id")
+    .populate("downvotes", "_id");
+
   if (!report) {
     return res.status(404).json({ error: "Post does not exist!" });
   }
@@ -193,7 +211,9 @@ const createReport = asyncErrorHandler(async (req, res) => {
   // Get userId if user is authenticated
   const userId = req.user?.userId;
   if (!userId) {
-    return res.status(401).json({ error: "Authentication required to submit reports" });
+    return res
+      .status(401)
+      .json({ error: "Authentication required to submit reports" });
   }
 
   // Reconstruct specific_location from the form data
@@ -202,59 +222,67 @@ const createReport = asyncErrorHandler(async (req, res) => {
     coordinates: [
       parseFloat(req.body["specific_location[coordinates][0]"]),
       parseFloat(req.body["specific_location[coordinates][1]"]),
-    ]
+    ],
   };
 
   // Validate required fields based on the Report model schema
   let emptyFields = [];
-  
+
   // Check required fields
   if (!req.body.barangay) emptyFields.push("barangay");
-  if (!specific_location || !specific_location.coordinates) emptyFields.push("specific_location");
+  if (!specific_location || !specific_location.coordinates)
+    emptyFields.push("specific_location");
   if (!req.body.date_and_time) emptyFields.push("date_and_time");
   if (!req.body.report_type) emptyFields.push("report_type");
   if (!req.body.description) emptyFields.push("description");
 
   if (emptyFields.length > 0) {
-    return res.status(400).json({ 
-      error: "Please fill in all required fields", 
+    return res.status(400).json({
+      error: "Please fill in all required fields",
       emptyFields,
-      message: `The following fields are required: ${emptyFields.join(", ")}`
+      message: `The following fields are required: ${emptyFields.join(", ")}`,
     });
   }
 
   // Validate barangay
   if (!isBarangayValid(req.body.barangay)) {
-    return res.status(400).json({ 
-      error: "Invalid barangay", 
-      message: `${req.body.barangay} is not a valid barangay.`
+    return res.status(400).json({
+      error: "Invalid barangay",
+      message: `${req.body.barangay} is not a valid barangay.`,
     });
   }
 
   // Validate report type
   if (!ALLOWED_REPORT_TYPES.includes(req.body.report_type)) {
-    return res.status(400).json({ 
-      error: "Invalid report type", 
-      message: `Invalid report_type. Allowed values: ${ALLOWED_REPORT_TYPES.join(", ")}.`
+    return res.status(400).json({
+      error: "Invalid report type",
+      message: `Invalid report_type. Allowed values: ${ALLOWED_REPORT_TYPES.join(
+        ", "
+      )}.`,
     });
   }
 
   // Validate specific_location coordinates
-  if (specific_location.coordinates.length !== 2 || 
-      specific_location.coordinates[0] < -180 || 
-      specific_location.coordinates[0] > 180 ||
-      specific_location.coordinates[1] < -90 || 
-      specific_location.coordinates[1] > 90) {
-    return res.status(400).json({ 
-      error: "Invalid coordinates", 
-      message: "Coordinates must be in [longitude, latitude] format with valid ranges."
+  if (
+    specific_location.coordinates.length !== 2 ||
+    specific_location.coordinates[0] < -180 ||
+    specific_location.coordinates[0] > 180 ||
+    specific_location.coordinates[1] < -90 ||
+    specific_location.coordinates[1] > 90
+  ) {
+    return res.status(400).json({
+      error: "Invalid coordinates",
+      message:
+        "Coordinates must be in [longitude, latitude] format with valid ranges.",
     });
   }
 
   // Handle image uploads
   const imageUrls = [];
   if (req.files && req.files.images) {
-    const imageFiles = Array.isArray(req.files.images) ? req.files.images : [req.files.images];
+    const imageFiles = Array.isArray(req.files.images)
+      ? req.files.images
+      : [req.files.images];
     for (const file of imageFiles) {
       try {
         const imgbbResponse = await uploadToImgBB(file.data);
@@ -262,9 +290,9 @@ const createReport = asyncErrorHandler(async (req, res) => {
         imageUrls.push(imgbbResponse.url);
       } catch (error) {
         console.error("[DEBUG] ImgBB upload error:", error);
-        return res.status(500).json({ 
-          error: "Image upload failed", 
-          message: "Failed to upload image to ImgBB"
+        return res.status(500).json({
+          error: "Image upload failed",
+          message: "Failed to upload image to ImgBB",
         });
       }
     }
@@ -301,17 +329,19 @@ const createReport = asyncErrorHandler(async (req, res) => {
         report_type: report.report_type,
         images: report.images,
         isAnonymous: report.isAnonymous,
-        anonymousId: report.anonymousId
+        anonymousId: report.anonymousId,
       },
     });
   } catch (error) {
     // Handle mongoose validation errors
-    if (error.name === 'ValidationError') {
-      const validationErrors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({ 
-        error: "Validation Error", 
+    if (error.name === "ValidationError") {
+      const validationErrors = Object.values(error.errors).map(
+        (err) => err.message
+      );
+      return res.status(400).json({
+        error: "Validation Error",
         message: "Invalid report data",
-        details: validationErrors
+        details: validationErrors,
       });
     }
     throw error; // Let the error handler middleware handle other errors
@@ -390,7 +420,9 @@ const getNearbyReports = asyncErrorHandler(async (req, res) => {
     !Array.isArray(referenceReport.specific_location.coordinates) ||
     referenceReport.specific_location.coordinates.length !== 2
   ) {
-    return res.status(400).json({ error: "Reference report does not have a valid location." });
+    return res
+      .status(400)
+      .json({ error: "Reference report does not have a valid location." });
   }
 
   // Build the query
@@ -411,10 +443,13 @@ const getNearbyReports = asyncErrorHandler(async (req, res) => {
     geoQuery.status = status;
   }
 
-  const nearbyReports = await Report.find(geoQuery).populate("user", "username");
+  const nearbyReports = await Report.find(geoQuery).populate(
+    "user",
+    "username"
+  );
 
   // Transform for anonymous
-  const transformedReports = nearbyReports.map(report => {
+  const transformedReports = nearbyReports.map((report) => {
     const reportObj = report.toObject();
     if (report.isAnonymous) {
       reportObj.user = {
@@ -432,6 +467,115 @@ const getNearbyReports = asyncErrorHandler(async (req, res) => {
   });
 });
 
+// Get comments for a report
+const getComments = asyncErrorHandler(async (req, res) => {
+  const { postId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(postId)) {
+    return res.status(404).json({ error: "Invalid report ID" });
+  }
+
+  const comments = await Comment.find({ report: postId })
+    .populate("user", "username")
+    .sort({ createdAt: -1 });
+
+  res.status(200).json(comments);
+});
+
+// Create a new comment
+const createComment = asyncErrorHandler(async (req, res) => {
+  const { postId } = req.params;
+  const { content } = req.body;
+  const userId = req.user.userId;
+
+  if (!mongoose.Types.ObjectId.isValid(postId)) {
+    return res.status(404).json({ error: "Invalid report ID" });
+  }
+
+  if (!content || content.trim().length === 0) {
+    return res.status(400).json({ error: "Comment content is required" });
+  }
+
+  // Check if the report exists
+  const report = await Report.findById(postId);
+  if (!report) {
+    return res.status(404).json({ error: "Report not found" });
+  }
+
+  const comment = await Comment.create({
+    content: content.trim(),
+    report: postId,
+    user: userId,
+  });
+
+  // Populate the user field before sending the response
+  await comment.populate("user", "username");
+
+  res.status(201).json(comment);
+});
+
+// Upvote a report
+const upvoteReport = asyncErrorHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.userId;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(404).json({ error: "Invalid report ID" });
+  }
+
+  const report = await Report.findById(id);
+  if (!report) {
+    return res.status(404).json({ error: "Report not found" });
+  }
+
+  // Remove user from downvotes if they had downvoted
+  report.downvotes = report.downvotes.filter(
+    (vote) => vote.toString() !== userId
+  );
+
+  // Add user to upvotes if they haven't upvoted
+  if (!report.upvotes.includes(userId)) {
+    report.upvotes.push(userId);
+  }
+
+  await report.save();
+
+  res.status(200).json({
+    upvotes: report.upvotes,
+    downvotes: report.downvotes,
+  });
+});
+
+// Downvote a report
+const downvoteReport = asyncErrorHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.userId;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(404).json({ error: "Invalid report ID" });
+  }
+
+  const report = await Report.findById(id);
+  if (!report) {
+    return res.status(404).json({ error: "Report not found" });
+  }
+
+  // Remove user from upvotes if they had upvoted
+  report.upvotes = report.upvotes.filter((vote) => vote.toString() !== userId);
+
+  // Add user to downvotes if they haven't downvoted
+  if (!report.downvotes.includes(userId)) {
+    report.downvotes.push(userId);
+  }
+
+  await report.save();
+
+  res.status(200).json({
+    upvotes: report.upvotes,
+    downvotes: report.downvotes,
+  });
+});
+
 module.exports = {
   getAllReports,
   getReport,
@@ -439,4 +583,8 @@ module.exports = {
   deleteReport,
   updateReportStatus,
   getNearbyReports,
+  getComments,
+  createComment,
+  upvoteReport,
+  downvoteReport,
 };
