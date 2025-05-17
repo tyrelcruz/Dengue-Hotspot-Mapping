@@ -113,6 +113,13 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('username', username);
         print('👤 Username saved to SharedPreferences: $username');
 
+        // Save user ID to SharedPreferences
+        final userId = responseData['user']?['_id'] ?? '';
+        if (userId.isNotEmpty) {
+          await prefs.setString('userId', userId);
+          print('👤 User ID saved to SharedPreferences: $userId');
+        }
+
         await _saveCredentials();
 
         if (responseData['user']?['verified'] == false) {

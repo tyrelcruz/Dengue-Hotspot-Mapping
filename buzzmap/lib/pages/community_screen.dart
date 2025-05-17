@@ -48,14 +48,18 @@ class _CommunityScreenState extends State<CommunityScreen> {
       _prefs = await SharedPreferences.getInstance();
       String? username = _prefs.getString('username');
       String? email = _prefs.getString('email');
+      String? userId = _prefs.getString('userId');
       print(
           '👤 Loading username from SharedPreferences: $username'); // Debug log
       print('📧 Loading email from SharedPreferences: $email'); // Debug log
+      print('👤 Loading userId from SharedPreferences: $userId'); // Debug log
 
       if (username == null ||
           username.isEmpty ||
           email == null ||
-          email.isEmpty) {
+          email.isEmpty ||
+          userId == null ||
+          userId.isEmpty) {
         // Fetch from backend if missing
         final token = _prefs.getString('authToken');
         if (token != null && token.isNotEmpty) {
@@ -72,6 +76,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
               // Try both 'username' and 'name' keys
               final fetchedUsername = data['username'] ?? data['name'] ?? '';
               final fetchedEmail = data['email'] ?? '';
+              final fetchedUserId = data['_id'] ?? '';
               if (fetchedUsername.isNotEmpty) {
                 username = fetchedUsername;
                 await _prefs.setString('username', fetchedUsername);
@@ -82,6 +87,12 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 email = fetchedEmail;
                 await _prefs.setString('email', fetchedEmail);
                 print('📧 Email fetched from backend and saved: $fetchedEmail');
+              }
+              if (fetchedUserId.isNotEmpty) {
+                userId = fetchedUserId;
+                await _prefs.setString('userId', fetchedUserId);
+                print(
+                    '👤 User ID fetched from backend and saved: $fetchedUserId');
               }
             } else {
               print('❌ Failed to fetch user profile: ${response.body}');
@@ -112,8 +123,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('authToken');
     final currentEmail = prefs.getString('email');
+    final currentUserId =
+        prefs.getString('userId'); // Get the current user's ID
     print(
         '📧 Current email from SharedPreferences: $currentEmail'); // Debug log
+    print('👤 Current user ID: $currentUserId'); // Debug log
 
     final response = await http.get(
       Uri.parse('${Config.baseUrl}/api/v1/reports'),
@@ -125,11 +139,16 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
+      print('📱 Raw response data: $data'); // Debug log for raw response
       print('📱 Fetched reports: ${data.length}'); // Debug log
 
-      return data
+      final reports = data
           .where((report) => report['status'] == 'Validated')
           .map<Map<String, dynamic>>((report) {
+        print('📝 Processing report: $report'); // Debug log for each report
+        print(
+            '👤 Report user data: ${report['user']}'); // Debug log for user data
+
         final DateTime reportDate = DateTime.parse(report['date_and_time']);
         final DateTime now = DateTime.now();
         final Duration difference = now.difference(reportDate);
@@ -147,14 +166,18 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
         final username = report['user']?['username'] ?? 'Anonymous';
         final email = report['user']?['email'] ?? '';
+        final userId =
+            report['user']?['_id'] ?? ''; // Get the user ID from the report
         print('👤 Report username: $username'); // Debug log
         print('📧 Report email: $email'); // Debug log
-        print('📧 Is current user? ${email == currentEmail}'); // Debug log
+        print('👤 Report user ID: $userId'); // Debug log
+        print('📧 Is current user? ${userId == currentUserId}'); // Debug log
 
         return {
           'id': report['_id'],
           'username': username,
           'email': email,
+          'userId': userId, // Add user ID to the report data
           'whenPosted': whenPosted,
           'location': '${report['barangay']}, Quezon City',
           'barangay': report['barangay'],
@@ -168,11 +191,31 @@ class _CommunityScreenState extends State<CommunityScreen> {
               : <String>[],
           'iconUrl': 'assets/icons/person_1.svg',
           'status': report['status'],
+          'numUpvotes': report['upvotes']?.length ?? 0,
+          'numDownvotes': report['downvotes']?.length ?? 0,
+          'date_and_time': report['date_and_time'],
         };
       }).toList();
-    } else {
-      throw Exception('Failed to fetch reports');
+
+      print(
+          '📱 Processed reports: ${reports.length}'); // Debug log for processed reports
+      print(
+          '📱 First report data: ${reports.isNotEmpty ? reports.first : "No reports"}'); // Debug log for first report
+
+      // Sort based on selected tab
+      if (selectedIndex == 0) {
+        // Popular tab
+        reports.sort((a, b) =>
+            (b['numUpvotes'] as int).compareTo(a['numUpvotes'] as int));
+      } else if (selectedIndex == 1) {
+        // Latest tab
+        reports.sort((a, b) => (b['date_and_time'] as String)
+            .compareTo(a['date_and_time'] as String));
+      }
+
+      return reports;
     }
+    throw Exception('Failed to fetch reports');
   }
 
   Future<void> _loadReports() async {
@@ -194,29 +237,63 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
   List<Map<String, dynamic>> get _currentPosts {
     final query = _searchQuery.toLowerCase();
-    final filtered = _allPosts.where((post) {
+    var filtered = _allPosts.where((post) {
       return post['username'].toLowerCase().contains(query) ||
           post['description'].toLowerCase().contains(query) ||
           post['reportType'].toLowerCase().contains(query) ||
           post['barangay'].toLowerCase().contains(query);
     }).toList();
 
-    if (selectedIndex == 2) {
+    // Apply sorting based on selected tab
+    if (selectedIndex == 0) {
+      // Popular tab
+      filtered.sort(
+          (a, b) => (b['numUpvotes'] as int).compareTo(a['numUpvotes'] as int));
+    } else if (selectedIndex == 1) {
+      // Latest tab
+      filtered.sort((a, b) => (b['date_and_time'] as String)
+          .compareTo(a['date_and_time'] as String));
+    } else if (selectedIndex == 2) {
+      // My Posts tab
       print('🔍 Filtering for My Posts'); // Debug log
-      final currentEmail = _prefs.getString('email')?.toLowerCase() ?? '';
-      print('📧 Current email: $currentEmail'); // Debug log
+      final currentUserId = _prefs.getString('userId');
+      print('👤 Current user ID: $currentUserId'); // Debug log
+      print(
+          '📱 Total posts before filtering: ${_allPosts.length}'); // Debug log
 
-      final myPosts = filtered.where((post) {
-        final postEmail = (post['email'] ?? '').toString().toLowerCase();
-        final isMyPost = postEmail == currentEmail;
-        print('📧 Post email: $postEmail');
+      if (currentUserId == null || currentUserId.isEmpty) {
+        print('❌ No user ID found in SharedPreferences');
+        return [];
+      }
+
+      // Filter posts by current user's ID
+      filtered = _allPosts.where((post) {
+        final postUserId = post['userId'] ?? '';
+        final isMyPost = postUserId == currentUserId;
+        print('👤 Post user ID: $postUserId');
         print('🔒 Is my post? $isMyPost');
+        print('📝 Post data: $post'); // Debug log for post data
         return isMyPost;
       }).toList();
 
-      print('📱 Found ${myPosts.length} of my posts'); // Debug log
-      return myPosts;
+      print('📱 Posts after filtering: ${filtered.length}'); // Debug log
+
+      // Then apply search filter if there's a search query
+      if (query.isNotEmpty) {
+        filtered = filtered.where((post) {
+          return post['username'].toLowerCase().contains(query) ||
+              post['description'].toLowerCase().contains(query) ||
+              post['reportType'].toLowerCase().contains(query) ||
+              post['barangay'].toLowerCase().contains(query);
+        }).toList();
+      }
+
+      // Sort my posts by date (newest first)
+      filtered.sort((a, b) => (b['date_and_time'] as String)
+          .compareTo(a['date_and_time'] as String));
+      print('📱 Found ${filtered.length} of my posts'); // Debug log
     }
+
     return filtered;
   }
 
