@@ -1283,26 +1283,25 @@ class _MappingScreenState extends State<MappingScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Dengue Risk Levels & Patterns'),
+        title: const Text('Dengue Pattern Recognition'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildLegendRow(
-                Colors.grey, 'No Data', 'Information not available'),
-            const SizedBox(height: 8),
-            _buildLegendRow(Colors.green, 'Stable', 'No significant change'),
-            _buildLegendRow(
-                Colors.lightBlue, 'Decline Pattern', 'Decreasing trend'),
+                Colors.grey.shade700, 'No Data', 'Information not available'),
             const SizedBox(height: 8),
             _buildLegendRow(
-                Colors.orange, 'Moderate Risk', 'Slight increase in cases'),
-            _buildLegendRow(
-                Colors.deepOrange, 'Spike Pattern', 'Sudden increase'),
+                Colors.red.shade700, 'Spike', 'Sudden increase in cases'),
+            _buildLegendRow(Colors.orange.shade500, 'Gradual Rise',
+                'Steady increase in cases'),
             const SizedBox(height: 8),
-            _buildLegendRow(Colors.red, 'High Risk', 'Critical situation'),
+            _buildLegendRow(
+                Colors.green.shade600, 'Decline', 'Decreasing trend'),
+            _buildLegendRow(Colors.lightBlue.shade600, 'Stability',
+                'No significant change'),
             const SizedBox(height: 16),
             const Text(
-              'Areas are color-coded based on risk levels and patterns. Click on any area to see detailed information.',
+              'Areas are color-coded based on dengue case patterns. Click on any area to see detailed information.',
               style: TextStyle(fontSize: 12),
             ),
           ],
@@ -1387,13 +1386,15 @@ class _MappingScreenState extends State<MappingScreen>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _legendItem(Colors.grey, 'No Data'),
+            _legendItem(Colors.grey.shade700, 'No Data'),
             const SizedBox(width: 8),
-            _legendItem(Colors.green, 'Stable'),
+            _legendItem(Colors.lightBlue.shade600, 'Stability'),
             const SizedBox(width: 8),
-            _legendItem(Colors.orange, 'Moderate'),
+            _legendItem(Colors.green.shade600, 'Decline'),
             const SizedBox(width: 8),
-            _legendItem(Colors.red, 'High'),
+            _legendItem(Colors.orange.shade500, 'Gradual Rise'),
+            const SizedBox(width: 8),
+            _legendItem(Colors.red.shade700, 'Spike'),
           ],
         ),
       ),
@@ -2268,8 +2269,22 @@ class _MappingScreenState extends State<MappingScreen>
             _barangayPatterns = {};
             _barangayAlerts = {};
 
+            // Name mapping for special cases
+            final nameMapping = {
+              'E. Rodriguez Sr.': 'E. Rodriguez',
+              // Add more mappings if needed
+            };
+
             for (var item in data['data'] as List) {
-              final name = item['name'];
+              String name = item['name'];
+              // Check if we need to map this name
+              if (nameMapping.containsKey(name)) {
+                name = nameMapping[name]!;
+              }
+
+              print('Processing barangay: $name'); // Debug log
+              print('Pattern data: ${item['triggered_pattern']}'); // Debug log
+
               if (item['risk_level'] != null) {
                 _barangayRiskLevels[name] =
                     item['risk_level'].toString().toLowerCase();
@@ -2277,6 +2292,8 @@ class _MappingScreenState extends State<MappingScreen>
               if (item['triggered_pattern'] != null) {
                 _barangayPatterns[name] =
                     item['triggered_pattern'].toString().toLowerCase();
+                print(
+                    'Set pattern for $name: ${_barangayPatterns[name]}'); // Debug log
               }
               if (item['alert'] != null) {
                 _barangayAlerts[name] = item['alert'].toString();
@@ -2314,83 +2331,101 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   Color _getColorForBarangay(String barangayName) {
-    final riskLevel = _barangayRiskLevels[barangayName]?.toLowerCase();
-    final pattern = _barangayPatterns[barangayName]?.toLowerCase();
+    // Name mapping for special cases
+    final nameMapping = {
+      'E. Rodriguez Sr.': 'E. Rodriguez',
+      // Add more mappings if needed
+    };
+
+    // Check if we need to map this name
+    final lookupName = nameMapping[barangayName] ?? barangayName;
+    final pattern = _barangayPatterns[lookupName]?.toLowerCase();
+    print(
+        'Getting color for $barangayName (mapped to $lookupName) with pattern: $pattern'); // Debug log
 
     // If no data is available, return gray
-    if (riskLevel == null || pattern == null) return Colors.grey.shade700;
-
-    // If high risk, always return red
-    if (riskLevel == 'high') return Colors.red.shade700;
-
-    // If low risk, check pattern
-    if (riskLevel == 'low') {
-      if (pattern == 'stability') return Colors.green.shade600;
-      if (pattern == 'spike') return Colors.deepOrange.shade600;
-      if (pattern == 'decline') return Colors.lightBlue.shade600;
-      return Colors.green.shade600; // Default for low risk without pattern
+    if (pattern == null) {
+      print(
+          'No pattern data for $barangayName (mapped to $lookupName)'); // Debug log
+      return Colors.grey.shade700;
     }
 
-    // For moderate risk
-    if (riskLevel == 'moderate') {
-      if (pattern == 'spike') return Colors.deepOrange.shade600;
-      return Colors.orange.shade500; // Default for moderate risk
+    // Color based on pattern only
+    switch (pattern) {
+      case 'spike':
+      case 'spike_pattern':
+        return Colors.red.shade700;
+      case 'gradual rise':
+      case 'gradual_rise':
+        return Colors.orange.shade500;
+      case 'decline':
+      case 'decline_pattern':
+        return Colors.green.shade600;
+      case 'stability':
+      case 'stability_pattern':
+        return Colors.lightBlue.shade600;
+      default:
+        print(
+            'Unknown pattern for $barangayName (mapped to $lookupName): $pattern'); // Debug log
+        return Colors.grey.shade700;
     }
-
-    return Colors.grey.shade700; // Default fallback
   }
 
   void _updatePolygonsWithRiskLevels() {
     Set<Polygon> updatedPolygons = {};
 
+    // Name mapping for special cases
+    final nameMapping = {
+      'E. Rodriguez Sr.': 'E. Rodriguez',
+      // Add more mappings if needed
+    };
+
     for (var polygon in _barangayPolygons) {
       final barangayName = polygon.polygonId.value;
-      final riskLevel = _barangayRiskLevels[barangayName]?.toLowerCase();
-      final pattern = _barangayPatterns[barangayName]?.toLowerCase();
+      // Check if we need to map this name
+      final lookupName = nameMapping[barangayName] ?? barangayName;
+      final pattern = _barangayPatterns[lookupName]?.toLowerCase();
+      print(
+          'Updating polygon for $barangayName (mapped to $lookupName) with pattern: $pattern'); // Debug log
 
       Color polygonColor;
       Color borderColor;
 
       // If no data is available, use gray
-      if (riskLevel == null || pattern == null) {
+      if (pattern == null) {
+        print(
+            'No pattern data for polygon $barangayName (mapped to $lookupName)'); // Debug log
         polygonColor = Colors.grey.shade700;
         borderColor = Colors.grey.shade800;
-      }
-      // If high risk, always use red
-      else if (riskLevel == 'high') {
-        polygonColor = Colors.red.shade700;
-        borderColor = Colors.red.shade900;
-      }
-      // If low risk, check pattern
-      else if (riskLevel == 'low') {
-        if (pattern == 'stability') {
-          polygonColor = Colors.green.shade600;
-          borderColor = Colors.green.shade800;
-        } else if (pattern == 'spike') {
-          polygonColor = Colors.deepOrange.shade600;
-          borderColor = Colors.deepOrange.shade800;
-        } else if (pattern == 'decline') {
-          polygonColor = Colors.lightBlue.shade600;
-          borderColor = Colors.lightBlue.shade800;
-        } else {
-          polygonColor = Colors.green.shade600;
-          borderColor = Colors.green.shade800;
+      } else {
+        // Color based on pattern only
+        switch (pattern) {
+          case 'spike':
+          case 'spike_pattern':
+            polygonColor = Colors.red.shade700;
+            borderColor = Colors.red.shade900;
+            break;
+          case 'gradual rise':
+          case 'gradual_rise':
+            polygonColor = Colors.orange.shade500;
+            borderColor = Colors.orange.shade700;
+            break;
+          case 'decline':
+          case 'decline_pattern':
+            polygonColor = Colors.green.shade600;
+            borderColor = Colors.green.shade800;
+            break;
+          case 'stability':
+          case 'stability_pattern':
+            polygonColor = Colors.lightBlue.shade600;
+            borderColor = Colors.lightBlue.shade800;
+            break;
+          default:
+            print(
+                'Unknown pattern for polygon $barangayName (mapped to $lookupName): $pattern'); // Debug log
+            polygonColor = Colors.grey.shade700;
+            borderColor = Colors.grey.shade800;
         }
-      }
-      // For moderate risk
-      else if (riskLevel == 'moderate') {
-        if (pattern == 'spike') {
-          polygonColor = Colors.deepOrange.shade600;
-          borderColor = Colors.deepOrange.shade800;
-        } else {
-          polygonColor = Colors.orange.shade500;
-          borderColor = Colors.orange.shade700;
-        }
-      }
-      // Default fallback
-      else {
-        polygonColor = Colors.grey.shade700;
-        borderColor = Colors.grey.shade800;
       }
 
       updatedPolygons.add(Polygon(
