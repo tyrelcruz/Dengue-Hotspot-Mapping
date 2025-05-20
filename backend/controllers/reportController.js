@@ -199,6 +199,10 @@ const getReport = asyncErrorHandler(async (req, res) => {
     reportObj.anonymousId = report.anonymousId;
   }
 
+  // Ensure upvotes and downvotes are properly populated
+  reportObj.upvotes = reportObj.upvotes.map((vote) => vote._id.toString());
+  reportObj.downvotes = reportObj.downvotes.map((vote) => vote._id.toString());
+
   res.status(200).json(reportObj);
 });
 
@@ -576,6 +580,56 @@ const downvoteReport = asyncErrorHandler(async (req, res) => {
   });
 });
 
+// Remove upvote from a report
+const removeUpvote = asyncErrorHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.userId;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(404).json({ error: "Invalid report ID" });
+  }
+
+  const report = await Report.findById(id);
+  if (!report) {
+    return res.status(404).json({ error: "Report not found" });
+  }
+
+  // Remove user from upvotes
+  report.upvotes = report.upvotes.filter((vote) => vote.toString() !== userId);
+  await report.save();
+
+  res.status(200).json({
+    upvotes: report.upvotes,
+    downvotes: report.downvotes,
+  });
+});
+
+// Remove downvote from a report
+const removeDownvote = asyncErrorHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.userId;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(404).json({ error: "Invalid report ID" });
+  }
+
+  const report = await Report.findById(id);
+  if (!report) {
+    return res.status(404).json({ error: "Report not found" });
+  }
+
+  // Remove user from downvotes
+  report.downvotes = report.downvotes.filter(
+    (vote) => vote.toString() !== userId
+  );
+  await report.save();
+
+  res.status(200).json({
+    upvotes: report.upvotes,
+    downvotes: report.downvotes,
+  });
+});
+
 module.exports = {
   getAllReports,
   getReport,
@@ -587,4 +641,6 @@ module.exports = {
   createComment,
   upvoteReport,
   downvoteReport,
+  removeUpvote,
+  removeDownvote,
 };
