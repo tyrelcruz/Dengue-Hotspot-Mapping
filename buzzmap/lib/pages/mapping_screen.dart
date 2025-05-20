@@ -19,6 +19,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:buzzmap/widgets/location_notification.dart';
 import 'package:buzzmap/services/alert_service.dart';
 import 'dart:io' show Platform;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MappingScreen extends StatefulWidget {
   final double? initialLatitude;
@@ -521,33 +522,94 @@ class _MappingScreenState extends State<MappingScreen>
     return isInside;
   }
 
-  // Call this function when Markers layer is enabled
-  void _loadVerifiedReportMarkers() async {
-    if (!_layerOptions['Markers']!)
-      return; // Ensure it's only called when Markers are enabled
+  void _updateMapLayers() async {
+    Set<Polygon> polygons = {};
+    Set<Marker> markers = {};
+
+    // Add polygons if Borders is enabled or if Markers is enabled
+    if (_layerOptions['Borders']! || _layerOptions['Markers']!) {
+      if (_layerOptions['Markers']!) {
+        // When markers are enabled, show all polygons in green
+        for (var polygon in _barangayPolygons) {
+          polygons.add(Polygon(
+            polygonId: polygon.polygonId,
+            points: polygon.points,
+            strokeColor: const Color(0xFF388E3C), // Lighter green border
+            strokeWidth: 2,
+            fillColor: const Color(0xFF4CAF50).withOpacity(0.3),
+            consumeTapEvents: false,
+          ));
+        }
+      } else {
+        // When only borders are enabled, show polygons with their risk level colors
+        polygons = polygons.union(_barangayPolygons);
+      }
+    }
+
+    // Add markers if Markers is enabled
+    if (_layerOptions['Markers']!) {
+      markers = await _loadVerifiedReportMarkers();
+    } else {
+      // Clear markers when Markers layer is disabled
+      markers = {};
+    }
+
+    // Apply the layers to the map
+    if (mounted) {
+      setState(() {
+        _polygons = polygons;
+        _markers = markers;
+      });
+    }
+  }
+
+  Future<Set<Marker>> _loadVerifiedReportMarkers() async {
+    if (!_layerOptions['Markers']!) return {};
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken');
+
+      if (token == null) {
+        print('❌ No auth token found');
+        return {};
+      }
+
+      print('🔍 Fetching reports with token: ${token.substring(0, 10)}...');
       final response = await http.get(
         Uri.parse('${Config.baseUrl}/api/v1/reports'),
         headers: {
+          'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
       );
 
       if (response.statusCode == 200) {
         final List<dynamic> reports = jsonDecode(response.body);
-        final verifiedReports = reports.where(
-          (r) => r['status']?.toString().toLowerCase() == 'validated',
-        );
+        print('📊 Total reports fetched: ${reports.length}');
+
+        final verifiedReports = reports.where((r) {
+          final status = r['status']?.toString().toLowerCase();
+          final isVerified = status == 'validated';
+          print('🔍 Report status: $status, isVerified: $isVerified');
+          return isVerified;
+        }).toList();
+
+        print('✅ Verified reports: ${verifiedReports.length}');
 
         Set<Marker> reportMarkers = {};
 
         for (var report in verifiedReports) {
           final coords = report['specific_location']?['coordinates'];
-          if (coords == null || coords.length != 2) continue;
+          if (coords == null || coords.length != 2) {
+            print('❌ Invalid coordinates for report: ${report['_id']}');
+            continue;
+          }
 
           final position = LatLng(coords[1], coords[0]);
           final barangay = report['barangay'] ?? 'Unknown';
+          print(
+              '📍 Adding marker for barangay: $barangay at ${position.latitude}, ${position.longitude}');
 
           reportMarkers.add(
             Marker(
@@ -562,15 +624,31 @@ class _MappingScreenState extends State<MappingScreen>
           );
         }
 
-        setState(() {
-          _markers = reportMarkers; // Only validated reports will show
-        });
+        print('🎯 Total markers created: ${reportMarkers.length}');
+        return reportMarkers;
       } else {
         print('❌ Failed to fetch reports: ${response.statusCode}');
+        if (response.statusCode == 401) {
+          print('Authentication failed. Please log in again.');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please log in to view reports'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+        return {};
       }
     } catch (e) {
       print('❌ Exception in _loadVerifiedReportMarkers: $e');
+      return {};
     }
+  }
+
+  bool _isPointInBounds(LatLng point, LatLngBounds bounds) {
+    return bounds.contains(point);
   }
 
   double _estimateBarangaySize(List<LatLng> points) {
@@ -786,45 +864,6 @@ class _MappingScreenState extends State<MappingScreen>
     _mapController.animateCamera(
       CameraUpdate.newLatLngBounds(bounds, 100), // Increased padding to 100
     );
-  }
-
-  void _updateMapLayers() {
-    Set<Polygon> polygons = {};
-    Set<Marker> markers = {};
-
-    // Add polygons if Borders is enabled or if Markers is enabled
-    if (_layerOptions['Borders']! || _layerOptions['Markers']!) {
-      if (_layerOptions['Markers']!) {
-        // When markers are enabled, show all polygons in green
-        for (var polygon in _barangayPolygons) {
-          polygons.add(Polygon(
-            polygonId: polygon.polygonId,
-            points: polygon.points,
-            strokeColor: const Color(0xFF388E3C), // Lighter green border
-            strokeWidth: 2,
-            fillColor: const Color(0xFF4CAF50).withOpacity(0.3),
-            consumeTapEvents: false,
-          ));
-        }
-      } else {
-        // When only borders are enabled, show polygons with their risk level colors
-        polygons = polygons.union(_barangayPolygons);
-      }
-    }
-
-    // Add markers if Markers is enabled
-    if (_layerOptions['Markers']!) {
-      _loadVerifiedReportMarkers();
-    } else {
-      // Clear markers when Markers layer is disabled
-      markers = {};
-    }
-
-    // Apply the layers to the map
-    setState(() {
-      _polygons = polygons;
-      _markers = markers;
-    });
   }
 
   double _getSeverityHue(String severity) {
