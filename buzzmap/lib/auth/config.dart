@@ -4,9 +4,14 @@ import 'package:http/http.dart' as http;
 
 //Login
 class Config {
-  static const String baseUrl = 'http://localhost:4000'; // For iOS simulator
-  // static const String baseUrl = 'http://192.168.1.45:4000'; // For physical device
-  // static const String baseUrl = 'http://10.0.2.2:4000'; // For Android emulator
+  static String get baseUrl {
+    if (Platform.isIOS) {
+      return 'http://localhost:4000'; // For iOS simulator
+    } else if (Platform.isAndroid) {
+      return 'http://10.0.2.2:4000'; // For Android emulator
+    }
+    return 'http://192.168.1.45:4000'; // For physical devices
+  }
 
   // Add these URLs
   static String get verifyOtpUrl => '$baseUrl/api/v1/auth/verify-otp';
@@ -19,8 +24,7 @@ class Config {
 
 //AuthService
 class AuthService {
-  static final String baseUrl =
-      Platform.isAndroid ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
+  static String get baseUrl => Config.baseUrl;
 
   static Future<bool> checkEmailExists(String email) async {
     try {
@@ -41,7 +45,7 @@ class AuthService {
         Uri.parse(Config.googleLoginUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'token': idToken, // Pass the actual Google ID token
+          'token': idToken,
         }),
       );
 

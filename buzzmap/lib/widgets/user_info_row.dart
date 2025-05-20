@@ -27,7 +27,7 @@ class UserInfoRow extends StatelessWidget {
     final customColors = Theme.of(context).extension<CustomColors>();
     final theme = Theme.of(context);
     final primaryColor = theme.colorScheme.primary;
-    
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,7 +97,8 @@ class UserInfoRow extends StatelessWidget {
             ],
           ),
         ),
-        if (type != 'announcement') // Only show menu for posts
+        if (type != 'announcement' &&
+            isOwner) // Only show menu for posts that user owns
           Builder(
             builder: (context) => PopupMenuButton<String>(
               icon: Icon(
@@ -106,44 +107,25 @@ class UserInfoRow extends StatelessWidget {
               ),
               onSelected: (value) {
                 switch (value) {
-                  case 'report':
-                    if (onReport != null) onReport!();
-                    break;
                   case 'delete':
                     if (onDelete != null) onDelete!();
                     break;
                 }
               },
               itemBuilder: (BuildContext context) {
-                final items = <PopupMenuEntry<String>>[
+                return <PopupMenuEntry<String>>[
                   PopupMenuItem<String>(
-                    value: 'report',
+                    value: 'delete',
                     child: Row(
                       children: [
-                        Icon(Icons.flag_outlined, size: 20, color: primaryColor),
+                        Icon(Icons.delete_outline,
+                            size: 20, color: primaryColor),
                         const SizedBox(width: 8),
-                        const Text('Report Post'),
+                        const Text('Delete Post'),
                       ],
                     ),
                   ),
                 ];
-
-                if (isOwner) {
-                  items.add(
-                    PopupMenuItem<String>(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_outline, size: 20, color: primaryColor),
-                          const SizedBox(width: 8),
-                          const Text('Delete Post'),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-
-                return items;
               },
             ),
           ),

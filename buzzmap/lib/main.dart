@@ -19,13 +19,17 @@ import 'package:provider/provider.dart';
 import 'package:buzzmap/services/notification_service.dart';
 import 'package:buzzmap/services/alert_service.dart';
 import 'package:buzzmap/widgets/global_alert_overlay.dart';
+import 'package:buzzmap/providers/vote_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => NotificationService(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => VoteProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationService()),
+      ],
       child: const MyApp(),
     ),
   );

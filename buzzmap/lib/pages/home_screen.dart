@@ -11,6 +11,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:buzzmap/services/alert_service.dart';
 import 'package:buzzmap/widgets/global_alert_overlay.dart';
 import 'package:dropdown_search/dropdown_search.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'dart:convert';
 
 // Map of districts to their barangays
 final Map<String, List<String>> districtData = {
@@ -166,12 +168,41 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String? selectedBarangay;
+  List<String> allBarangays = [];
+  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
     // Start polling for alerts when the app starts
     AlertService().startPolling();
+    _loadBarangays();
+  }
+
+  Future<void> _loadBarangays() async {
+    try {
+      final String data =
+          await rootBundle.loadString('assets/geojson/barangays.geojson');
+      final geojson = json.decode(data);
+      Set<String> barangayNames = {};
+
+      for (var feature in geojson['features']) {
+        final name = feature['properties']['name'];
+        if (name != null) {
+          barangayNames.add(name);
+        }
+      }
+
+      setState(() {
+        allBarangays = barangayNames.toList()..sort();
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading barangays: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   @override
@@ -619,12 +650,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBarangayDropdown(BuildContext context) {
-    // Get all unique barangays from all districts
-    final allBarangays = districtData.values
-        .expand((barangays) => barangays)
-        .toSet()
-        .toList()
-      ..sort();
+    if (isLoading) {
+      return const SizedBox(
+        width: 300,
+        height: 40,
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return SizedBox(
       width: 300,

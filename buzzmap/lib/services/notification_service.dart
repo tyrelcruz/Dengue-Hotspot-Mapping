@@ -1,15 +1,22 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:buzzmap/widgets/utils/notification_template.dart';
 import 'package:another_flushbar/flushbar.dart';
 import 'package:buzzmap/errors/flushbar.dart';
 import 'package:buzzmap/config/config.dart';
+import 'package:buzzmap/services/http_client.dart';
+import 'package:buzzmap/errors/flushbar.dart';
 
 class NotificationService with ChangeNotifier {
   final storage = FlutterSecureStorage();
+  static final NotificationService _instance = NotificationService._internal();
+  factory NotificationService() => _instance;
+  NotificationService._internal();
+
+  final _httpClient = HttpClient();
 
   static Future<void> showLocationToast(
     BuildContext context,
@@ -30,10 +37,9 @@ class NotificationService with ChangeNotifier {
       BuildContext context, String message) async {
     await AppFlushBar.showCustom(
       context,
-      title: 'Report Submitted',
+      title: 'Thank You for Reporting!',
       message: message,
       backgroundColor: Colors.green,
-      duration: Duration(seconds: 3),
     );
   }
 
@@ -47,8 +53,8 @@ class NotificationService with ChangeNotifier {
       }
 
       print('🔍 Fetching report details for ID: $reportId');
-      final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/$reportId'),
+      final response = await _httpClient.get(
+        '${Config.baseUrl}/api/v1/reports/$reportId',
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -64,7 +70,8 @@ class NotificationService with ChangeNotifier {
         print(json.encode(report));
         return report;
       } else {
-        print('❌ Failed to fetch report details. Status: ${response.statusCode}');
+        print(
+            '❌ Failed to fetch report details. Status: ${response.statusCode}');
         print('❌ Response body: ${response.body}');
         return null;
       }
@@ -74,7 +81,8 @@ class NotificationService with ChangeNotifier {
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchNotifications(BuildContext context) async {
+  Future<List<Map<String, dynamic>>> fetchNotifications(
+      BuildContext context) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('authToken');
@@ -87,8 +95,8 @@ class NotificationService with ChangeNotifier {
       await cleanupDeletedReports(token);
 
       // Then fetch the updated notifications
-      final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/notifications'),
+      final response = await _httpClient.get(
+        '${Config.baseUrl}/api/v1/notifications',
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -98,73 +106,23 @@ class NotificationService with ChangeNotifier {
       if (response.statusCode == 200) {
         final List<dynamic> rawNotifications = jsonDecode(response.body);
         print('📱 Fetched notifications: ${rawNotifications.length}');
-        
-        // Process notifications to include location data and ensure proper typing
-        final List<Map<String, dynamic>> processedNotifications = await Future.wait(
-          rawNotifications.map((notification) async {
-            final Map<String, dynamic> typedNotification = Map<String, dynamic>.from(notification);
-            print('🔍 Processing notification: ${typedNotification['_id']}');
-            
-            if (typedNotification['report'] != null) {
-              final report = Map<String, dynamic>.from(typedNotification['report']);
-              print('📄 Report data:');
-              print(json.encode(report));
-              print('📊 Report status: ${report['status']}');
-              
-              typedNotification['report'] = report;
-              
-              // If the report is validated, fetch its full details to get location data
-              if (report['status']?.toLowerCase() == 'validated') {
-                print('✅ Found validated report, fetching details...');
-                final reportDetails = await fetchReportDetails(report['_id']);
-                if (reportDetails != null) {
-                  print('✅ Successfully fetched report details');
-                  // Update the report with full details
-                  typedNotification['report'] = reportDetails;
-                  
-                  // Extract location data
-                  if (reportDetails['specific_location'] != null) {
-                    final location = reportDetails['specific_location'];
-                    print('📍 Found specific_location: $location');
-                    if (location['coordinates'] != null) {
-                      final coordinates = location['coordinates'];
-                      print('📍 Found coordinates: $coordinates');
-                      if (coordinates is List && coordinates.length >= 2) {
-                        typedNotification['latitude'] = coordinates[1].toDouble();
-                        typedNotification['longitude'] = coordinates[0].toDouble();
-                        print('✅ Extracted coordinates - Lat: ${typedNotification['latitude']}, Long: ${typedNotification['longitude']}');
-                      }
-                    }
-                  } else {
-                    print('❌ No specific_location found in report details');
-                  }
-                } else {
-                  print('❌ Failed to fetch report details');
-                }
-              }
-              
-              typedNotification['streetName'] = report['street_name'] ?? 'Unknown Street';
-              print('📍 Street name: ${typedNotification['streetName']}');
-            }
-            
-            return typedNotification;
-          })
-        );
-        
-        return processedNotifications;
+        return rawNotifications.cast<Map<String, dynamic>>();
       } else {
-        throw Exception('Failed to fetch notifications');
+        print(
+            '❌ Failed to fetch notifications. Status: ${response.statusCode}');
+        print('❌ Response body: ${response.body}');
+        return [];
       }
     } catch (e) {
       print('❌ Error fetching notifications: $e');
-      rethrow;
+      return [];
     }
   }
 
   Future<void> cleanupDeletedReports(String token) async {
     try {
-      final response = await http.delete(
-        Uri.parse('${Config.baseUrl}/api/v1/notifications/cleanup-deleted'),
+      final response = await _httpClient.delete(
+        '${Config.baseUrl}/api/v1/notifications/cleanup-deleted',
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -173,7 +131,8 @@ class NotificationService with ChangeNotifier {
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        print('🧹 Cleaned up ${result['deletedCount']} notifications with deleted reports');
+        print(
+            '🧹 Cleaned up ${result['deletedCount']} notifications with deleted reports');
       }
     } catch (e) {
       print('❌ Error cleaning up notifications: $e');
@@ -182,8 +141,8 @@ class NotificationService with ChangeNotifier {
 
   Future<void> deleteUserNotifications(String token, String username) async {
     try {
-      final response = await http.delete(
-        Uri.parse('${Config.baseUrl}/api/v1/notifications/user/$username'),
+      final response = await _httpClient.delete(
+        '${Config.baseUrl}/api/v1/notifications/user/$username',
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -192,7 +151,8 @@ class NotificationService with ChangeNotifier {
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        print('🧹 Deleted ${result['deletedCount']} notifications for user $username');
+        print(
+            '🧹 Deleted ${result['deletedCount']} notifications for user $username');
       }
     } catch (e) {
       print('❌ Error deleting user notifications: $e');
@@ -221,8 +181,7 @@ class NotificationService with ChangeNotifier {
 // Retrieve the token from secure storage
 Future<String?> getToken() async {
   final prefs = await SharedPreferences.getInstance();
-  String? token =
-      prefs.getString('authToken'); // Retrieve from SharedPreferences
-  print('Retrieved Token: $token'); // Debugging line
+  String? token = prefs.getString('authToken');
+  print('Retrieved Token: $token');
   return token;
 }

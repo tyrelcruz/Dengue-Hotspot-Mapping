@@ -45,11 +45,21 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   List<Map<String, dynamic>> _barangayPosts = [];
   bool _isLoadingPosts = true;
 
+  String? _currentUsername;
+
   @override
   void initState() {
     super.initState();
     _loadDengueData();
     _loadReports();
+    _loadCurrentUsername();
+  }
+
+  Future<void> _loadCurrentUsername() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _currentUsername = prefs.getString('email');
+    });
   }
 
   Color _getSeverityColor(String severity) {
@@ -268,7 +278,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                         '${cases > 0 ? cases : 0} Reported Cases',
                                         style: const TextStyle(
                                           color: Color(0xFF35505A),
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight: FontWeight.w500,
                                           fontSize: 13,
                                         ),
                                         overflow: TextOverflow.ellipsis,
@@ -300,7 +310,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                             : 'Severity N/A',
                                         style: const TextStyle(
                                           color: Colors.white,
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight: FontWeight.w500,
                                           fontSize: 13,
                                         ),
                                         overflow: TextOverflow.ellipsis,
@@ -415,6 +425,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                             'assets/icons/person_1.svg',
                                         type: 'bordered',
                                         postId: report['id'] ?? '',
+                                        isOwner:
+                                            report['email'] == _currentUsername,
+                                        post: report,
                                       ),
                                     ),
                                   )),

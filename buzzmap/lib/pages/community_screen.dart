@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
+import 'package:buzzmap/widgets/post_detail_screen.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -470,30 +471,48 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     )
                   else
                     ..._currentPosts.map((post) {
-                      final isOwner = post['email'] == _currentUsername;
-                      print('👤 Post username: ${post['username']}');
-                      print('📧 Post email: ${post['email']}');
-                      print('📧 Current email: $_currentUsername');
-                      print('🔒 Is owner: $isOwner');
-                      print('🔍 Post data: $post'); // Debug log
+                      final isOwner =
+                          post['userId'] == _prefs.getString('userId');
+                      print('👤 Post username: \\${post['username']}');
+                      print('👤 Post userId: \\${post['userId']}');
+                      print(
+                          '👤 Current userId: \\${_prefs.getString('userId')}');
+                      print('🔒 Is owner: \\${isOwner}');
+                      print('🔍 Post data: \\${post}'); // Debug log
 
-                      return PostCard(
-                        username: post['username'],
-                        whenPosted: post['whenPosted'],
-                        location: post['location'],
-                        date: post['date'],
-                        time: post['time'],
-                        reportType: post['reportType'],
-                        description: post['description'],
-                        numUpvotes: post['numUpvotes'] ?? 0,
-                        numDownvotes: post['numDownvotes'] ?? 0,
-                        images: List<String>.from(post['images']),
-                        iconUrl: post['iconUrl'],
-                        type: 'bordered',
-                        onReport: () => _reportPost(post),
-                        onDelete: () => _deletePost(post),
-                        isOwner: isOwner,
-                        postId: post['id'],
+                      return GestureDetector(
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  PostDetailScreen(post: post),
+                            ),
+                          );
+                          setState(
+                              () {}); // Refresh EngagementRow/comment count
+                        },
+                        child: PostCard(
+                          key: ValueKey(
+                              post['id']), // Ensure unique key for rebuild
+                          post: post,
+                          username: post['username'],
+                          whenPosted: post['whenPosted'],
+                          location: post['location'],
+                          date: post['date'],
+                          time: post['time'],
+                          reportType: post['reportType'],
+                          description: post['description'],
+                          numUpvotes: post['numUpvotes'] ?? 0,
+                          numDownvotes: post['numDownvotes'] ?? 0,
+                          images: List<String>.from(post['images']),
+                          iconUrl: post['iconUrl'],
+                          type: 'bordered',
+                          onReport: () => _reportPost(post),
+                          onDelete: () => _deletePost(post),
+                          isOwner: isOwner,
+                          postId: post['id'],
+                        ),
                       );
                     }),
                 ],

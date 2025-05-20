@@ -252,10 +252,8 @@ class _PostScreenState extends State<PostScreen> {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         // Show the empathetic feedback notification on success
-        await NotificationService.showEmpatheticFeedback(
-          context,
-          "Thank you for reporting! We'll review your submission and notify you once verified."
-        );
+        await NotificationService.showEmpatheticFeedback(context,
+            "Thank you for reporting! We'll review your submission and notify you once verified.");
 
         final responseData = jsonDecode(response.body);
         debugPrint(
@@ -381,7 +379,8 @@ class _PostScreenState extends State<PostScreen> {
   }
 
   Future<Map<String, LatLng>> loadBarangayCentersFromGeoJson() async {
-    final String data = await rootBundle.loadString('assets/geojson/barangays.geojson');
+    final String data =
+        await rootBundle.loadString('assets/geojson/barangays.geojson');
     final geojson = json.decode(data);
     Map<String, LatLng> centers = {};
     Set<String> barangayNames = {};
@@ -408,12 +407,18 @@ class _PostScreenState extends State<PostScreen> {
     // Update the district data with all barangays
     setState(() {
       districtData = {
-        'District I': barangayNames.where((name) => _isInDistrict(name, 1)).toList(),
-        'District II': barangayNames.where((name) => _isInDistrict(name, 2)).toList(),
-        'District III': barangayNames.where((name) => _isInDistrict(name, 3)).toList(),
-        'District IV': barangayNames.where((name) => _isInDistrict(name, 4)).toList(),
-        'District V': barangayNames.where((name) => _isInDistrict(name, 5)).toList(),
-        'District VI': barangayNames.where((name) => _isInDistrict(name, 6)).toList(),
+        'District I':
+            barangayNames.where((name) => _isInDistrict(name, 1)).toList(),
+        'District II':
+            barangayNames.where((name) => _isInDistrict(name, 2)).toList(),
+        'District III':
+            barangayNames.where((name) => _isInDistrict(name, 3)).toList(),
+        'District IV':
+            barangayNames.where((name) => _isInDistrict(name, 4)).toList(),
+        'District V':
+            barangayNames.where((name) => _isInDistrict(name, 5)).toList(),
+        'District VI':
+            barangayNames.where((name) => _isInDistrict(name, 6)).toList(),
       };
     });
 
@@ -423,12 +428,133 @@ class _PostScreenState extends State<PostScreen> {
   bool _isInDistrict(String barangayName, int district) {
     // This is a simplified version - you might want to implement a more accurate district mapping
     final districtRanges = {
-      1: ['Alicia', 'Apollonio Samson', 'Bahay Toro', 'Balingasa', 'Damar', 'Del Monte', 'Lourdes', 'Maharlika', 'Manresa', 'Mariblo', 'N.S. Amoranto', 'Paltok', 'Paraiso', 'Salvacion', 'San Antonio', 'San Isidro Labrador', 'Santa Cruz', 'Sienna', 'Sta. Teresita', 'Sto. Cristo', 'Sto. Domingo', 'Talayan', 'Vasra', 'Veterans Village'],
-      2: ['Baesa', 'Bagong Pag-asa', 'Balumbato', 'Culiat', 'Kaligayahan', 'New Era', 'Pasong Putik Proper', 'San Bartolome', 'Sangandaan', 'Sauyo', 'Talipapa', 'Unang Sigaw'],
-      3: ['Amihan', 'Botocan', 'Claro', 'Duyan-Duyan', 'E. Rodriguez Sr.', 'Escopa I', 'Escopa II', 'Escopa III', 'Escopa IV', 'Kalusugan', 'Kristong Hari', 'Loyola Heights', 'Marilag', 'Masagana', 'Matandang Balara', 'Milagrosa', 'Pansol', 'Quirino 2-A', 'Quirino 2-B', 'Quirino 2-C', 'Quirino 3-A', 'San Vicente', 'Silangan', 'Tagumpay', 'Villa Maria Clara', 'White Plains'],
-      4: ['Bagong Lipunan ng Crame', 'Damayang Lagi', 'Doña Aurora', 'Doña Imelda', 'Doña Josefa', 'Horseshoe', 'Immaculate Concepcion', 'Kamuning', 'Kaunlaran', 'Laging Handa', 'Obrero', 'Old Capitol Site', 'Paligsahan', 'Roxas', 'Sacred Heart', 'San Martin de Porres', 'South Triangle', 'West Triangle'],
-      5: ['Bagong Silangan', 'Capri', 'Commonwealth', 'Greater Lagro', 'Gulod', 'Holy Spirit', 'Nagkaisang Nayon', 'North Fairview', 'Payatas', 'San Agustin', 'Santa Lucia', 'Santa Monica', 'Tandang Sora', 'Fairview'],
-      6: ['Batasan Hills', 'Blue Ridge A', 'Blue Ridge B', 'Camp Aguinaldo', 'Central', 'Cubao', 'East Kamias', 'Libis', 'Mangga', 'Pinagkaisahan', 'Project 6', 'San Roque', 'Sikatuna Village', 'Socorro', 'UP Campus', 'UP Village', 'Ugong Norte', 'West Kamias', 'Teachers Village East', 'Teachers Village West', 'Pasong Tamo'],
+      1: [
+        'Alicia',
+        'Apollonio Samson',
+        'Bahay Toro',
+        'Balingasa',
+        'Damar',
+        'Del Monte',
+        'Lourdes',
+        'Maharlika',
+        'Manresa',
+        'Mariblo',
+        'N.S. Amoranto',
+        'Paltok',
+        'Paraiso',
+        'Salvacion',
+        'San Antonio',
+        'San Isidro Labrador',
+        'Santa Cruz',
+        'Sienna',
+        'Sta. Teresita',
+        'Sto. Cristo',
+        'Sto. Domingo',
+        'Talayan',
+        'Vasra',
+        'Veterans Village'
+      ],
+      2: [
+        'Baesa',
+        'Bagong Pag-asa',
+        'Balumbato',
+        'Culiat',
+        'Kaligayahan',
+        'New Era',
+        'Pasong Putik Proper',
+        'San Bartolome',
+        'Sangandaan',
+        'Sauyo',
+        'Talipapa',
+        'Unang Sigaw'
+      ],
+      3: [
+        'Amihan',
+        'Botocan',
+        'Claro',
+        'Duyan-Duyan',
+        'E. Rodriguez Sr.',
+        'Escopa I',
+        'Escopa II',
+        'Escopa III',
+        'Escopa IV',
+        'Kalusugan',
+        'Kristong Hari',
+        'Loyola Heights',
+        'Marilag',
+        'Masagana',
+        'Matandang Balara',
+        'Milagrosa',
+        'Pansol',
+        'Quirino 2-A',
+        'Quirino 2-B',
+        'Quirino 2-C',
+        'Quirino 3-A',
+        'San Vicente',
+        'Silangan',
+        'Tagumpay',
+        'Villa Maria Clara',
+        'White Plains'
+      ],
+      4: [
+        'Bagong Lipunan ng Crame',
+        'Damayang Lagi',
+        'Doña Aurora',
+        'Doña Imelda',
+        'Doña Josefa',
+        'Horseshoe',
+        'Immaculate Concepcion',
+        'Kamuning',
+        'Kaunlaran',
+        'Laging Handa',
+        'Obrero',
+        'Old Capitol Site',
+        'Paligsahan',
+        'Roxas',
+        'Sacred Heart',
+        'San Martin de Porres',
+        'South Triangle',
+        'West Triangle'
+      ],
+      5: [
+        'Bagong Silangan',
+        'Capri',
+        'Commonwealth',
+        'Greater Lagro',
+        'Gulod',
+        'Holy Spirit',
+        'Nagkaisang Nayon',
+        'North Fairview',
+        'Payatas',
+        'San Agustin',
+        'Santa Lucia',
+        'Santa Monica',
+        'Tandang Sora',
+        'Fairview'
+      ],
+      6: [
+        'Batasan Hills',
+        'Blue Ridge A',
+        'Blue Ridge B',
+        'Camp Aguinaldo',
+        'Central',
+        'Cubao',
+        'East Kamias',
+        'Libis',
+        'Mangga',
+        'Pinagkaisahan',
+        'Project 6',
+        'San Roque',
+        'Sikatuna Village',
+        'Socorro',
+        'UP Campus',
+        'UP Village',
+        'Ugong Norte',
+        'West Kamias',
+        'Teachers Village East',
+        'Teachers Village West',
+        'Pasong Tamo'
+      ],
     };
 
     return districtRanges[district]?.contains(barangayName) ?? false;
@@ -446,7 +572,8 @@ class _PostScreenState extends State<PostScreen> {
 
   Widget _buildBarangayDropdown(BuildContext context) {
     final theme = Theme.of(context);
-    final allBarangays = districtData.values.expand((list) => list).toList()..sort();
+    final allBarangays = districtData.values.expand((list) => list).toList()
+      ..sort();
 
     return SizedBox(
       width: double.infinity,
@@ -457,8 +584,10 @@ class _PostScreenState extends State<PostScreen> {
         dropdownDecoratorProps: DropDownDecoratorProps(
           dropdownSearchDecoration: InputDecoration(
             labelText: "Select Barangay",
-            labelStyle: TextStyle(color: theme.colorScheme.primary, fontSize: 12),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            labelStyle:
+                TextStyle(color: theme.colorScheme.primary, fontSize: 12),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             filled: true,
             fillColor: theme.colorScheme.surface,
             border: OutlineInputBorder(
@@ -518,7 +647,7 @@ class _PostScreenState extends State<PostScreen> {
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
-        title: Text('New Post',
+        title: Text('New Report',
             style: theme.textTheme.titleLarge
                 ?.copyWith(fontWeight: FontWeight.w600)),
         centerTitle: true,
@@ -582,7 +711,8 @@ class _PostScreenState extends State<PostScreen> {
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(
                                             const SnackBar(
-                                              content: Text('Outside Quezon City'),
+                                              content:
+                                                  Text('Outside Quezon City'),
                                               backgroundColor: Colors.redAccent,
                                               duration: Duration(seconds: 2),
                                             ),
@@ -604,23 +734,30 @@ class _PostScreenState extends State<PostScreen> {
                                             setState(() {
                                               selectedAddress =
                                                   '${place.name}, ${place.subLocality}, ${place.locality}';
-                                              selectedBarangay = place.subLocality;
+                                              selectedBarangay =
+                                                  place.subLocality;
                                               selectedDistrict =
                                                   guessDistrictFromBarangay(
                                                       place.subLocality);
                                             });
                                           } else {
                                             // If no placemarks found, try to find the nearest barangay
-                                            String? nearestBarangay = _findNearestBarangay(pos);
+                                            String? nearestBarangay =
+                                                _findNearestBarangay(pos);
                                             if (nearestBarangay != null) {
                                               setState(() {
-                                                selectedBarangay = nearestBarangay;
-                                                selectedDistrict = guessDistrictFromBarangay(nearestBarangay);
-                                                selectedAddress = 'Near $nearestBarangay';
+                                                selectedBarangay =
+                                                    nearestBarangay;
+                                                selectedDistrict =
+                                                    guessDistrictFromBarangay(
+                                                        nearestBarangay);
+                                                selectedAddress =
+                                                    'Near $nearestBarangay';
                                               });
                                             } else {
                                               setState(() {
-                                                selectedAddress = 'Selected Location';
+                                                selectedAddress =
+                                                    'Selected Location';
                                                 selectedBarangay = null;
                                                 selectedDistrict = null;
                                               });
@@ -629,16 +766,22 @@ class _PostScreenState extends State<PostScreen> {
                                         } catch (e) {
                                           print("Reverse geocoding error: $e");
                                           // Try to find the nearest barangay as fallback
-                                          String? nearestBarangay = _findNearestBarangay(pos);
+                                          String? nearestBarangay =
+                                              _findNearestBarangay(pos);
                                           if (nearestBarangay != null) {
                                             setState(() {
-                                              selectedBarangay = nearestBarangay;
-                                              selectedDistrict = guessDistrictFromBarangay(nearestBarangay);
-                                              selectedAddress = 'Near $nearestBarangay';
+                                              selectedBarangay =
+                                                  nearestBarangay;
+                                              selectedDistrict =
+                                                  guessDistrictFromBarangay(
+                                                      nearestBarangay);
+                                              selectedAddress =
+                                                  'Near $nearestBarangay';
                                             });
                                           } else {
                                             setState(() {
-                                              selectedAddress = 'Selected Location';
+                                              selectedAddress =
+                                                  'Selected Location';
                                               selectedBarangay = null;
                                               selectedDistrict = null;
                                             });
@@ -730,7 +873,7 @@ class _PostScreenState extends State<PostScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('📝 Feedback:', style: theme.textTheme.titleSmall),
+                  Text('📝 Description:', style: theme.textTheme.titleSmall),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: descriptionController,
@@ -738,7 +881,8 @@ class _PostScreenState extends State<PostScreen> {
                     keyboardType: TextInputType.multiline,
                     style: theme.textTheme.bodyMedium,
                     decoration: InputDecoration(
-                      hintText: 'What did you see? Is there anything you\'d like to share?',
+                      hintText:
+                          'What did you see? Is there anything you\'d like to share?',
                       hintStyle: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurface.withOpacity(0.5),
                       ),
@@ -836,7 +980,7 @@ class _PostScreenState extends State<PostScreen> {
                   label: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Text(
-                      'Share',
+                      'Report',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontFamily: 'Inter',
                         fontWeight: FontWeight.w600,

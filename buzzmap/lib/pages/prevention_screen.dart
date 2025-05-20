@@ -290,7 +290,7 @@ class _PreventionScreenState extends State<PreventionScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      '4S Against Dengue',
+                                      '5S Against Dengue',
                                       textAlign: TextAlign.right,
                                       style: const TextStyle(
                                         fontSize: 14,
@@ -302,7 +302,7 @@ class _PreventionScreenState extends State<PreventionScreen> {
                                     ),
                                     const SizedBox(height: 5),
                                     const Text(
-                                      'Learn the 4S strategy\nto prevent dengue',
+                                      'Learn the 5S strategy\nto prevent dengue',
                                       textAlign: TextAlign.right,
                                       style: TextStyle(
                                         fontSize: 9,
@@ -325,8 +325,8 @@ class _PreventionScreenState extends State<PreventionScreen> {
                                           builder: (context) =>
                                               TipDetailsScreen(
                                             tip: AdminPost(
-                                              id: '4s-against-dengue',
-                                              title: '4S AGAINST DENGUE',
+                                              id: '5s-against-dengue',
+                                              title: '5S AGAINST DENGUE',
                                               content: '',
                                               images: [],
                                               publishDate: DateTime.now(),
