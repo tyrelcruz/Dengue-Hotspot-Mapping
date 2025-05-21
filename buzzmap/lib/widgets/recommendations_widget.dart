@@ -9,6 +9,7 @@ class PatternRecognitionData {
   final String? alert;
   final String? lastAnalysisTime;
   final String? triggeredPattern;
+  final Map<String, dynamic>? statusAndRecommendation;
 
   PatternRecognitionData({
     required this.name,
@@ -16,15 +17,19 @@ class PatternRecognitionData {
     this.alert,
     this.lastAnalysisTime,
     this.triggeredPattern,
+    this.statusAndRecommendation,
   });
 
   factory PatternRecognitionData.fromJson(Map<String, dynamic> json) {
     return PatternRecognitionData(
       name: json['name'] ?? '',
       riskLevel: json['risk_level'] ?? 'Unknown',
-      alert: json['alert'],
+      alert: json['status_and_recommendation']?['pattern_based']?['alert'] ??
+          'No alerts triggered.',
       lastAnalysisTime: json['last_analysis_time'],
-      triggeredPattern: json['triggered_pattern'],
+      triggeredPattern:
+          json['status_and_recommendation']?['pattern_based']?['status'] ?? '',
+      statusAndRecommendation: json['status_and_recommendation'],
     );
   }
 }
@@ -81,8 +86,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
       print('Selected barangay: ${widget.selectedBarangay}');
 
       final response = await http.get(
-        Uri.parse(
-            '${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
+        Uri.parse('${Config.baseUrl}/api/v1/barangays/get-all-barangays'),
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -90,15 +94,13 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
       print('Pattern API Response Body: ${response.body}');
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true &&
-            data['data'] != null &&
-            data['data'].isNotEmpty) {
+        final List<dynamic> data = jsonDecode(response.body);
+        if (data.isNotEmpty) {
           // Find the matching barangay data
           final barangayName = widget.selectedBarangay.toLowerCase();
           print('Searching for barangay: $barangayName');
 
-          final barangayData = data['data'].firstWhere(
+          final barangayData = data.firstWhere(
             (item) {
               final itemName = item['name']?.toString().toLowerCase() ?? '';
               print('Comparing with: $itemName');
@@ -113,14 +115,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
           if (barangayData != null) {
             print('Found matching barangay data: $barangayData');
             setState(() {
-              _patternData = PatternRecognitionData(
-                name: barangayData['name'] ?? '',
-                riskLevel: barangayData['risk_level'] ?? 'Unknown',
-                alert: barangayData['alert'] ?? 'No data available',
-                lastAnalysisTime: barangayData['last_analysis_time'],
-                triggeredPattern:
-                    barangayData['triggered_pattern'] ?? 'No data',
-              );
+              _patternData = PatternRecognitionData.fromJson(barangayData);
             });
           } else {
             print('No matching barangay data found');
@@ -129,9 +124,16 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
               _patternData = PatternRecognitionData(
                 name: barangayName,
                 riskLevel: 'Low',
-                alert: 'No recent data available',
+                alert: 'No alerts triggered.',
                 lastAnalysisTime: DateTime.now().toIso8601String(),
-                triggeredPattern: 'No data',
+                triggeredPattern: '',
+                statusAndRecommendation: {
+                  'pattern_based': {
+                    'status': '',
+                    'alert': 'No alerts triggered.',
+                    'recommendation': ''
+                  }
+                },
               );
             });
           }
@@ -144,9 +146,16 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
         _patternData = PatternRecognitionData(
           name: widget.selectedBarangay,
           riskLevel: 'Low',
-          alert: 'Error fetching data',
+          alert: 'No alerts triggered.',
           lastAnalysisTime: DateTime.now().toIso8601String(),
-          triggeredPattern: 'No data',
+          triggeredPattern: '',
+          statusAndRecommendation: {
+            'pattern_based': {
+              'status': '',
+              'alert': 'No alerts triggered.',
+              'recommendation': ''
+            }
+          },
         );
       });
     }
@@ -182,7 +191,8 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
   }
 
   Widget _buildPatternCard() {
-    if (_patternData!.triggeredPattern == 'No data') {
+    if (_patternData!.triggeredPattern == null ||
+        _patternData!.triggeredPattern!.isEmpty) {
       return Card(
         elevation: 0,
         color: Colors.grey.shade50,
@@ -249,7 +259,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
   }
 
   Widget _buildAlertCard() {
-    if (_patternData!.alert == 'No data available') {
+    if (_patternData!.alert == null || _patternData!.alert!.isEmpty) {
       return Card(
         elevation: 0,
         color: Colors.grey.shade50,
@@ -330,6 +340,40 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
   }
 
   Widget _buildLastAnalyzedCard() {
+    if (_patternData!.lastAnalysisTime == null ||
+        _patternData!.lastAnalysisTime!.isEmpty) {
+      return Card(
+        elevation: 0,
+        color: Colors.grey.shade50,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: Colors.grey.shade300,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(
+                Icons.access_time,
+                size: 20,
+                color: Colors.grey.shade700,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Last analysis time not available',
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Card(
       elevation: 0,
       color: Colors.grey.shade50,

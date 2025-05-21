@@ -798,9 +798,11 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   void _onBarangayPolygonTapped(String barangayName) {
-    final riskLevel =
-        _barangayRiskLevels[barangayName]?.toLowerCase() ?? 'no data';
-    final pattern = _barangayPatterns[barangayName]?.toLowerCase() ?? '';
+    final data = _dengueData[barangayName];
+    final riskLevel = data?['severity']?.toLowerCase() ?? 'no data';
+    final pattern = data?['pattern']?.toLowerCase() ?? '';
+    final alert = data?['alert'] ?? 'No alerts triggered.';
+    final lastAnalysisTime = data?['last_analysis_time'];
 
     setState(() {
       selectedBarangay = barangayName;
@@ -815,6 +817,8 @@ class _MappingScreenState extends State<MappingScreen>
         'Home Safety Status': riskLevel.toUpperCase(),
         'Pattern': pattern.toUpperCase(),
         'RiskLevel': riskLevel.toUpperCase(),
+        'Alert': alert,
+        'LastAnalysisTime': lastAnalysisTime,
       };
     });
 
@@ -2295,14 +2299,22 @@ class _MappingScreenState extends State<MappingScreen>
 
   Future<void> _fetchRiskLevels() async {
     try {
+      print('Fetching risk levels from API...');
       final response = await http.get(
         Uri.parse(
             '${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
       );
 
+      print('API Response Status: ${response.statusCode}');
+      print('API Response Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        print('Parsed data: $data');
+
         if (data['success'] == true && data['data'] != null) {
+          print('Data array length: ${(data['data'] as List).length}');
+
           setState(() {
             _barangayRiskLevels = {};
             _barangayPatterns = {};
@@ -2321,92 +2333,62 @@ class _MappingScreenState extends State<MappingScreen>
                 name = nameMapping[name]!;
               }
 
-              print('Processing barangay: $name'); // Debug log
-              print('Pattern data: ${item['triggered_pattern']}'); // Debug log
+              print('Processing barangay: $name');
+              print('Item data: $item');
 
+              // Handle risk level
               if (item['risk_level'] != null) {
                 _barangayRiskLevels[name] =
                     item['risk_level'].toString().toLowerCase();
+                print('Set risk level for $name: ${_barangayRiskLevels[name]}');
               }
-              if (item['triggered_pattern'] != null) {
-                _barangayPatterns[name] =
-                    item['triggered_pattern'].toString().toLowerCase();
-                print(
-                    'Set pattern for $name: ${_barangayPatterns[name]}'); // Debug log
+
+              // Handle pattern from status_and_recommendation
+              if (item['status_and_recommendation'] != null &&
+                  item['status_and_recommendation']['pattern_based'] != null) {
+                String pattern = item['status_and_recommendation']
+                            ['pattern_based']['status']
+                        ?.toString()
+                        .toLowerCase() ??
+                    '';
+                // Normalize pattern names
+                if (pattern == 'spike_pattern') pattern = 'spike';
+                if (pattern == 'gradual_rise') pattern = 'gradual rise';
+                if (pattern == 'decline_pattern') pattern = 'decline';
+                if (pattern == 'stability_pattern') pattern = 'stability';
+                _barangayPatterns[name] = pattern;
+                print('Set pattern for $name: ${_barangayPatterns[name]}');
               }
-              if (item['alert'] != null) {
-                _barangayAlerts[name] = item['alert'].toString();
+
+              // Handle alert from status_and_recommendation
+              if (item['status_and_recommendation'] != null &&
+                  item['status_and_recommendation']['pattern_based'] != null) {
+                _barangayAlerts[name] = item['status_and_recommendation']
+                            ['pattern_based']['alert']
+                        ?.toString() ??
+                    '';
+                print('Set alert for $name: ${_barangayAlerts[name]}');
               }
             }
+
+            print('Final _barangayRiskLevels: $_barangayRiskLevels');
+            print('Final _barangayPatterns: $_barangayPatterns');
+            print('Final _barangayAlerts: $_barangayAlerts');
           });
+
           // Update polygons with new risk levels and patterns
           _updatePolygonsWithRiskLevels();
+        } else {
+          print('API response indicates failure or no data');
+          print('Success flag: ${data['success']}');
+          print('Data present: ${data['data'] != null}');
         }
       } else {
-        if (mounted) {
-          LocationNotificationService.show(
-            context: context,
-            title: 'API Error',
-            message:
-                'Failed to fetch risk levels. Status code: ${response.statusCode}',
-            backgroundColor: const Color(0xFFB8585B),
-            duration: const Duration(seconds: 4),
-          );
-        }
+        print('API request failed with status code: ${response.statusCode}');
       }
     } catch (e) {
       print('Error fetching risk levels: $e');
-      if (mounted) {
-        LocationNotificationService.show(
-          context: context,
-          title: 'Connection Error',
-          message:
-              'Unable to connect to the server. Please check your internet connection and try again.',
-          backgroundColor: const Color(0xFFB8585B),
-          duration: const Duration(seconds: 4),
-        );
-      }
-    }
-  }
-
-  Color _getColorForBarangay(String barangayName) {
-    // Name mapping for special cases
-    final nameMapping = {
-      'E. Rodriguez Sr.': 'E. Rodriguez',
-      // Add more mappings if needed
-    };
-
-    // Check if we need to map this name
-    final lookupName = nameMapping[barangayName] ?? barangayName;
-    final pattern = _barangayPatterns[lookupName]?.toLowerCase();
-    print(
-        'Getting color for $barangayName (mapped to $lookupName) with pattern: $pattern'); // Debug log
-
-    // If no data is available, return gray
-    if (pattern == null) {
-      print(
-          'No pattern data for $barangayName (mapped to $lookupName)'); // Debug log
-      return Colors.grey.shade700;
-    }
-
-    // Color based on pattern only
-    switch (pattern) {
-      case 'spike':
-      case 'spike_pattern':
-        return Colors.red.shade700;
-      case 'gradual rise':
-      case 'gradual_rise':
-        return Colors.orange.shade500;
-      case 'decline':
-      case 'decline_pattern':
-        return Colors.green.shade600;
-      case 'stability':
-      case 'stability_pattern':
-        return Colors.lightBlue.shade600;
-      default:
-        print(
-            'Unknown pattern for $barangayName (mapped to $lookupName): $pattern'); // Debug log
-        return Colors.grey.shade700;
+      print('Error stack trace: ${StackTrace.current}');
     }
   }
 
@@ -2437,7 +2419,7 @@ class _MappingScreenState extends State<MappingScreen>
         polygonColor = Colors.grey.shade700;
         borderColor = Colors.grey.shade800;
       } else {
-        // Color based on pattern only
+        // Color based on pattern status
         switch (pattern) {
           case 'spike':
           case 'spike_pattern':
@@ -2490,16 +2472,15 @@ class _MappingScreenState extends State<MappingScreen>
   Future<void> _fetchDengueData() async {
     try {
       final response = await http.get(
-        Uri.parse(
-            '${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
+        Uri.parse('${Config.baseUrl}/api/v1/barangays/get-all-barangays'),
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
+        final List<dynamic> data = jsonDecode(response.body);
+        if (data.isNotEmpty) {
           setState(() {
             _dengueData = Map.fromEntries(
-              (data['data'] as List).map((item) => MapEntry(
+              data.map((item) => MapEntry(
                     item['name'],
                     {
                       'cases':
@@ -2507,8 +2488,13 @@ class _MappingScreenState extends State<MappingScreen>
                       'severity':
                           item['risk_level']?.toString().toLowerCase() ??
                               'Unknown',
-                      'alert': item['alert'],
-                      'pattern': item['triggered_pattern'],
+                      'alert': item['status_and_recommendation']
+                              ?['pattern_based']?['alert'] ??
+                          'No alerts triggered.',
+                      'pattern': item['status_and_recommendation']
+                              ?['pattern_based']?['status'] ??
+                          '',
+                      'last_analysis_time': item['last_analysis_time'],
                     },
                   )),
             );
@@ -2519,6 +2505,43 @@ class _MappingScreenState extends State<MappingScreen>
     } catch (e) {
       print('Error fetching dengue data: $e');
       setState(() => _isLoadingData = false);
+    }
+  }
+
+  Color _getColorForBarangay(String barangayName) {
+    // Name mapping for special cases
+    final nameMapping = {
+      'E. Rodriguez Sr.': 'E. Rodriguez',
+      // Add more mappings if needed
+    };
+
+    // Check if we need to map this name
+    final lookupName = nameMapping[barangayName] ?? barangayName;
+    final pattern = _barangayPatterns[lookupName]?.toLowerCase();
+    print(
+        'Getting color for $barangayName (mapped to $lookupName) with pattern: $pattern'); // Debug log
+
+    // If no data is available, return gray
+    if (pattern == null) {
+      print(
+          'No pattern data for $barangayName (mapped to $lookupName)'); // Debug log
+      return Colors.grey.shade700;
+    }
+
+    // Color based on pattern status
+    switch (pattern) {
+      case 'spike':
+        return Colors.red.shade700;
+      case 'gradual_rise':
+        return Colors.orange.shade500;
+      case 'decline':
+        return Colors.green.shade600;
+      case 'stability':
+        return Colors.lightBlue.shade600;
+      default:
+        print(
+            'Unknown pattern for $barangayName (mapped to $lookupName): $pattern'); // Debug log
+        return Colors.grey.shade700;
     }
   }
 }
