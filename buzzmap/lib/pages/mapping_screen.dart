@@ -201,7 +201,7 @@ class _MappingScreenState extends State<MappingScreen>
       'Pasong Tamo',
     ],
   };
-  late AnimationController _bounceController;
+  late AnimationController _animationController;
   late Animation<double> _bounceAnimation;
 
   // Barangay boundary data - coordinates for polygon borders
@@ -229,25 +229,30 @@ class _MappingScreenState extends State<MappingScreen>
 
   final AlertService _alertService = AlertService();
 
+  Set<Marker> _clusterMarkers = {};
+  double _currentZoom = 11.4;
+  static const double _clusterDistance =
+      0.01; // Distance threshold for clustering
+
   @override
   void initState() {
     super.initState();
-
-    // Initialize the default layer to show Risk Levels initially
-    _layerOptions['Borders'] = true; // Set to true by default
-    _layerOptions['Markers'] = false; // Set to false by default
-
-    _bounceController = AnimationController(
+    _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..repeat(reverse: true);
-
+      duration: const Duration(milliseconds: 300),
+    );
     _bounceAnimation = Tween<double>(begin: 0, end: 10).animate(
       CurvedAnimation(
-        parent: _bounceController,
+        parent: _animationController,
         curve: Curves.easeInOut,
       ),
     );
+
+    // Initialize layer options
+    _layerOptions['Borders'] = true;
+    _layerOptions['Markers'] = widget.reportId !=
+        null; // Enable markers if navigating from notification
+    _layerOptions['Heatmap'] = false;
 
     // Call the GeoJSON loading function for borders
     _loadGeoJSON();
@@ -288,6 +293,12 @@ class _MappingScreenState extends State<MappingScreen>
     _alertService.startPolling();
   }
 
+  void _updateMarkers(Set<Marker> markers) {
+    setState(() {
+      _clusterMarkers = markers;
+    });
+  }
+
   @override
   void dispose() {
     // Cancel the location check timer
@@ -298,7 +309,7 @@ class _MappingScreenState extends State<MappingScreen>
     _mapController.dispose();
 
     // Dispose the bounce controller
-    _bounceController.dispose();
+    _animationController.dispose();
 
     // Clear any existing notifications
     LocationNotificationService.dismiss();
@@ -597,35 +608,43 @@ class _MappingScreenState extends State<MappingScreen>
 
         print('✅ Verified reports: ${verifiedReports.length}');
 
-        Set<Marker> reportMarkers = {};
+        // Create markers
+        final markers = verifiedReports
+            .map((report) {
+              final coords = report['specific_location']?['coordinates'];
+              if (coords == null || coords.length != 2) {
+                print('❌ Invalid coordinates for report: ${report['_id']}');
+                return null;
+              }
 
-        for (var report in verifiedReports) {
-          final coords = report['specific_location']?['coordinates'];
-          if (coords == null || coords.length != 2) {
-            print('❌ Invalid coordinates for report: ${report['_id']}');
-            continue;
-          }
+              final position = LatLng(coords[1], coords[0]);
+              final barangay = report['barangay'] ?? 'Unknown';
 
-          final position = LatLng(coords[1], coords[0]);
-          final barangay = report['barangay'] ?? 'Unknown';
-          print(
-              '📍 Adding marker for barangay: $barangay at ${position.latitude}, ${position.longitude}');
+              return Marker(
+                markerId: MarkerId(report['_id']),
+                position: position,
+                icon: BitmapDescriptor.defaultMarkerWithHue(
+                    BitmapDescriptor.hueRed),
+                onTap: () {
+                  _showDengueDetails(
+                    context,
+                    barangay,
+                    1,
+                    'Verified',
+                    position,
+                  );
+                },
+              );
+            })
+            .whereType<Marker>()
+            .toList();
 
-          reportMarkers.add(
-            Marker(
-              markerId: MarkerId(report['_id']),
-              position: position,
-              icon: BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueRed),
-              onTap: () {
-                _showDengueDetails(context, barangay, 1, 'Verified', position);
-              },
-            ),
-          );
+        // Apply clustering based on zoom level
+        if (_currentZoom < 14) {
+          return _createClusters(markers);
+        } else {
+          return markers.toSet();
         }
-
-        print('🎯 Total markers created: ${reportMarkers.length}');
-        return reportMarkers;
       } else {
         print('❌ Failed to fetch reports: ${response.statusCode}');
         if (response.statusCode == 401) {
@@ -645,6 +664,88 @@ class _MappingScreenState extends State<MappingScreen>
       print('❌ Exception in _loadVerifiedReportMarkers: $e');
       return {};
     }
+  }
+
+  Set<Marker> _createClusters(List<Marker> markers) {
+    final clusters = <Marker>[];
+    final processed = <String>{};
+
+    for (var i = 0; i < markers.length; i++) {
+      if (processed.contains(markers[i].markerId.value)) continue;
+
+      final cluster = <Marker>[markers[i]];
+      processed.add(markers[i].markerId.value);
+
+      for (var j = i + 1; j < markers.length; j++) {
+        if (processed.contains(markers[j].markerId.value)) continue;
+
+        if (_areMarkersClose(markers[i], markers[j])) {
+          cluster.add(markers[j]);
+          processed.add(markers[j].markerId.value);
+        }
+      }
+
+      if (cluster.length > 1) {
+        // Create cluster marker
+        final clusterPosition = _getClusterCenter(cluster);
+        clusters.add(
+          Marker(
+            markerId: MarkerId(
+                'cluster_${clusterPosition.latitude}_${clusterPosition.longitude}'),
+            position: clusterPosition,
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueViolet),
+            infoWindow: InfoWindow(
+              title: '${cluster.length} Reports',
+              snippet: 'Tap to zoom in',
+            ),
+            onTap: () {
+              _zoomToCluster(cluster);
+            },
+          ),
+        );
+      } else {
+        clusters.add(cluster[0]);
+      }
+    }
+
+    return clusters.toSet();
+  }
+
+  bool _areMarkersClose(Marker m1, Marker m2) {
+    final latDiff = (m1.position.latitude - m2.position.latitude).abs();
+    final lngDiff = (m1.position.longitude - m2.position.longitude).abs();
+    return latDiff < _clusterDistance && lngDiff < _clusterDistance;
+  }
+
+  LatLng _getClusterCenter(List<Marker> markers) {
+    double latSum = 0;
+    double lngSum = 0;
+    for (var marker in markers) {
+      latSum += marker.position.latitude;
+      lngSum += marker.position.longitude;
+    }
+    return LatLng(
+      latSum / markers.length,
+      lngSum / markers.length,
+    );
+  }
+
+  void _zoomToCluster(List<Marker> cluster) {
+    final bounds = LatLngBounds(
+      southwest: LatLng(
+        cluster.map((m) => m.position.latitude).reduce(min),
+        cluster.map((m) => m.position.longitude).reduce(min),
+      ),
+      northeast: LatLng(
+        cluster.map((m) => m.position.latitude).reduce(max),
+        cluster.map((m) => m.position.longitude).reduce(max),
+      ),
+    );
+
+    _mapController.animateCamera(
+      CameraUpdate.newLatLngBounds(bounds, 50),
+    );
   }
 
   bool _isPointInBounds(LatLng point, LatLngBounds bounds) {
@@ -947,16 +1048,33 @@ class _MappingScreenState extends State<MappingScreen>
                             ),
                             zoom: widget.initialZoom ?? 11.4,
                           ),
-                          onMapCreated: (controller) =>
-                              _mapController = controller,
+                          onMapCreated: (controller) {
+                            _mapController = controller;
+                          },
                           circles: _circles,
-                          markers: _markers,
+                          markers: _layerOptions['Markers']!
+                              ? _clusterMarkers
+                              : _markers,
                           polygons: _polygons,
                           polylines: _polylines,
                           myLocationEnabled: true,
                           myLocationButtonEnabled: true,
                           zoomControlsEnabled: true,
                           mapToolbarEnabled: false,
+                          onCameraMove: (position) {
+                            setState(() {
+                              _currentZoom = position.zoom;
+                            });
+                          },
+                          onCameraIdle: () {
+                            if (_layerOptions['Markers']!) {
+                              _loadVerifiedReportMarkers().then((markers) {
+                                setState(() {
+                                  _clusterMarkers = markers;
+                                });
+                              });
+                            }
+                          },
                         ),
                         if (_isLoading)
                           Center(

@@ -62,6 +62,8 @@ class _PostScreenState extends State<PostScreen> {
 
   bool _isLoadingLocation = false;
 
+  bool _isLoading = false;
+
   bool _isPointInsideBarangay(LatLng point) {
     for (final polygon in _barangayPolygons) {
       if (polygon.polygonId.value == 'outside-quezon-city') continue;
@@ -174,7 +176,6 @@ class _PostScreenState extends State<PostScreen> {
         selectedReportType == null ||
         dateController.text.isEmpty ||
         timeController.text.isEmpty) {
-      // Show error using AppFlushBar
       await AppFlushBar.showError(
         context,
         title: 'Missing Information',
@@ -186,7 +187,6 @@ class _PostScreenState extends State<PostScreen> {
     // Ensure the coordinates are valid numbers
     if (selectedCoordinates!.latitude.isNaN ||
         selectedCoordinates!.longitude.isNaN) {
-      // Show error using AppFlushBar
       await AppFlushBar.showError(
         context,
         title: 'Invalid Location',
@@ -194,6 +194,10 @@ class _PostScreenState extends State<PostScreen> {
       );
       return;
     }
+
+    setState(() {
+      _isLoading = true;
+    });
 
     final url = Uri.parse(Config.createPostUrl);
     final prefs = await SharedPreferences.getInstance();
@@ -235,16 +239,20 @@ class _PostScreenState extends State<PostScreen> {
             specificLocation["coordinates"][1].toString(),
       });
 
+      // Process images in parallel if there are multiple
       if (_selectedImages.isNotEmpty) {
-        for (final image in _selectedImages) {
+        final imageFutures = _selectedImages.map((image) async {
           final bytes = await image.readAsBytes();
           final filename = image.path.split('/').last;
-          request.files.add(http.MultipartFile.fromBytes(
+          return http.MultipartFile.fromBytes(
             'images',
             bytes,
             filename: filename,
-          ));
-        }
+          );
+        });
+
+        final imageFiles = await Future.wait(imageFutures);
+        request.files.addAll(imageFiles);
       }
 
       final streamedResponse = await request.send();
@@ -259,25 +267,32 @@ class _PostScreenState extends State<PostScreen> {
         debugPrint(
             '✅ Report submitted successfully: ${responseData['report']}');
 
-        // Delay navigation to avoid pop-related issues
-        await Future.delayed(Duration(milliseconds: 300));
-
         // Navigate to the community screen (replace current screen)
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const CommunityScreen()),
-        );
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const CommunityScreen()),
+          );
+        }
       } else {
         throw Exception(
             'Failed with status ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
       debugPrint('❌ Error submitting post: $e');
-      await AppFlushBar.showError(
-        context,
-        title: 'Submission Failed',
-        message: 'Unable to submit your report. Please try again.',
-      );
+      if (mounted) {
+        await AppFlushBar.showError(
+          context,
+          title: 'Submission Failed',
+          message: 'Unable to submit your report. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 

@@ -496,6 +496,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "8.1.1"
+  google_maps_cluster_manager:
+    dependency: "direct main"
+    description:
+      name: google_maps_cluster_manager
+      sha256: "36e9a4b2d831c470fc85d692a6c9cec70e0f385d578b9697de5f4de347561b83"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.0"
   google_maps_flutter:
     dependency: "direct main"
     description:

@@ -177,7 +177,7 @@ class MyApp extends StatelessWidget {
                 child: child!,
               );
             },
-            initialRoute: '/otp',
+            initialRoute: '/',
             routes: {
               '/': (context) => const SplashScreen(),
               '/welcome': (context) => const WelcomeScreen(),

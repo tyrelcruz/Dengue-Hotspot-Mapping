@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -43,18 +44,25 @@ class NotificationService with ChangeNotifier {
     );
   }
 
+  Future<String?> _getAuthToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('authToken');
+  }
+
   Future<Map<String, dynamic>?> fetchReportDetails(String reportId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('authToken');
-
+      final token = await _getAuthToken();
       if (token == null) {
-        throw Exception('No auth token found');
+        print('❌ No auth token found');
+        return null;
       }
 
-      print('🔍 Fetching report details for ID: $reportId');
+      print('🔑 Using auth token: $token');
+      final url = '${Config.baseUrl}/api/v1/reports/$reportId';
+      print('🌐 Fetching report details from: $url');
+
       final response = await _httpClient.get(
-        '${Config.baseUrl}/api/v1/reports/$reportId',
+        url,
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -62,21 +70,63 @@ class NotificationService with ChangeNotifier {
       );
 
       print('📡 API Response Status: ${response.statusCode}');
+      print('📡 API Response Headers: ${response.headers}');
       print('📡 API Response Body: ${response.body}');
 
       if (response.statusCode == 200) {
-        final report = jsonDecode(response.body);
-        print('📄 Fetched report details:');
-        print(json.encode(report));
-        return report;
+        final data = json.decode(response.body);
+        print('📄 Decoded response data:');
+        print(json.encode(data));
+
+        if (data['success'] == true && data['data'] != null) {
+          final report = data['data'];
+          print('📄 Full report data:');
+          print(json.encode(report));
+
+          // Check for location data in different possible fields
+          if (report['specific_location'] != null) {
+            print('✅ Found specific_location in report');
+            final location = report['specific_location'];
+            print('📍 Location data:');
+            print(json.encode(location));
+
+            if (location['coordinates'] != null) {
+              print('🎯 Found coordinates in location');
+              final coordinates = location['coordinates'];
+              print('📌 Raw coordinates: $coordinates');
+
+              if (coordinates is List && coordinates.length >= 2) {
+                // Note: coordinates are in [longitude, latitude] format
+                final longitude = coordinates[0].toDouble();
+                final latitude = coordinates[1].toDouble();
+                print(
+                    '✅ Successfully extracted coordinates: $latitude, $longitude');
+                return report;
+              } else {
+                print('❌ Invalid coordinates format: $coordinates');
+              }
+            } else {
+              print('❌ No coordinates found in location data');
+            }
+          } else {
+            print('❌ No specific_location found in report');
+          }
+        } else {
+          print('❌ Invalid response format or missing data');
+          print('Response data:');
+          print(json.encode(data));
+        }
       } else {
         print(
             '❌ Failed to fetch report details. Status: ${response.statusCode}');
-        print('❌ Response body: ${response.body}');
-        return null;
+        print('Response body: ${response.body}');
       }
+      return null;
     } catch (e) {
       print('❌ Error fetching report details: $e');
+      if (e is TimeoutException) {
+        print('⏰ Request timed out');
+      }
       return null;
     }
   }
@@ -106,6 +156,23 @@ class NotificationService with ChangeNotifier {
       if (response.statusCode == 200) {
         final List<dynamic> rawNotifications = jsonDecode(response.body);
         print('📱 Fetched notifications: ${rawNotifications.length}');
+
+        // Debug log the raw notification data
+        for (var notification in rawNotifications) {
+          print('📄 Raw notification data:');
+          print(json.encode(notification));
+
+          if (notification['report'] != null) {
+            print('📍 Report data:');
+            print(json.encode(notification['report']));
+
+            if (notification['report']['specific_location'] != null) {
+              print('🗺️ Location data:');
+              print(json.encode(notification['report']['specific_location']));
+            }
+          }
+        }
+
         return rawNotifications.cast<Map<String, dynamic>>();
       } else {
         print(

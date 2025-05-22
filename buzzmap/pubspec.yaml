@@ -60,6 +60,7 @@ dependencies:
 
   url_launcher: ^6.2.1
   auto_size_text: ^3.0.0
+  google_maps_cluster_manager: ^3.1.0
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1

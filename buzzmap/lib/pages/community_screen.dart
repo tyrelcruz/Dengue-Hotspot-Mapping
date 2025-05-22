@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
 import 'package:buzzmap/widgets/post_detail_screen.dart';
+import 'package:buzzmap/errors/flushbar.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -123,12 +124,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Future<List<Map<String, dynamic>>> fetchReports() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('authToken');
-    final currentEmail = prefs.getString('email');
-    final currentUserId =
-        prefs.getString('userId'); // Get the current user's ID
-    print(
-        '📧 Current email from SharedPreferences: $currentEmail'); // Debug log
-    print('👤 Current user ID: $currentUserId'); // Debug log
+    final currentUserId = prefs.getString('userId');
 
     final response = await http.get(
       Uri.parse('${Config.baseUrl}/api/v1/reports'),
@@ -140,86 +136,69 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
-      print('📱 Raw response data: $data'); // Debug log for raw response
-      print('📱 Fetched reports: ${data.length}'); // Debug log
 
-      final reports = data
-          .where((report) => report['status'] == 'Validated')
-          .map<Map<String, dynamic>>((report) {
-        print('📝 Processing report: $report'); // Debug log for each report
-        print(
-            '👤 Report user data: ${report['user']}'); // Debug log for user data
+      // Process reports in parallel
+      final reports = await Future.wait(
+        data
+            .where((report) => report['status'] == 'Validated')
+            .map((report) async {
+          final DateTime reportDate = DateTime.parse(report['date_and_time']);
+          final DateTime now = DateTime.now();
+          final Duration difference = now.difference(reportDate);
 
-        final DateTime reportDate = DateTime.parse(report['date_and_time']);
-        final DateTime now = DateTime.now();
-        final Duration difference = now.difference(reportDate);
+          String whenPosted;
+          if (difference.inDays > 0) {
+            whenPosted = '${difference.inDays} days ago';
+          } else if (difference.inHours > 0) {
+            whenPosted = '${difference.inHours} hours ago';
+          } else if (difference.inMinutes > 0) {
+            whenPosted = '${difference.inMinutes} minutes ago';
+          } else {
+            whenPosted = 'Just now';
+          }
 
-        String whenPosted;
-        if (difference.inDays > 0) {
-          whenPosted = '${difference.inDays} days ago';
-        } else if (difference.inHours > 0) {
-          whenPosted = '${difference.inHours} hours ago';
-        } else if (difference.inMinutes > 0) {
-          whenPosted = '${difference.inMinutes} minutes ago';
-        } else {
-          whenPosted = 'Just now';
-        }
+          final username = report['user']?['username'] ?? 'Anonymous';
+          final email = report['user']?['email'] ?? '';
+          final userId = report['user']?['_id'] ?? '';
 
-        final username = report['user']?['username'] ?? 'Anonymous';
-        final email = report['user']?['email'] ?? '';
-        final userId =
-            report['user']?['_id'] ?? ''; // Get the user ID from the report
-        print('👤 Report username: $username'); // Debug log
-        print('📧 Report email: $email'); // Debug log
-        print('👤 Report user ID: $userId'); // Debug log
-        print('📧 Is current user? ${userId == currentUserId}'); // Debug log
-
-        return {
-          'id': report['_id'],
-          'username': username,
-          'email': email,
-          'userId': userId, // Add user ID to the report data
-          'whenPosted': whenPosted,
-          'location': '${report['barangay']}, Quezon City',
-          'barangay': report['barangay'],
-          'date': '${reportDate.month}/${reportDate.day}/${reportDate.year}',
-          'time':
-              '${reportDate.hour.toString().padLeft(2, '0')}:${reportDate.minute.toString().padLeft(2, '0')}',
-          'reportType': report['report_type'],
-          'description': report['description'],
-          'images': report['images'] != null
-              ? List<String>.from(report['images'])
-              : <String>[],
-          'iconUrl': 'assets/icons/person_1.svg',
-          'status': report['status'],
-          'numUpvotes': report['upvotes']?.length ?? 0,
-          'numDownvotes': report['downvotes']?.length ?? 0,
-          'date_and_time': report['date_and_time'],
-        };
-      }).toList();
-
-      print(
-          '📱 Processed reports: ${reports.length}'); // Debug log for processed reports
-      print(
-          '📱 First report data: ${reports.isNotEmpty ? reports.first : "No reports"}'); // Debug log for first report
-
-      // Sort based on selected tab
-      if (selectedIndex == 0) {
-        // Popular tab
-        reports.sort((a, b) =>
-            (b['numUpvotes'] as int).compareTo(a['numUpvotes'] as int));
-      } else if (selectedIndex == 1) {
-        // Latest tab
-        reports.sort((a, b) => (b['date_and_time'] as String)
-            .compareTo(a['date_and_time'] as String));
-      }
+          return {
+            'id': report['_id'],
+            'username': username,
+            'email': email,
+            'userId': userId,
+            'whenPosted': whenPosted,
+            'location': '${report['barangay']}, Quezon City',
+            'barangay': report['barangay'],
+            'date': '${reportDate.month}/${reportDate.day}/${reportDate.year}',
+            'time':
+                '${reportDate.hour.toString().padLeft(2, '0')}:${reportDate.minute.toString().padLeft(2, '0')}',
+            'reportType': report['report_type'],
+            'description': report['description'],
+            'images': report['images'] != null
+                ? List<String>.from(report['images'])
+                : <String>[],
+            'iconUrl': 'assets/icons/person_1.svg',
+            'status': report['status'],
+            'numUpvotes': report['upvotes']?.length ?? 0,
+            'numDownvotes': report['downvotes']?.length ?? 0,
+            'date_and_time': report['date_and_time'],
+          };
+        }),
+      );
 
       return reports;
+    } else {
+      throw Exception('Failed to load reports');
     }
-    throw Exception('Failed to fetch reports');
   }
 
   Future<void> _loadReports() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       final reports = await fetchReports();
       if (mounted) {
@@ -229,9 +208,16 @@ class _CommunityScreenState extends State<CommunityScreen> {
         });
       }
     } catch (e) {
-      print('❌ Error loading reports: $e');
+      print('Error loading reports: $e');
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
+        AppFlushBar.showError(
+          context,
+          title: 'Loading Failed',
+          message: 'Unable to load reports. Please try again.',
+        );
       }
     }
   }

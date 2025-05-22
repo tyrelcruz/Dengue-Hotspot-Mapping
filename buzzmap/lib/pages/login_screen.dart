@@ -2,6 +2,7 @@ import 'package:buzzmap/pages/otp_screen.dart';
 import 'package:buzzmap/pages/register_screen.dart';
 import 'package:buzzmap/pages/welcome_screen.dart';
 import 'package:buzzmap/pages/home_screen.dart';
+import 'package:buzzmap/pages/forgot_password_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
@@ -323,270 +324,21 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                           TextButton(
-                            onPressed: () async {
-                              // Show dialog to enter email
-                              final TextEditingController
-                                  forgotEmailController =
-                                  TextEditingController();
-                              final result = await showDialog<String>(
-                                context: context,
-                                builder: (context) {
-                                  return AlertDialog(
-                                    backgroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(18),
-                                    ),
-                                    insetPadding: const EdgeInsets.symmetric(
-                                        horizontal: 30, vertical: 24),
-                                    contentPadding: const EdgeInsets.fromLTRB(
-                                        20, 18, 20, 8),
-                                    title: const Text('Forgot Password',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold)),
-                                    content: SizedBox(
-                                      width: 340,
-                                      child: TextField(
-                                        controller: forgotEmailController,
-                                        keyboardType:
-                                            TextInputType.emailAddress,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Enter your email',
-                                        ),
-                                      ),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context),
-                                        child: const Text('Cancel'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.pop(
-                                              context,
-                                              forgotEmailController.text
-                                                  .trim());
-                                        },
-                                        child: const Text('Submit'),
-                                      ),
-                                    ],
-                                  );
-                                },
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const ForgotPasswordScreen(),
+                                ),
                               );
-                              if (result != null && result.isNotEmpty) {
-                                // Send forgot password request
-                                try {
-                                  final response = await http.post(
-                                    Uri.parse(
-                                        '${Config.baseUrl}/api/v1/auth/forgot-password'),
-                                    headers: {
-                                      'Content-Type': 'application/json'
-                                    },
-                                    body: jsonEncode({'email': result}),
-                                  );
-                                  final data = jsonDecode(response.body);
-                                  if (response.statusCode == 200 &&
-                                      data['status'] == 'Success') {
-                                    AppFlushBar.showSuccess(
-                                      context,
-                                      message: data['message'] ??
-                                          'Password reset email sent!',
-                                    );
-                                    // Show dialog to enter OTP and new password
-                                    final TextEditingController otpController =
-                                        TextEditingController();
-                                    final TextEditingController
-                                        newPasswordController =
-                                        TextEditingController();
-                                    final TextEditingController
-                                        confirmPasswordController =
-                                        TextEditingController();
-                                    final resetResult = await showDialog<bool>(
-                                      context: context,
-                                      builder: (context) {
-                                        return AlertDialog(
-                                          backgroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(18),
-                                          ),
-                                          insetPadding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 30, vertical: 24),
-                                          contentPadding:
-                                              const EdgeInsets.fromLTRB(
-                                                  20, 18, 20, 8),
-                                          title: const Text('Reset Password',
-                                              style: TextStyle(
-                                                  fontWeight: FontWeight.bold)),
-                                          content: SizedBox(
-                                            width: 340,
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                TextField(
-                                                  controller: otpController,
-                                                  keyboardType:
-                                                      TextInputType.number,
-                                                  decoration:
-                                                      const InputDecoration(
-                                                    labelText: 'Enter OTP',
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 12),
-                                                TextField(
-                                                  controller:
-                                                      newPasswordController,
-                                                  obscureText: true,
-                                                  decoration:
-                                                      const InputDecoration(
-                                                    labelText: 'New Password',
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 12),
-                                                TextField(
-                                                  controller:
-                                                      confirmPasswordController,
-                                                  obscureText: true,
-                                                  decoration:
-                                                      const InputDecoration(
-                                                    labelText:
-                                                        'Confirm Password',
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context, false),
-                                              child: const Text('Cancel'),
-                                            ),
-                                            TextButton(
-                                              onPressed: () async {
-                                                final otp =
-                                                    otpController.text.trim();
-                                                final newPassword =
-                                                    newPasswordController.text;
-                                                final confirmPassword =
-                                                    confirmPasswordController
-                                                        .text;
-                                                if (otp.isEmpty ||
-                                                    newPassword.isEmpty ||
-                                                    confirmPassword.isEmpty) {
-                                                  AppFlushBar.showError(context,
-                                                      message:
-                                                          'All fields are required.');
-                                                  return;
-                                                }
-                                                if (newPassword !=
-                                                    confirmPassword) {
-                                                  AppFlushBar.showError(context,
-                                                      message:
-                                                          'Passwords do not match.');
-                                                  return;
-                                                }
-                                                // Verify OTP and reset password
-                                                try {
-                                                  final verifyResponse =
-                                                      await http.post(
-                                                    Uri.parse(
-                                                        '${Config.baseUrl}/api/v1/otp/verify'),
-                                                    headers: {
-                                                      'Content-Type':
-                                                          'application/json'
-                                                    },
-                                                    body: jsonEncode({
-                                                      'email': result,
-                                                      'otp': otp,
-                                                      'purpose':
-                                                          'password-reset',
-                                                    }),
-                                                  );
-                                                  final verifyData = jsonDecode(
-                                                      verifyResponse.body);
-                                                  if (verifyResponse
-                                                              .statusCode ==
-                                                          200 &&
-                                                      verifyData[
-                                                              'resetToken'] !=
-                                                          null) {
-                                                    // Now reset the password
-                                                    final resetResponse =
-                                                        await http.post(
-                                                      Uri.parse(
-                                                          '${Config.baseUrl}/api/v1/auth/reset-password'),
-                                                      headers: {
-                                                        'Content-Type':
-                                                            'application/json'
-                                                      },
-                                                      body: jsonEncode({
-                                                        'resetToken':
-                                                            verifyData[
-                                                                'resetToken'],
-                                                        'newPassword':
-                                                            newPassword,
-                                                      }),
-                                                    );
-                                                    final resetData =
-                                                        jsonDecode(
-                                                            resetResponse.body);
-                                                    if (resetResponse
-                                                                .statusCode ==
-                                                            200 &&
-                                                        resetData['status'] ==
-                                                            'Success') {
-                                                      AppFlushBar.showSuccess(
-                                                          context,
-                                                          message: resetData[
-                                                                  'message'] ??
-                                                              'Password reset successful!');
-                                                      Navigator.pop(
-                                                          context, true);
-                                                    } else {
-                                                      AppFlushBar.showError(
-                                                          context,
-                                                          message: resetData[
-                                                                  'message'] ??
-                                                              'Failed to reset password.');
-                                                    }
-                                                  } else {
-                                                    AppFlushBar.showError(
-                                                        context,
-                                                        message: verifyData[
-                                                                'message'] ??
-                                                            'Invalid OTP.');
-                                                  }
-                                                } catch (e) {
-                                                  AppFlushBar.showNetworkError(
-                                                      context);
-                                                }
-                                              },
-                                              child:
-                                                  const Text('Reset Password'),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    );
-                                  } else {
-                                    AppFlushBar.showError(
-                                      context,
-                                      message: data['message'] ??
-                                          'Failed to send password reset email.',
-                                    );
-                                  }
-                                } catch (e) {
-                                  AppFlushBar.showNetworkError(context);
-                                }
-                              }
                             },
                             child: const Text(
                               "Forgot Password?",
                               style: TextStyle(
-                                fontFamily: 'Inter-Regular',
-                                fontSize: 14.0,
-                                fontWeight: FontWeight.w400,
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                color: const Color(0xFF1D4C5E),
                               ),
                             ),
                           ),
