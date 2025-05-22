@@ -181,7 +181,7 @@ const getAllReports = asyncErrorHandler(async (req, res) => {
 const getReport = asyncErrorHandler(async (req, res) => {
   const { id } = req.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(404).json({ error: "No such post!" });
+    return res.status(404).json({ success: false, error: "No such post!" });
   }
   const report = await Report.findById(id)
     .populate("user", "username")
@@ -189,7 +189,9 @@ const getReport = asyncErrorHandler(async (req, res) => {
     .populate("downvotes", "_id");
 
   if (!report) {
-    return res.status(404).json({ error: "Post does not exist!" });
+    return res
+      .status(404)
+      .json({ success: false, error: "Post does not exist!" });
   }
 
   // Transform the response to show anonymousId for anonymous reports
@@ -203,7 +205,10 @@ const getReport = asyncErrorHandler(async (req, res) => {
   reportObj.upvotes = reportObj.upvotes.map((vote) => vote._id.toString());
   reportObj.downvotes = reportObj.downvotes.map((vote) => vote._id.toString());
 
-  res.status(200).json(reportObj);
+  res.status(200).json({
+    success: true,
+    data: reportObj,
+  });
 });
 
 // * UPDATED createReport with fixed ImgBB integration for express-fileupload

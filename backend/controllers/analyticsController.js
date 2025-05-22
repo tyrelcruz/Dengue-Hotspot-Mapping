@@ -5,7 +5,7 @@ const FormData = require("form-data");
 const asyncErrorHandler = require("../middleware/asyncErrorHandler");
 const Barangay = require("../models/Barangays");
 const weatherAnalysis = require("../services/weatherRiskService");
-const Alert = require('../models/Alerts');
+const Alert = require("../models/Alerts");
 const Intervention = require("../models/Interventions");
 const AdminPost = require("../models/AdminPosts");
 const { detectClusters } = require("../services/clusterService");
@@ -18,9 +18,63 @@ const patternRecognitionAnalysis = asyncErrorHandler(async (req, res) => {
 
     console.log("Received alerts from FastAPI:", analysisResults);
 
+    // Update each barangay with its analysis results
+    for (const result of analysisResults) {
+      try {
+        // Normalize the data structure
+        const barangayData = {
+          name: result.name,
+          risk_level: result.risk_level || result.riskLevel || "Low",
+          status_and_recommendation: {
+            pattern_based: {
+              status:
+                result.status_and_recommendation?.pattern_based?.status ||
+                result.triggered_pattern ||
+                null,
+              alert:
+                result.status_and_recommendation?.pattern_based?.alert ||
+                result.alert ||
+                result.message ||
+                null,
+              recommendation:
+                result.status_and_recommendation?.pattern_based
+                  ?.recommendation || "No specific recommendation available.",
+            },
+            report_based: result.status_and_recommendation?.report_based || {
+              count: 0,
+              status: "",
+              alert: "None",
+              recommendation: "",
+            },
+            death_priority: result.status_and_recommendation
+              ?.death_priority || {
+              status: "",
+              alert: "None",
+              recommendation: "",
+            },
+          },
+          last_analysis_time: new Date().toISOString(),
+        };
+
+        console.log("Updating barangay with data:", barangayData);
+
+        await Barangay.findOneAndUpdate(
+          { name: barangayData.name },
+          barangayData,
+          { upsert: true, new: true }
+        );
+      } catch (error) {
+        console.error(`Error updating barangay ${result.name}:`, error);
+      }
+    }
+
+    // Get all updated barangays
+    const updatedBarangays = await Barangay.find({});
+    console.log("Updated barangays:", updatedBarangays);
+
     res.status(200).json({
       success: true,
-      data: analysisResults,
+      data: updatedBarangays,
     });
   } catch (error) {
     console.error("Error calling FastAPI:", error.message);
@@ -258,19 +312,20 @@ const sendDengueAlert = asyncErrorHandler(async (req, res) => {
     if (!barangayIds || !message || !severity) {
       return res.status(400).json({
         success: false,
-        message: "Missing required fields: barangayIds, message, and severity are required"
+        message:
+          "Missing required fields: barangayIds, message, and severity are required",
       });
     }
 
     // Find the specified barangays
     const barangays = await Barangay.find({
-      _id: { $in: barangayIds }
+      _id: { $in: barangayIds },
     });
 
     if (barangays.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "No barangays found with the provided IDs"
+        message: "No barangays found with the provided IDs",
       });
     }
 
@@ -281,86 +336,90 @@ const sendDengueAlert = asyncErrorHandler(async (req, res) => {
       affectedAreas,
       barangays: barangayIds,
       timestamp: new Date(),
-      status: 'ACTIVE'
+      status: "ACTIVE",
     });
 
     // TODO: Implement notification system
     // For now, we'll just log the alert
-    console.log(`Alert created: ${alert._id} for barangays: ${barangays.map(b => b.name).join(', ')}`);
+    console.log(
+      `Alert created: ${alert._id} for barangays: ${barangays
+        .map((b) => b.name)
+        .join(", ")}`
+    );
 
     res.status(200).json({
       success: true,
       message: "Dengue alert sent successfully",
       data: {
         alert,
-        affectedBarangays: barangays.map(b => b.name)
-      }
+        affectedBarangays: barangays.map((b) => b.name),
+      },
     });
   } catch (error) {
     console.error("Error sending dengue alert:", error);
     res.status(500).json({
       success: false,
       message: "Failed to send dengue alert",
-      error: error.message
+      error: error.message,
     });
   }
 });
 
 const getAllAlerts = asyncErrorHandler(async (req, res) => {
   const alerts = await Alert.find()
-    .populate('barangays', 'name')
+    .populate("barangays", "name")
     .sort({ timestamp: -1 });
 
   res.status(200).json({
     success: true,
     count: alerts.length,
-    data: alerts
+    data: alerts,
   });
 });
 
 const getAlertsByBarangay = asyncErrorHandler(async (req, res) => {
   const { barangayId } = req.params;
-  
+
   const alerts = await Alert.find({ barangays: barangayId })
-    .populate('barangays', 'name')
+    .populate("barangays", "name")
     .sort({ timestamp: -1 });
 
   res.status(200).json({
     success: true,
     count: alerts.length,
-    data: alerts
+    data: alerts,
   });
 });
 
 const getAlertsByBarangayName = asyncErrorHandler(async (req, res) => {
   const { name } = req.query;
-  
+
   if (!name) {
     return res.status(400).json({
       success: false,
-      message: "Barangay name is required"
+      message: "Barangay name is required",
     });
   }
 
-  const barangay = await Barangay.findOne({ 
-    name: { $regex: new RegExp(name, 'i') } 
+  const barangay = await Barangay.findOne({
+    name: { $regex: new RegExp(name, "i") },
   });
 
   if (!barangay) {
     return res.status(404).json({
       success: false,
-      message: "Barangay not found"
+      message: "Barangay not found",
     });
   }
 
   const alerts = await Alert.find({ barangays: barangay._id })
-    .populate('barangays', 'name')
+    .populate("barangays", "name")
     .sort({ timestamp: -1 });
 
   res.status(200).json({
     success: true,
     count: alerts.length,
-    data: alerts
+    data: alerts,
   });
 });
 
@@ -392,8 +451,10 @@ const retrieveTrendsAndPatterns = asyncErrorHandler(async (req, res) => {
 const analyzeInterventionEffectivity = asyncErrorHandler(async (req, res) => {
   const { intervention_id } = req.body;
 
-  const intervention = await Intervention.findById(intervention_id)
-    .populate('adminId', 'name'); // Populate admin details
+  const intervention = await Intervention.findById(intervention_id).populate(
+    "adminId",
+    "name"
+  ); // Populate admin details
 
   if (!intervention) {
     return res.status(404).json({
@@ -403,21 +464,26 @@ const analyzeInterventionEffectivity = asyncErrorHandler(async (req, res) => {
 
   const { date, barangay } = intervention;
 
-  
   const interventionDate = new Date(date);
   const currentDate = new Date();
-  
-  const daysSinceIntervention = Math.floor((currentDate - interventionDate) / (1000 * 60 * 60 * 24));
-  
+
+  const daysSinceIntervention = Math.floor(
+    (currentDate - interventionDate) / (1000 * 60 * 60 * 24)
+  );
+
   if (daysSinceIntervention < 30) {
     const daysToWait = 30 - daysSinceIntervention;
     return res.status(422).json({
-      message: `Intervention is too recent for analysis. Please wait ${daysToWait} more day${daysToWait === 1 ? '' : 's'} before analyzing.`,
-      daysToWait
+      message: `Intervention is too recent for analysis. Please wait ${daysToWait} more day${
+        daysToWait === 1 ? "" : "s"
+      } before analyzing.`,
+      daysToWait,
     });
   }
 
-  const formattedInterventionDate = interventionDate.toISOString().split("T")[0];
+  const formattedInterventionDate = interventionDate
+    .toISOString()
+    .split("T")[0];
 
   const requestData = {
     barangay,
@@ -447,9 +513,9 @@ const analyzeInterventionEffectivity = asyncErrorHandler(async (req, res) => {
         intervention_date: response.data.intervention_date,
         case_counts: {
           before: response.data.before_intervention,
-          after: response.data.after_intervention
-        }
-      }
+          after: response.data.after_intervention,
+        },
+      },
     });
   } catch (error) {
     return res.status(500).json({
