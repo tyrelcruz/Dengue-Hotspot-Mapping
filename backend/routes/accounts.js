@@ -8,6 +8,9 @@ const {
   createAccount,
   updateAccount,
   deleteAccount,
+  addTimestampsToExistingAccounts,
+  toggleAccountStatus,
+  deleteAllAccounts,
 } = require("../controllers/accountsController");
 
 // Protect all routes with auth and superadmin check
@@ -25,7 +28,16 @@ router.post("/", createAccount);
 // Update an account
 router.patch("/:id", updateAccount);
 
+// Delete all accounts
+router.delete("/delete-all", deleteAllAccounts);
+
 // Delete an account
 router.delete("/:id", deleteAccount);
+
+// Add this route
+router.post("/add-timestamps", addTimestampsToExistingAccounts);
+
+// Add this new route
+router.patch("/:id/toggle-status", toggleAccountStatus);
 
 module.exports = router;

@@ -1,2 +1,0 @@
-/Users/tyrelcruz/Documents/Capstone/Dengue_Hotspot_Mapping/buzzmap/android/app/.cxx/Debug/165v5b5k/x86/CMakeFiles/edit_cache.dir
-/Users/tyrelcruz/Documents/Capstone/Dengue_Hotspot_Mapping/buzzmap/android/app/.cxx/Debug/165v5b5k/x86/CMakeFiles/rebuild_cache.dir

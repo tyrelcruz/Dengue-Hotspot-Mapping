@@ -19,6 +19,9 @@ router.get('/', getAllAlerts);
 // GET /api/v1/alerts/barangay/:barangayId
 router.get('/barangay/:barangayId', getAlertsByBarangay);
 
+// DELETE /api/v1/alerts/all
+router.delete('/all', deleteAllAlerts);
+
 // GET /api/v1/alerts/:barangayName
 router.get('/:barangayName', getAlertsByBarangayName);
 
@@ -27,8 +30,5 @@ router.patch('/:alertId', updateAlert);
 
 // DELETE /api/v1/alerts/:alertId
 router.delete('/:alertId', deleteAlert);
-
-// DELETE /api/v1/alerts
-router.delete('/', deleteAllAlerts);
 
 module.exports = router; 

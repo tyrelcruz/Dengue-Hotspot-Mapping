@@ -54,9 +54,23 @@ app.use(errorController);
 const start = async () => {
   try {
     await connectDB(process.env.MONGO_URI);
-    app.listen(process.env.PORT, () => {
+    const server = app.listen(process.env.PORT, () => {
       console.log(`Server running on port ${process.env.PORT}`);
     });
+
+    // Handle server errors
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.log(`Port ${process.env.PORT} is busy, trying ${process.env.PORT + 1}`);
+        server.close();
+        app.listen(process.env.PORT + 1, () => {
+          console.log(`Server running on port ${process.env.PORT + 1}`);
+        });
+      } else {
+        console.error('Server error:', error);
+      }
+    });
+
   } catch (error) {
     console.error("Server startup failed:", error);
     process.exit(1);

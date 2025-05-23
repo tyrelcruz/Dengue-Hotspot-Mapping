@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:buzzmap/errors/flushbar.dart';
 
 class CustomTextField extends StatefulWidget {
   final String hintText;
@@ -29,11 +30,14 @@ class CustomTextField extends StatefulWidget {
 
 class _CustomTextFieldState extends State<CustomTextField> {
   Future<void> _selectDate(BuildContext context) async {
+    final DateTime now = DateTime.now();
+    final DateTime yesterday = now.subtract(const Duration(days: 1));
+
     DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2101),
+      initialDate: now,
+      firstDate: yesterday,
+      lastDate: now,
     );
     if (picked != null && widget.controller != null) {
       setState(() {
@@ -43,14 +47,46 @@ class _CustomTextFieldState extends State<CustomTextField> {
   }
 
   Future<void> _selectTime(BuildContext context) async {
+    final DateTime now = DateTime.now();
+    final DateTime fiveHoursAgo = now.subtract(const Duration(hours: 5));
+
     TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
+      builder: (BuildContext context, Widget? child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            alwaysUse24HourFormat: false,
+          ),
+          child: child!,
+        );
+      },
     );
+
     if (picked != null && widget.controller != null) {
-      setState(() {
-        widget.controller!.text = picked.format(context);
-      });
+      // Convert TimeOfDay to DateTime for comparison
+      final DateTime pickedDateTime = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        picked.hour,
+        picked.minute,
+      );
+
+      // Check if the picked time is within the allowed range
+      if (pickedDateTime.isAfter(fiveHoursAgo) &&
+          pickedDateTime.isBefore(now.add(const Duration(minutes: 1)))) {
+        setState(() {
+          widget.controller!.text = picked.format(context);
+        });
+      } else {
+        // Show error message if time is outside allowed range
+        await AppFlushBar.showError(
+          context,
+          title: 'Invalid Time',
+          message: 'Please select a time within the last 5 hours',
+        );
+      }
     }
   }
 

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:buzzmap/widgets/engagement_row.dart';
 
 class PostCard extends StatelessWidget {
+  final Map<String, dynamic> post;
   final String username;
   final String whenPosted;
   final String location;
@@ -24,6 +25,7 @@ class PostCard extends StatelessWidget {
 
   const PostCard({
     super.key,
+    required this.post,
     required this.username,
     required this.whenPosted,
     this.location = '',
@@ -166,7 +168,7 @@ class PostCard extends StatelessWidget {
           ),
           Container(
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary,
+              color: Theme.of(context).colorScheme.primary,
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(12),
                 bottomRight: Radius.circular(12),
@@ -177,6 +179,7 @@ class PostCard extends StatelessWidget {
               numDownvotes: numDownvotes,
               postId: postId,
               themeMode: type == 'bordered' ? 'dark' : 'light',
+              post: post,
             ),
           ),
         ],

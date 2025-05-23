@@ -9,6 +9,7 @@ class PatternRecognitionData {
   final String? alert;
   final String? lastAnalysisTime;
   final String? triggeredPattern;
+  final Map<String, dynamic>? statusAndRecommendation;
 
   PatternRecognitionData({
     required this.name,
@@ -16,15 +17,19 @@ class PatternRecognitionData {
     this.alert,
     this.lastAnalysisTime,
     this.triggeredPattern,
+    this.statusAndRecommendation,
   });
 
   factory PatternRecognitionData.fromJson(Map<String, dynamic> json) {
     return PatternRecognitionData(
       name: json['name'] ?? '',
       riskLevel: json['risk_level'] ?? 'Unknown',
-      alert: json['alert'],
+      alert: json['status_and_recommendation']?['pattern_based']?['alert'] ??
+          'No alerts triggered.',
       lastAnalysisTime: json['last_analysis_time'],
-      triggeredPattern: json['triggered_pattern'],
+      triggeredPattern:
+          json['status_and_recommendation']?['pattern_based']?['status'] ?? '',
+      statusAndRecommendation: json['status_and_recommendation'],
     );
   }
 }
@@ -81,8 +86,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
       print('Selected barangay: ${widget.selectedBarangay}');
 
       final response = await http.get(
-        Uri.parse(
-            '${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
+        Uri.parse('${Config.baseUrl}/api/v1/barangays/get-all-barangays'),
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -90,15 +94,13 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
       print('Pattern API Response Body: ${response.body}');
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true &&
-            data['data'] != null &&
-            data['data'].isNotEmpty) {
+        final List<dynamic> data = jsonDecode(response.body);
+        if (data.isNotEmpty) {
           // Find the matching barangay data
           final barangayName = widget.selectedBarangay.toLowerCase();
           print('Searching for barangay: $barangayName');
 
-          final barangayData = data['data'].firstWhere(
+          final barangayData = data.firstWhere(
             (item) {
               final itemName = item['name']?.toString().toLowerCase() ?? '';
               print('Comparing with: $itemName');
@@ -113,14 +115,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
           if (barangayData != null) {
             print('Found matching barangay data: $barangayData');
             setState(() {
-              _patternData = PatternRecognitionData(
-                name: barangayData['name'] ?? '',
-                riskLevel: barangayData['risk_level'] ?? 'Unknown',
-                alert: barangayData['alert'] ?? 'No data available',
-                lastAnalysisTime: barangayData['last_analysis_time'],
-                triggeredPattern:
-                    barangayData['triggered_pattern'] ?? 'No data',
-              );
+              _patternData = PatternRecognitionData.fromJson(barangayData);
             });
           } else {
             print('No matching barangay data found');
@@ -129,9 +124,16 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
               _patternData = PatternRecognitionData(
                 name: barangayName,
                 riskLevel: 'Low',
-                alert: 'No recent data available',
+                alert: 'No alerts triggered.',
                 lastAnalysisTime: DateTime.now().toIso8601String(),
-                triggeredPattern: 'No data',
+                triggeredPattern: '',
+                statusAndRecommendation: {
+                  'pattern_based': {
+                    'status': '',
+                    'alert': 'No alerts triggered.',
+                    'recommendation': ''
+                  }
+                },
               );
             });
           }
@@ -144,9 +146,16 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
         _patternData = PatternRecognitionData(
           name: widget.selectedBarangay,
           riskLevel: 'Low',
-          alert: 'Error fetching data',
+          alert: 'No alerts triggered.',
           lastAnalysisTime: DateTime.now().toIso8601String(),
-          triggeredPattern: 'No data',
+          triggeredPattern: '',
+          statusAndRecommendation: {
+            'pattern_based': {
+              'status': '',
+              'alert': 'No alerts triggered.',
+              'recommendation': ''
+            }
+          },
         );
       });
     }
@@ -165,18 +174,25 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
     }
     switch (pattern.toLowerCase()) {
       case 'stability':
-        return Colors.blue.shade600;
+      case 'stability_pattern':
+        return Colors.lightBlue.shade600;
       case 'spike':
-        return Colors.deepOrange.shade600;
+      case 'spike_pattern':
+        return Colors.red.shade700;
+      case 'gradual rise':
+      case 'gradual_rise':
+        return Colors.orange.shade500;
       case 'decline':
-        return Colors.lightGreen.shade600;
+      case 'decline_pattern':
+        return Colors.green.shade600;
       default:
         return Colors.grey.shade700;
     }
   }
 
   Widget _buildPatternCard() {
-    if (_patternData!.triggeredPattern == 'No data') {
+    if (_patternData!.triggeredPattern == null ||
+        _patternData!.triggeredPattern!.isEmpty) {
       return Card(
         elevation: 0,
         color: Colors.grey.shade50,
@@ -243,7 +259,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
   }
 
   Widget _buildAlertCard() {
-    if (_patternData!.alert == 'No data available') {
+    if (_patternData!.alert == null || _patternData!.alert!.isEmpty) {
       return Card(
         elevation: 0,
         color: Colors.grey.shade50,
@@ -324,6 +340,40 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
   }
 
   Widget _buildLastAnalyzedCard() {
+    if (_patternData!.lastAnalysisTime == null ||
+        _patternData!.lastAnalysisTime!.isEmpty) {
+      return Card(
+        elevation: 0,
+        color: Colors.grey.shade50,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: Colors.grey.shade300,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(
+                Icons.access_time,
+                size: 20,
+                color: Colors.grey.shade700,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Last analysis time not available',
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Card(
       elevation: 0,
       color: Colors.grey.shade50,
@@ -381,6 +431,78 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
     }
   }
 
+  List<Widget> _getPreventiveActions(String riskLevel) {
+    final actions = <Widget>[];
+
+    switch (riskLevel.toLowerCase()) {
+      case 'high':
+        actions.addAll([
+          _buildActionItem(
+              '1. Conduct daily inspection and elimination of mosquito breeding sites'),
+          _buildActionItem(
+              '2. Use mosquito repellent and wear protective clothing'),
+          _buildActionItem('3. Install window and door screens'),
+          _buildActionItem(
+              '4. Seek immediate medical attention if symptoms appear'),
+          _buildActionItem('5. Support community-wide fogging operations'),
+        ]);
+        break;
+      case 'moderate':
+        actions.addAll([
+          _buildActionItem(
+              '1. Check and clean potential breeding sites weekly'),
+          _buildActionItem('2. Use mosquito repellent when outdoors'),
+          _buildActionItem(
+              '3. Keep doors and windows closed during peak mosquito hours'),
+          _buildActionItem('4. Monitor for dengue symptoms'),
+          _buildActionItem('5. Participate in community clean-up drives'),
+        ]);
+        break;
+      case 'low':
+        actions.addAll([
+          _buildActionItem('1. Maintain regular cleaning of surroundings'),
+          _buildActionItem('2. Keep water containers covered'),
+          _buildActionItem('3. Use mosquito nets if needed'),
+          _buildActionItem('4. Stay informed about dengue prevention'),
+          _buildActionItem('5. Report any potential breeding sites'),
+        ]);
+        break;
+      default:
+        actions.add(
+          _buildActionItem(
+              'No specific preventive actions available for this risk level'),
+        );
+    }
+
+    return actions;
+  }
+
+  Widget _buildActionItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.check_circle_outline,
+            size: 16,
+            color: Colors.grey.shade600,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -431,7 +553,8 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
                   height: 5,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: _getRiskColor(_patternData!.riskLevel),
+                    color: _getPatternColor(
+                        _patternData!.triggeredPattern ?? 'No data'),
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(12),
                     ),
@@ -451,7 +574,9 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
                                 width: 24,
                                 height: 24,
                                 decoration: BoxDecoration(
-                                  color: _getRiskColor(_patternData!.riskLevel)
+                                  color: _getPatternColor(
+                                          _patternData!.triggeredPattern ??
+                                              'No data')
                                       .withOpacity(0.1),
                                   shape: BoxShape.circle,
                                 ),
@@ -459,8 +584,9 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
                                   child: Text(
                                     'i',
                                     style: TextStyle(
-                                      color: _getRiskColor(
-                                          _patternData!.riskLevel),
+                                      color: _getPatternColor(
+                                          _patternData!.triggeredPattern ??
+                                              'No data'),
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
                                     ),
@@ -469,37 +595,13 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
                               ),
                               const SizedBox(width: 8),
                               const Text(
-                                'Dengue Risk Assessment',
+                                'Dengue Pattern Assessment',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
                                 ),
                               ),
                             ],
-                          ),
-                          Flexible(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: _getRiskColor(_patternData!.riskLevel)
-                                    .withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: _getRiskColor(_patternData!.riskLevel)
-                                      .withOpacity(0.3),
-                                ),
-                              ),
-                              child: Text(
-                                _patternData!.riskLevel.toUpperCase(),
-                                style: TextStyle(
-                                  color: _getRiskColor(_patternData!.riskLevel),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
                           ),
                         ],
                       ),
@@ -510,8 +612,116 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
                         if (_patternData!.alert != null) _buildAlertCard(),
                         if (_patternData!.lastAnalysisTime != null)
                           _buildLastAnalyzedCard(),
+                        const SizedBox(height: 16),
+                        // Add preventive actions based on risk level
+                        Card(
+                          elevation: 0,
+                          color: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(
+                              color: Colors.grey.shade300,
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.shield_outlined,
+                                      size: 20,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Preventive Actions',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade700,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                ..._getPreventiveActions(
+                                    _patternData!.riskLevel),
+                              ],
+                            ),
+                          ),
+                        ),
                       ],
                     ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Add notes about using tabs and clicking barangays
+        Card(
+          elevation: 0,
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(
+              color: Colors.grey.shade300,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.tips_and_updates_outlined,
+                  size: 20,
+                  color: Colors.grey.shade700,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'For a comprehensive dengue risk assessment, check the risk levels and patterns above.',
+                    style: TextStyle(
+                      color: Colors.grey.shade700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          elevation: 0,
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(
+              color: Colors.grey.shade300,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.touch_app_outlined,
+                  size: 20,
+                  color: Colors.grey.shade700,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Click on any barangay on the map to view its detailed risk assessment and recommendations.',
+                    style: TextStyle(
+                      color: Colors.grey.shade700,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ],

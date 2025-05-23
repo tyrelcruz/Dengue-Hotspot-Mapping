@@ -68,6 +68,14 @@ const login = asyncErrorHandler(async (req, res) => {
     );
   }
 
+  // Check for disabled or banned status
+  if (account.status === "disabled") {
+    throw new UnauthenticatedError("This account has been disabled. Please contact the administrator.");
+  }
+  if (account.status === "banned") {
+    throw new UnauthenticatedError("This account has been banned. Please contact the administrator.");
+  }
+
   const isPasswordCorrect = await account.comparePassword(password);
 
   if (!isPasswordCorrect) {
@@ -98,6 +106,7 @@ const login = asyncErrorHandler(async (req, res) => {
       name: account.username,
       email: account.email,
       role: account.role, // Always use the role from the database
+      status: account.status // Include status in the response
     },
     accessToken,
   });

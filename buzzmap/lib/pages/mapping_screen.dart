@@ -18,6 +18,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:buzzmap/widgets/location_notification.dart';
 import 'package:buzzmap/services/alert_service.dart';
+import 'dart:io' show Platform;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MappingScreen extends StatefulWidget {
   final double? initialLatitude;
@@ -46,6 +48,7 @@ class _MappingScreenState extends State<MappingScreen>
   Set<Marker> _markers = {};
   Set<Polygon> _polygons = {};
   Set<Polygon> _barangayPolygons = {};
+  Set<Polyline> _polylines = {};
   String? selectedSeverity;
 
   Map<String, String> hazardRiskLevels = {};
@@ -198,7 +201,7 @@ class _MappingScreenState extends State<MappingScreen>
       'Pasong Tamo',
     ],
   };
-  late AnimationController _bounceController;
+  late AnimationController _animationController;
   late Animation<double> _bounceAnimation;
 
   // Barangay boundary data - coordinates for polygon borders
@@ -226,25 +229,30 @@ class _MappingScreenState extends State<MappingScreen>
 
   final AlertService _alertService = AlertService();
 
+  Set<Marker> _clusterMarkers = {};
+  double _currentZoom = 11.4;
+  static const double _clusterDistance =
+      0.01; // Distance threshold for clustering
+
   @override
   void initState() {
     super.initState();
-
-    // Initialize the default layer to show Risk Levels initially
-    _layerOptions['Borders'] = true; // Set to true by default
-    _layerOptions['Markers'] = false; // Set to false by default
-
-    _bounceController = AnimationController(
+    _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..repeat(reverse: true);
-
+      duration: const Duration(milliseconds: 300),
+    );
     _bounceAnimation = Tween<double>(begin: 0, end: 10).animate(
       CurvedAnimation(
-        parent: _bounceController,
+        parent: _animationController,
         curve: Curves.easeInOut,
       ),
     );
+
+    // Initialize layer options
+    _layerOptions['Borders'] = true;
+    _layerOptions['Markers'] = widget.reportId !=
+        null; // Enable markers if navigating from notification
+    _layerOptions['Heatmap'] = false;
 
     // Call the GeoJSON loading function for borders
     _loadGeoJSON();
@@ -285,6 +293,12 @@ class _MappingScreenState extends State<MappingScreen>
     _alertService.startPolling();
   }
 
+  void _updateMarkers(Set<Marker> markers) {
+    setState(() {
+      _clusterMarkers = markers;
+    });
+  }
+
   @override
   void dispose() {
     // Cancel the location check timer
@@ -295,7 +309,7 @@ class _MappingScreenState extends State<MappingScreen>
     _mapController.dispose();
 
     // Dispose the bounce controller
-    _bounceController.dispose();
+    _animationController.dispose();
 
     // Clear any existing notifications
     LocationNotificationService.dismiss();
@@ -519,56 +533,296 @@ class _MappingScreenState extends State<MappingScreen>
     return isInside;
   }
 
-  // Call this function when Markers layer is enabled
-  void _loadVerifiedReportMarkers() async {
-    if (!_layerOptions['Markers']!)
-      return; // Ensure it's only called when Markers are enabled
+  void _updateMapLayers() async {
+    Set<Polygon> polygons = {};
+    Set<Marker> markers = {};
+
+    // Add polygons if Borders is enabled or if Markers is enabled
+    if (_layerOptions['Borders']! || _layerOptions['Markers']!) {
+      if (_layerOptions['Markers']!) {
+        // When markers are enabled, show all polygons in green
+        for (var polygon in _barangayPolygons) {
+          polygons.add(Polygon(
+            polygonId: polygon.polygonId,
+            points: polygon.points,
+            strokeColor: const Color(0xFF388E3C), // Lighter green border
+            strokeWidth: 2,
+            fillColor: const Color(0xFF4CAF50).withOpacity(0.3),
+            consumeTapEvents: false,
+          ));
+        }
+      } else {
+        // When only borders are enabled, show polygons with their risk level colors
+        polygons = polygons.union(_barangayPolygons);
+      }
+    }
+
+    // Add markers if Markers is enabled
+    if (_layerOptions['Markers']!) {
+      markers = await _loadVerifiedReportMarkers();
+    } else {
+      // Clear markers when Markers layer is disabled
+      markers = {};
+    }
+
+    // Apply the layers to the map
+    if (mounted) {
+      setState(() {
+        _polygons = polygons;
+        _markers = markers;
+      });
+    }
+  }
+
+  void _updatePolygonsWithRiskLevels() {
+    Set<Polygon> updatedPolygons = {};
+
+    // Name mapping for special cases
+    final nameMapping = {
+      'E. Rodriguez Sr.': 'E. Rodriguez',
+      // Add more mappings if needed
+    };
+
+    for (var polygon in _barangayPolygons) {
+      final barangayName = polygon.polygonId.value;
+      // Check if we need to map this name
+      final lookupName = nameMapping[barangayName] ?? barangayName;
+      final pattern = _barangayPatterns[lookupName]?.toLowerCase();
+      print(
+          'Updating polygon for $barangayName (mapped to $lookupName) with pattern: $pattern'); // Debug log
+
+      Color polygonColor;
+      Color borderColor;
+
+      // If no data is available, use gray
+      if (pattern == null) {
+        print(
+            'No pattern data for polygon $barangayName (mapped to $lookupName)'); // Debug log
+        polygonColor = Colors.grey.shade700;
+        borderColor = Colors.grey.shade800;
+      } else {
+        // Color based on pattern status
+        switch (pattern) {
+          case 'spike':
+            polygonColor = Colors.red.shade700;
+            borderColor = Colors.red.shade900;
+            break;
+          case 'gradual_rise':
+            polygonColor = Colors.orange.shade500;
+            borderColor = Colors.orange.shade700;
+            break;
+          case 'decline':
+            polygonColor = Colors.green.shade600;
+            borderColor = Colors.green.shade800;
+            break;
+          case 'stability':
+            polygonColor = Colors.lightBlue.shade600;
+            borderColor = Colors.lightBlue.shade800;
+            break;
+          default:
+            print(
+                'Unknown pattern for polygon $barangayName (mapped to $lookupName): $pattern'); // Debug log
+            polygonColor = Colors.grey.shade700;
+            borderColor = Colors.grey.shade800;
+        }
+      }
+
+      updatedPolygons.add(Polygon(
+        polygonId: polygon.polygonId,
+        points: polygon.points,
+        strokeColor: _selectedPolygonId == polygon.polygonId
+            ? Colors.redAccent
+            : borderColor,
+        strokeWidth: _selectedPolygonId == polygon.polygonId ? 4 : 2,
+        fillColor: polygonColor.withOpacity(0.3),
+        consumeTapEvents: true,
+        onTap: () {
+          _onBarangayPolygonTapped(barangayName);
+        },
+      ));
+    }
+
+    setState(() {
+      _barangayPolygons = updatedPolygons;
+    });
+  }
+
+  Future<Set<Marker>> _loadVerifiedReportMarkers() async {
+    if (!_layerOptions['Markers']!) return {};
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken');
+
+      if (token == null) {
+        print('❌ No auth token found');
+        return {};
+      }
+
+      print('🔍 Fetching reports with token: ${token.substring(0, 10)}...');
       final response = await http.get(
         Uri.parse('${Config.baseUrl}/api/v1/reports'),
         headers: {
+          'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
       );
 
       if (response.statusCode == 200) {
         final List<dynamic> reports = jsonDecode(response.body);
-        final verifiedReports = reports.where(
-          (r) => r['status']?.toString().toLowerCase() == 'validated',
-        );
+        print('📊 Total reports fetched: ${reports.length}');
 
-        Set<Marker> reportMarkers = {};
+        final verifiedReports = reports.where((r) {
+          final status = r['status']?.toString().toLowerCase();
+          final isVerified = status == 'validated';
+          print('🔍 Report status: $status, isVerified: $isVerified');
+          return isVerified;
+        }).toList();
 
-        for (var report in verifiedReports) {
-          final coords = report['specific_location']?['coordinates'];
-          if (coords == null || coords.length != 2) continue;
+        print('✅ Verified reports: ${verifiedReports.length}');
 
-          final position = LatLng(coords[1], coords[0]);
-          final barangay = report['barangay'] ?? 'Unknown';
+        // Create markers
+        final markers = verifiedReports
+            .map((report) {
+              final coords = report['specific_location']?['coordinates'];
+              if (coords == null || coords.length != 2) {
+                print('❌ Invalid coordinates for report: ${report['_id']}');
+                return null;
+              }
 
-          reportMarkers.add(
-            Marker(
-              markerId: MarkerId(report['_id']),
-              position: position,
-              icon: BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueRed),
-              onTap: () {
-                _showDengueDetails(context, barangay, 1, 'Verified', position);
-              },
-            ),
-          );
+              final position = LatLng(coords[1], coords[0]);
+              final barangay = report['barangay'] ?? 'Unknown';
+
+              return Marker(
+                markerId: MarkerId(report['_id']),
+                position: position,
+                icon: BitmapDescriptor.defaultMarkerWithHue(
+                    BitmapDescriptor.hueRed),
+                onTap: () {
+                  _showDengueDetails(
+                    context,
+                    barangay,
+                    1,
+                    'Verified',
+                    position,
+                  );
+                },
+              );
+            })
+            .whereType<Marker>()
+            .toList();
+
+        // Apply clustering based on zoom level
+        if (_currentZoom < 14) {
+          return _createClusters(markers);
+        } else {
+          return markers.toSet();
         }
-
-        setState(() {
-          _markers = reportMarkers; // Only validated reports will show
-        });
       } else {
         print('❌ Failed to fetch reports: ${response.statusCode}');
+        if (response.statusCode == 401) {
+          print('Authentication failed. Please log in again.');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please log in to view reports'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+        return {};
       }
     } catch (e) {
       print('❌ Exception in _loadVerifiedReportMarkers: $e');
+      return {};
     }
+  }
+
+  Set<Marker> _createClusters(List<Marker> markers) {
+    final clusters = <Marker>[];
+    final processed = <String>{};
+
+    for (var i = 0; i < markers.length; i++) {
+      if (processed.contains(markers[i].markerId.value)) continue;
+
+      final cluster = <Marker>[markers[i]];
+      processed.add(markers[i].markerId.value);
+
+      for (var j = i + 1; j < markers.length; j++) {
+        if (processed.contains(markers[j].markerId.value)) continue;
+
+        if (_areMarkersClose(markers[i], markers[j])) {
+          cluster.add(markers[j]);
+          processed.add(markers[j].markerId.value);
+        }
+      }
+
+      if (cluster.length > 1) {
+        // Create cluster marker
+        final clusterPosition = _getClusterCenter(cluster);
+        clusters.add(
+          Marker(
+            markerId: MarkerId(
+                'cluster_${clusterPosition.latitude}_${clusterPosition.longitude}'),
+            position: clusterPosition,
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueViolet),
+            infoWindow: InfoWindow(
+              title: '${cluster.length} Reports',
+              snippet: 'Tap to zoom in',
+            ),
+            onTap: () {
+              _zoomToCluster(cluster);
+            },
+          ),
+        );
+      } else {
+        clusters.add(cluster[0]);
+      }
+    }
+
+    return clusters.toSet();
+  }
+
+  bool _areMarkersClose(Marker m1, Marker m2) {
+    final latDiff = (m1.position.latitude - m2.position.latitude).abs();
+    final lngDiff = (m1.position.longitude - m2.position.longitude).abs();
+    return latDiff < _clusterDistance && lngDiff < _clusterDistance;
+  }
+
+  LatLng _getClusterCenter(List<Marker> markers) {
+    double latSum = 0;
+    double lngSum = 0;
+    for (var marker in markers) {
+      latSum += marker.position.latitude;
+      lngSum += marker.position.longitude;
+    }
+    return LatLng(
+      latSum / markers.length,
+      lngSum / markers.length,
+    );
+  }
+
+  void _zoomToCluster(List<Marker> cluster) {
+    final bounds = LatLngBounds(
+      southwest: LatLng(
+        cluster.map((m) => m.position.latitude).reduce(min),
+        cluster.map((m) => m.position.longitude).reduce(min),
+      ),
+      northeast: LatLng(
+        cluster.map((m) => m.position.latitude).reduce(max),
+        cluster.map((m) => m.position.longitude).reduce(max),
+      ),
+    );
+
+    _mapController.animateCamera(
+      CameraUpdate.newLatLngBounds(bounds, 50),
+    );
+  }
+
+  bool _isPointInBounds(LatLng point, LatLngBounds bounds) {
+    return bounds.contains(point);
   }
 
   double _estimateBarangaySize(List<LatLng> points) {
@@ -669,21 +923,19 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   Color _getColorForSeverity(String severity) {
+    print('Getting color for severity: $severity');
     switch (severity.toLowerCase()) {
-      case 'stability':
-        return Colors.green;
-      case 'low':
-        return Colors.amber;
-      case 'decline':
-        return Colors.lightGreen;
-      case 'moderate':
-        return Colors.orange;
       case 'spike':
-        return Colors.deepOrange;
-      case 'high':
-        return Colors.red;
+        return Colors.red.shade700;
+      case 'gradual_rise':
+        return Colors.orange.shade500;
+      case 'decline':
+        return Colors.green.shade600;
+      case 'stability':
+        return Colors.lightBlue.shade600;
       default:
-        return Colors.grey;
+        print('Unknown severity: $severity, using grey');
+        return Colors.grey.shade700;
     }
   }
 
@@ -718,9 +970,11 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   void _onBarangayPolygonTapped(String barangayName) {
-    final riskLevel =
-        _barangayRiskLevels[barangayName]?.toLowerCase() ?? 'no data';
-    final pattern = _barangayPatterns[barangayName]?.toLowerCase() ?? '';
+    final data = _dengueData[barangayName];
+    final riskLevel = data?['severity']?.toLowerCase() ?? 'no data';
+    final pattern = data?['pattern']?.toLowerCase() ?? '';
+    final alert = data?['alert'] ?? 'No alerts triggered.';
+    final lastAnalysisTime = data?['last_analysis_time'];
 
     setState(() {
       selectedBarangay = barangayName;
@@ -735,6 +989,8 @@ class _MappingScreenState extends State<MappingScreen>
         'Home Safety Status': riskLevel.toUpperCase(),
         'Pattern': pattern.toUpperCase(),
         'RiskLevel': riskLevel.toUpperCase(),
+        'Alert': alert,
+        'LastAnalysisTime': lastAnalysisTime,
       };
     });
 
@@ -784,45 +1040,6 @@ class _MappingScreenState extends State<MappingScreen>
     _mapController.animateCamera(
       CameraUpdate.newLatLngBounds(bounds, 100), // Increased padding to 100
     );
-  }
-
-  void _updateMapLayers() {
-    Set<Polygon> polygons = {};
-    Set<Marker> markers = {};
-
-    // Add polygons if Borders is enabled or if Markers is enabled
-    if (_layerOptions['Borders']! || _layerOptions['Markers']!) {
-      if (_layerOptions['Markers']!) {
-        // When markers are enabled, show all polygons in green
-        for (var polygon in _barangayPolygons) {
-          polygons.add(Polygon(
-            polygonId: polygon.polygonId,
-            points: polygon.points,
-            strokeColor: const Color(0xFF388E3C), // Lighter green border
-            strokeWidth: 2,
-            fillColor: const Color(0xFF4CAF50).withOpacity(0.3),
-            consumeTapEvents: false,
-          ));
-        }
-      } else {
-        // When only borders are enabled, show polygons with their risk level colors
-        polygons = polygons.union(_barangayPolygons);
-      }
-    }
-
-    // Add markers if Markers is enabled
-    if (_layerOptions['Markers']!) {
-      _loadVerifiedReportMarkers();
-    } else {
-      // Clear markers when Markers layer is disabled
-      markers = {};
-    }
-
-    // Apply the layers to the map
-    setState(() {
-      _polygons = polygons;
-      _markers = markers;
-    });
   }
 
   double _getSeverityHue(String severity) {
@@ -902,15 +1119,33 @@ class _MappingScreenState extends State<MappingScreen>
                             ),
                             zoom: widget.initialZoom ?? 11.4,
                           ),
-                          onMapCreated: (controller) =>
-                              _mapController = controller,
+                          onMapCreated: (controller) {
+                            _mapController = controller;
+                          },
                           circles: _circles,
-                          markers: _markers,
+                          markers: _layerOptions['Markers']!
+                              ? _clusterMarkers
+                              : _markers,
                           polygons: _polygons,
+                          polylines: _polylines,
                           myLocationEnabled: true,
                           myLocationButtonEnabled: true,
                           zoomControlsEnabled: true,
                           mapToolbarEnabled: false,
+                          onCameraMove: (position) {
+                            setState(() {
+                              _currentZoom = position.zoom;
+                            });
+                          },
+                          onCameraIdle: () {
+                            if (_layerOptions['Markers']!) {
+                              _loadVerifiedReportMarkers().then((markers) {
+                                setState(() {
+                                  _clusterMarkers = markers;
+                                });
+                              });
+                            }
+                          },
                         ),
                         if (_isLoading)
                           Center(
@@ -1280,26 +1515,25 @@ class _MappingScreenState extends State<MappingScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Dengue Risk Levels & Patterns'),
+        title: const Text('Dengue Pattern Recognition'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildLegendRow(
-                Colors.grey, 'No Data', 'Information not available'),
-            const SizedBox(height: 8),
-            _buildLegendRow(Colors.green, 'Stable', 'No significant change'),
-            _buildLegendRow(
-                Colors.lightBlue, 'Decline Pattern', 'Decreasing trend'),
+                Colors.grey.shade700, 'No Data', 'Information not available'),
             const SizedBox(height: 8),
             _buildLegendRow(
-                Colors.orange, 'Moderate Risk', 'Slight increase in cases'),
-            _buildLegendRow(
-                Colors.deepOrange, 'Spike Pattern', 'Sudden increase'),
+                Colors.red.shade700, 'Spike', 'Sudden increase in cases'),
+            _buildLegendRow(Colors.orange.shade500, 'Gradual Rise',
+                'Steady increase in cases'),
             const SizedBox(height: 8),
-            _buildLegendRow(Colors.red, 'High Risk', 'Critical situation'),
+            _buildLegendRow(
+                Colors.green.shade600, 'Decline', 'Decreasing trend'),
+            _buildLegendRow(Colors.lightBlue.shade600, 'Stability',
+                'No significant change'),
             const SizedBox(height: 16),
             const Text(
-              'Areas are color-coded based on risk levels and patterns. Click on any area to see detailed information.',
+              'Areas are color-coded based on dengue case patterns. Click on any area to see detailed information.',
               style: TextStyle(fontSize: 12),
             ),
           ],
@@ -1384,13 +1618,15 @@ class _MappingScreenState extends State<MappingScreen>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _legendItem(Colors.grey, 'No Data'),
+            _legendItem(Colors.grey.shade700, 'No Data'),
             const SizedBox(width: 8),
-            _legendItem(Colors.green, 'Stable'),
+            _legendItem(Colors.lightBlue.shade600, 'Stability'),
             const SizedBox(width: 8),
-            _legendItem(Colors.orange, 'Moderate'),
+            _legendItem(Colors.green.shade600, 'Decline'),
             const SizedBox(width: 8),
-            _legendItem(Colors.red, 'High'),
+            _legendItem(Colors.orange.shade500, 'Gradual Rise'),
+            const SizedBox(width: 8),
+            _legendItem(Colors.red.shade700, 'Spike'),
           ],
         ),
       ),
@@ -1507,6 +1743,65 @@ class _MappingScreenState extends State<MappingScreen>
     );
   }
 
+  Future<List<LatLng>> _getDirections(LatLng origin, LatLng destination) async {
+    final apiKey = 'AIzaSyC1qJ8pzXVWuWOEyc7svbEKDa_HEPE2EL0';
+    final url =
+        'https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=$apiKey';
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      final data = jsonDecode(response.body);
+
+      if (data['status'] == 'OK') {
+        final List<LatLng> points = [];
+        final List<dynamic> steps = data['routes'][0]['legs'][0]['steps'];
+
+        for (var step in steps) {
+          final String polyline = step['polyline']['points'];
+          points.addAll(_decodePolyline(polyline));
+        }
+
+        return points;
+      }
+    } catch (e) {
+      print('Error getting directions: $e');
+    }
+
+    // Fallback to direct line if directions fail
+    return [origin, destination];
+  }
+
+  List<LatLng> _decodePolyline(String encoded) {
+    List<LatLng> poly = [];
+    int index = 0, len = encoded.length;
+    int lat = 0, lng = 0;
+
+    while (index < len) {
+      int b, shift = 0, result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1F) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1F) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lng += dlng;
+
+      final p = LatLng(lat / 1E5, lng / 1E5);
+      poly.add(p);
+    }
+    return poly;
+  }
+
   void _showDengueDetails(
     BuildContext context,
     String barangay,
@@ -1531,332 +1826,748 @@ class _MappingScreenState extends State<MappingScreen>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white, // or any color you want
-
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 🔥 Clean Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        streetName.isNotEmpty ? streetName : barangay,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '${barangay.toUpperCase()}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+      builder: (context) => FutureBuilder<List<Map<String, dynamic>>>(
+        future:
+            fetchNearbyHealthFacilities(location.latitude, location.longitude),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+          final facilities = snapshot.data!;
+          int _currentFacilityPage = 0;
+          final PageController _pageController = PageController();
+          return StatefulBuilder(
+            builder: (context, setModalState) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                streetName.isNotEmpty ? streetName : barangay,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '${barangay.toUpperCase()}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _getColorForSeverity(severity),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    severity,
-                    style: TextStyle(
-                      color: severity == 'Low' ? Colors.black : Colors.white,
-                      fontWeight: FontWeight.bold,
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _getColorForSeverity(severity),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            severity,
+                            style: TextStyle(
+                              color: severity == 'Low'
+                                  ? Colors.black
+                                  : Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
-            // Cases
-            Row(
-              children: [
-                const Icon(Icons.warning_amber_rounded),
-                const SizedBox(width: 8),
-                Text(
-                  '$cases reported cases',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+                    // Cases
+                    Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$cases reported cases',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
 
-            // Coordinates
-            Row(
-              children: [
-                const Icon(Icons.location_on),
-                const SizedBox(width: 8),
-                Text(
-                  'Coordinates: ${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
+                    // Coordinates
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Coordinates: ${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
 
-            // Recommendations
-            const Text(
-              'Recommendations:',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            RecommendationsWidget(
-              severity: severity,
-              hazardRiskLevels: hazardRiskLevels,
-              latitude: location.latitude,
-              longitude: location.longitude,
-              selectedBarangay: barangay,
-              barangayColor: _getColorForBarangay(barangay),
-            ),
-
-            const SizedBox(height: 20), // 🔥 SMALL controlled space
-
-            // View Detailed Report Button - flows after recommendations naturally
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => LocationDetailsScreen(
-                        location: barangay,
-                        streetName: streetName, // from reverse geocoding
-                        latitude: location.latitude,
-                        longitude: location.longitude,
-                        cases: _dengueData[barangay]?['cases'] as int,
-                        severity: _dengueData[barangay]?['severity'] as String,
-                        district: selectedDistrict,
+                    // Recommendations
+                    const Text(
+                      'Recommendations:',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                    const SizedBox(height: 8),
+                    RecommendationsWidget(
+                      severity: severity,
+                      hazardRiskLevels: hazardRiskLevels,
+                      latitude: location.latitude,
+                      longitude: location.longitude,
+                      selectedBarangay: barangay,
+                      barangayColor: _getColorForBarangay(barangay),
+                    ),
+
+                    const SizedBox(height: 20),
+                    // --- Critical Facilities Carousel ---
+                    const Text(
+                      'Health Care Facilities Nearby:',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (facilities.isEmpty)
+                      const Text('No nearby health facilities found.'),
+                    if (facilities.isNotEmpty)
+                      SizedBox(
+                        height: 170,
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.arrow_left,
+                                  size: 32, color: Colors.blue),
+                              onPressed: () {
+                                if (_currentFacilityPage > 0) {
+                                  setModalState(() {
+                                    _currentFacilityPage--;
+                                    _pageController.animateToPage(
+                                      _currentFacilityPage,
+                                      duration:
+                                          const Duration(milliseconds: 300),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  });
+                                }
+                              },
+                            ),
+                            Expanded(
+                              child: PageView.builder(
+                                controller: _pageController,
+                                itemCount: facilities.length,
+                                onPageChanged: (index) {
+                                  setModalState(() {
+                                    _currentFacilityPage = index;
+                                  });
+                                },
+                                itemBuilder: (context, index) {
+                                  final facility = facilities[index];
+                                  return GestureDetector(
+                                    onTap: () async {
+                                      // Close the bottom sheet
+                                      Navigator.pop(context);
+
+                                      // First zoom out slightly to show context
+                                      _mapController.animateCamera(
+                                        CameraUpdate.newCameraPosition(
+                                          CameraPosition(
+                                            target: LatLng(
+                                              facility['lat'],
+                                              facility['lng'],
+                                            ),
+                                            zoom: 14.0,
+                                          ),
+                                        ),
+                                      );
+
+                                      // Get directions between report and facility
+                                      final routePoints = await _getDirections(
+                                        location,
+                                        LatLng(
+                                            facility['lat'], facility['lng']),
+                                      );
+
+                                      // Update markers and polyline in the main widget's state
+                                      this.setState(() {
+                                        // Remove any existing facility markers and polylines
+                                        _markers.removeWhere((marker) => marker
+                                            .markerId.value
+                                            .startsWith('facility-'));
+                                        _polylines.clear();
+
+                                        // Add new marker
+                                        _markers.add(
+                                          Marker(
+                                            markerId: MarkerId(
+                                                'facility-${facility['name']}'),
+                                            position: LatLng(
+                                              facility['lat'],
+                                              facility['lng'],
+                                            ),
+                                            icon: BitmapDescriptor
+                                                .defaultMarkerWithHue(
+                                              BitmapDescriptor.hueBlue,
+                                            ),
+                                            infoWindow: InfoWindow(
+                                              title: facility['name'],
+                                              snippet:
+                                                  '${facility['type']} • ${facility['distance_km'].toStringAsFixed(1)} km away',
+                                            ),
+                                          ),
+                                        );
+
+                                        // Add glow effect polyline
+                                        _polylines.add(
+                                          Polyline(
+                                            polylineId:
+                                                const PolylineId('route-glow'),
+                                            points: routePoints,
+                                            color: const Color(0xFFFFD700)
+                                                .withOpacity(
+                                                    0.3), // Semi-transparent yellow
+                                            width:
+                                                12, // Wider than the main line
+                                            patterns: [
+                                              PatternItem.dash(40),
+                                              PatternItem.gap(20),
+                                            ],
+                                          ),
+                                        );
+
+                                        // Add main polyline with proper route
+                                        _polylines.add(
+                                          Polyline(
+                                            polylineId:
+                                                const PolylineId('route'),
+                                            points: routePoints,
+                                            color: const Color(
+                                                0xFFFFD700), // Bright golden yellow
+                                            width: 6, // Increased width
+                                            patterns: [
+                                              PatternItem.dash(
+                                                  40), // Longer dashes
+                                              PatternItem.gap(
+                                                  20), // Longer gaps
+                                            ],
+                                          ),
+                                        );
+                                      });
+
+                                      // After a short delay, zoom in closer
+                                      Future.delayed(
+                                          const Duration(milliseconds: 800),
+                                          () {
+                                        _mapController.animateCamera(
+                                          CameraUpdate.newCameraPosition(
+                                            CameraPosition(
+                                              target: LatLng(
+                                                facility['lat'],
+                                                facility['lng'],
+                                              ),
+                                              zoom: 16.5,
+                                              tilt: 45.0,
+                                            ),
+                                          ),
+                                        );
+                                      });
+
+                                      // Show a snackbar with facility info
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.location_on,
+                                                color: Colors.white,
+                                                size: 20,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  'Viewing ${facility['name']}',
+                                                  style: const TextStyle(
+                                                      color: Colors.white),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          backgroundColor:
+                                              Theme.of(context).primaryColor,
+                                          duration: const Duration(seconds: 3),
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    child: Card(
+                                      elevation: 2,
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 13, vertical: 8),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      color: Colors.white,
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: SingleChildScrollView(
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      facility['name'],
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 16,
+                                                        color: Colors.black87,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.blue
+                                                          .withOpacity(0.1),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              12),
+                                                    ),
+                                                    child: Text(
+                                                      facility['type'],
+                                                      style: const TextStyle(
+                                                        color: Colors.blue,
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons.location_on,
+                                                    size: 14,
+                                                    color: Colors.black54,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Expanded(
+                                                    child: Text(
+                                                      facility['vicinity'],
+                                                      style: const TextStyle(
+                                                        fontSize: 13,
+                                                        color: Colors.black54,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 8),
+                                              if (facility['distance_km'] !=
+                                                  null)
+                                                Row(
+                                                  children: [
+                                                    const Icon(
+                                                      Icons.directions_walk,
+                                                      size: 14,
+                                                      color: Colors.black54,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      '${facility['distance_km'].toStringAsFixed(1)} km away',
+                                                      style: const TextStyle(
+                                                        fontSize: 13,
+                                                        color: Colors.black87,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              const SizedBox(height: 12),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 6,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.blue
+                                                      .withOpacity(0.1),
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
+                                                ),
+                                                child: const Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.touch_app,
+                                                      color: Colors.blue,
+                                                      size: 16,
+                                                    ),
+                                                    SizedBox(width: 4),
+                                                    Text(
+                                                      'Tap to view on map',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors.blue,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.arrow_right,
+                                  size: 32, color: Colors.blue),
+                              onPressed: () {
+                                if (_currentFacilityPage <
+                                    facilities.length - 1) {
+                                  setModalState(() {
+                                    _currentFacilityPage++;
+                                    _pageController.animateToPage(
+                                      _currentFacilityPage,
+                                      duration:
+                                          const Duration(milliseconds: 300),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  });
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (facilities.isNotEmpty)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(facilities.length, (index) {
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: _currentFacilityPage == index ? 16 : 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: _currentFacilityPage == index
+                                  ? Colors.blue
+                                  : Colors.blue.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          );
+                        }),
+                      ),
+                    const SizedBox(height: 20),
+                    // View Detailed Report Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => LocationDetailsScreen(
+                                location: barangay,
+                                streetName: streetName,
+                                latitude: location.latitude,
+                                longitude: location.longitude,
+                                cases: _dengueData[barangay]?['cases'] as int,
+                                severity: _dengueData[barangay]?['severity']
+                                    as String,
+                                district: selectedDistrict,
+                              ),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primary,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('View Detailed Report'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                 ),
-                child: const Text('View Detailed Report'),
-              ),
-            ),
-            const SizedBox(height: 8), // small bottom space
-          ],
-        ),
+              );
+            },
+          );
+        },
       ),
     );
   }
 
+  // Add this helper function to calculate distance between two lat/lng points in km
+  // Haversine formula
+  double calculateDistanceKm(
+      double lat1, double lon1, double lat2, double lon2) {
+    const earthRadius = 6371; // km
+    final dLat = (lat2 - lat1) * pi / 180.0;
+    final dLon = (lon2 - lon1) * pi / 180.0;
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1 * pi / 180.0) *
+            cos(lat2 * pi / 180.0) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return earthRadius * c;
+  }
+
+  Future<List<Map<String, dynamic>>> fetchNearbyHealthFacilities(
+      double lat, double lng) async {
+    final apiKey = 'AIzaSyC1qJ8pzXVWuWOEyc7svbEKDa_HEPE2EL0';
+
+    // Single API call for all health facilities
+    final url =
+        'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=1000&type=hospital&key=$apiKey';
+    final response = await http.get(Uri.parse(url));
+    final data = jsonDecode(response.body);
+
+    if (data['status'] == 'OK') {
+      final List<Map<String, dynamic>> facilities =
+          (data['results'] as List).map((place) {
+        final List types = place['types'] ?? [];
+        String facilityType = '';
+        final nameLower = place['name'].toString().toLowerCase();
+
+        // Strict filtering for admitting facilities
+        if (types.contains('hospital')) {
+          // Check for specific hospital types that can admit patients
+          if (nameLower.contains('general hospital') ||
+              nameLower.contains('medical center') ||
+              nameLower.contains('regional hospital') ||
+              nameLower.contains('provincial hospital') ||
+              nameLower.contains('city hospital') ||
+              nameLower.contains('university hospital') ||
+              nameLower.contains('specialty hospital') ||
+              nameLower.contains('tertiary hospital') ||
+              nameLower.contains('secondary hospital')) {
+            facilityType = 'Hospital';
+          }
+        } else if (nameLower.contains('health center') ||
+            nameLower.contains('healthcare')) {
+          // Only include major health centers that can admit patients
+          if (nameLower.contains('regional') ||
+              nameLower.contains('provincial') ||
+              nameLower.contains('city') ||
+              nameLower.contains('district')) {
+            facilityType = 'Health Center';
+          }
+        }
+
+        // Exclude facilities that are clearly not admitting facilities
+        if (nameLower.contains('clinic') ||
+            nameLower.contains('diagnostic') ||
+            nameLower.contains('laboratory') ||
+            nameLower.contains('imaging') ||
+            nameLower.contains('radiology') ||
+            nameLower.contains('outpatient') ||
+            nameLower.contains('ambulatory') ||
+            nameLower.contains('animal') ||
+            nameLower.contains('pet') ||
+            nameLower.contains('veterinary') ||
+            nameLower.contains('vet') ||
+            nameLower.contains('airgun') ||
+            nameLower.contains('shooting') ||
+            nameLower.contains('dental') ||
+            nameLower.contains('optical') ||
+            nameLower.contains('eye') ||
+            nameLower.contains('vision') ||
+            nameLower.contains('skin') ||
+            nameLower.contains('dermatology') ||
+            nameLower.contains('wellness') ||
+            nameLower.contains('spa')) {
+          facilityType = '';
+        }
+
+        return {
+          'name': place['name'],
+          'type': facilityType,
+          'vicinity': place['vicinity'] ?? '',
+          'lat': place['geometry']['location']['lat'],
+          'lng': place['geometry']['location']['lng'],
+        };
+      }).toList();
+
+      // Remove duplicates and filter by type
+      final seen = <String>{};
+      final all = <Map<String, dynamic>>[];
+
+      for (final facility in facilities) {
+        final key = facility['name'] + facility['vicinity'];
+        if (!seen.contains(key) && facility['type'].isNotEmpty) {
+          // Calculate distance from report location to facility
+          final distance = calculateDistanceKm(
+            lat,
+            lng,
+            facility['lat'],
+            facility['lng'],
+          );
+          facility['distance_km'] = distance;
+          seen.add(key);
+          all.add(facility);
+        }
+      }
+
+      // Sort facilities by distance
+      all.sort((a, b) =>
+          (a['distance_km'] as double).compareTo(b['distance_km'] as double));
+
+      return all;
+    }
+    return [];
+  }
+
   Future<void> _fetchRiskLevels() async {
     try {
+      print('Fetching risk levels from API...');
       final response = await http.get(
         Uri.parse(
             '${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
       );
 
+      print('API Response Status: ${response.statusCode}');
+      print('API Response Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        print('Parsed data: $data');
+
         if (data['success'] == true && data['data'] != null) {
+          print('Data array length: ${(data['data'] as List).length}');
+
           setState(() {
             _barangayRiskLevels = {};
             _barangayPatterns = {};
             _barangayAlerts = {};
 
+            // Name mapping for special cases
+            final nameMapping = {
+              'E. Rodriguez Sr.': 'E. Rodriguez',
+              // Add more mappings if needed
+            };
+
             for (var item in data['data'] as List) {
-              final name = item['name'];
-              if (item['risk_level'] != null) {
-                _barangayRiskLevels[name] =
-                    item['risk_level'].toString().toLowerCase();
+              String name = item['name'];
+              // Check if we need to map this name
+              if (nameMapping.containsKey(name)) {
+                name = nameMapping[name]!;
               }
-              if (item['triggered_pattern'] != null) {
-                _barangayPatterns[name] =
-                    item['triggered_pattern'].toString().toLowerCase();
-              }
-              if (item['alert'] != null) {
-                _barangayAlerts[name] = item['alert'].toString();
-              }
+
+              print('Processing barangay: $name');
+              print('Item data: $item');
+
+              // Handle pattern directly from the pattern field
+              String pattern =
+                  item['pattern']?.toString().toLowerCase() ?? 'stability';
+              _barangayPatterns[name] = pattern;
+              print('Set pattern for $name: ${_barangayPatterns[name]}');
+
+              // Handle alert
+              _barangayAlerts[name] = item['alert']?.toString() ?? '';
+              print('Set alert for $name: ${_barangayAlerts[name]}');
             }
+
+            print('Final _barangayPatterns: $_barangayPatterns');
+            print('Final _barangayAlerts: $_barangayAlerts');
           });
+
           // Update polygons with new risk levels and patterns
           _updatePolygonsWithRiskLevels();
+        } else {
+          print('API response indicates failure or no data');
+          print('Success flag: ${data['success']}');
+          print('Data present: ${data['data'] != null}');
         }
       } else {
-        if (mounted) {
-          LocationNotificationService.show(
-            context: context,
-            title: 'API Error',
-            message:
-                'Failed to fetch risk levels. Status code: ${response.statusCode}',
-            backgroundColor: const Color(0xFFB8585B),
-            duration: const Duration(seconds: 4),
-          );
-        }
+        print('API request failed with status code: ${response.statusCode}');
       }
     } catch (e) {
       print('Error fetching risk levels: $e');
-      if (mounted) {
-        LocationNotificationService.show(
-          context: context,
-          title: 'Connection Error',
-          message:
-              'Unable to connect to the server. Please check your internet connection and try again.',
-          backgroundColor: const Color(0xFFB8585B),
-          duration: const Duration(seconds: 4),
-        );
-      }
+      print('Error stack trace: ${StackTrace.current}');
     }
-  }
-
-  Color _getColorForBarangay(String barangayName) {
-    final riskLevel = _barangayRiskLevels[barangayName]?.toLowerCase();
-    final pattern = _barangayPatterns[barangayName]?.toLowerCase();
-
-    // If no data is available, return gray
-    if (riskLevel == null || pattern == null) return Colors.grey.shade700;
-
-    // If high risk, always return red
-    if (riskLevel == 'high') return Colors.red.shade700;
-
-    // If low risk, check pattern
-    if (riskLevel == 'low') {
-      if (pattern == 'stability') return Colors.green.shade600;
-      if (pattern == 'spike') return Colors.deepOrange.shade600;
-      if (pattern == 'decline') return Colors.lightBlue.shade600;
-      return Colors.green.shade600; // Default for low risk without pattern
-    }
-
-    // For moderate risk
-    if (riskLevel == 'moderate') {
-      if (pattern == 'spike') return Colors.deepOrange.shade600;
-      return Colors.orange.shade500; // Default for moderate risk
-    }
-
-    return Colors.grey.shade700; // Default fallback
-  }
-
-  void _updatePolygonsWithRiskLevels() {
-    Set<Polygon> updatedPolygons = {};
-
-    for (var polygon in _barangayPolygons) {
-      final barangayName = polygon.polygonId.value;
-      final riskLevel = _barangayRiskLevels[barangayName]?.toLowerCase();
-      final pattern = _barangayPatterns[barangayName]?.toLowerCase();
-
-      Color polygonColor;
-      Color borderColor;
-
-      // If no data is available, use gray
-      if (riskLevel == null || pattern == null) {
-        polygonColor = Colors.grey.shade700;
-        borderColor = Colors.grey.shade800;
-      }
-      // If high risk, always use red
-      else if (riskLevel == 'high') {
-        polygonColor = Colors.red.shade700;
-        borderColor = Colors.red.shade900;
-      }
-      // If low risk, check pattern
-      else if (riskLevel == 'low') {
-        if (pattern == 'stability') {
-          polygonColor = Colors.green.shade600;
-          borderColor = Colors.green.shade800;
-        } else if (pattern == 'spike') {
-          polygonColor = Colors.deepOrange.shade600;
-          borderColor = Colors.deepOrange.shade800;
-        } else if (pattern == 'decline') {
-          polygonColor = Colors.lightBlue.shade600;
-          borderColor = Colors.lightBlue.shade800;
-        } else {
-          polygonColor = Colors.green.shade600;
-          borderColor = Colors.green.shade800;
-        }
-      }
-      // For moderate risk
-      else if (riskLevel == 'moderate') {
-        if (pattern == 'spike') {
-          polygonColor = Colors.deepOrange.shade600;
-          borderColor = Colors.deepOrange.shade800;
-        } else {
-          polygonColor = Colors.orange.shade500;
-          borderColor = Colors.orange.shade700;
-        }
-      }
-      // Default fallback
-      else {
-        polygonColor = Colors.grey.shade700;
-        borderColor = Colors.grey.shade800;
-      }
-
-      updatedPolygons.add(Polygon(
-        polygonId: polygon.polygonId,
-        points: polygon.points,
-        strokeColor: _selectedPolygonId == polygon.polygonId
-            ? Colors.redAccent
-            : borderColor,
-        strokeWidth: _selectedPolygonId == polygon.polygonId ? 4 : 2,
-        fillColor: polygonColor.withOpacity(0.3),
-        consumeTapEvents: true,
-        onTap: () {
-          _onBarangayPolygonTapped(barangayName);
-        },
-      ));
-    }
-
-    setState(() {
-      _barangayPolygons = updatedPolygons;
-    });
   }
 
   Future<void> _fetchDengueData() async {
     try {
       final response = await http.get(
-        Uri.parse(
-            '${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
+        Uri.parse('${Config.baseUrl}/api/v1/barangays/get-all-barangays'),
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
+        final List<dynamic> data = jsonDecode(response.body);
+        if (data.isNotEmpty) {
           setState(() {
             _dengueData = Map.fromEntries(
-              (data['data'] as List).map((item) => MapEntry(
+              data.map((item) => MapEntry(
                     item['name'],
                     {
                       'cases':
@@ -1864,8 +2575,13 @@ class _MappingScreenState extends State<MappingScreen>
                       'severity':
                           item['risk_level']?.toString().toLowerCase() ??
                               'Unknown',
-                      'alert': item['alert'],
-                      'pattern': item['triggered_pattern'],
+                      'alert': item['status_and_recommendation']
+                              ?['pattern_based']?['alert'] ??
+                          'No alerts triggered.',
+                      'pattern': item['status_and_recommendation']
+                              ?['pattern_based']?['status'] ??
+                          '',
+                      'last_analysis_time': item['last_analysis_time'],
                     },
                   )),
             );
@@ -1876,6 +2592,43 @@ class _MappingScreenState extends State<MappingScreen>
     } catch (e) {
       print('Error fetching dengue data: $e');
       setState(() => _isLoadingData = false);
+    }
+  }
+
+  Color _getColorForBarangay(String barangayName) {
+    // Name mapping for special cases
+    final nameMapping = {
+      'E. Rodriguez Sr.': 'E. Rodriguez',
+      // Add more mappings if needed
+    };
+
+    // Check if we need to map this name
+    final lookupName = nameMapping[barangayName] ?? barangayName;
+    final pattern = _barangayPatterns[lookupName]?.toLowerCase();
+    print(
+        'Getting color for $barangayName (mapped to $lookupName) with pattern: $pattern'); // Debug log
+
+    // If no data is available, return gray
+    if (pattern == null) {
+      print(
+          'No pattern data for $barangayName (mapped to $lookupName)'); // Debug log
+      return Colors.grey.shade700;
+    }
+
+    // Color based on pattern status
+    switch (pattern) {
+      case 'spike':
+        return Colors.red.shade700;
+      case 'gradual_rise':
+        return Colors.orange.shade500;
+      case 'decline':
+        return Colors.green.shade600;
+      case 'stability':
+        return Colors.lightBlue.shade600;
+      default:
+        print(
+            'Unknown pattern for $barangayName (mapped to $lookupName): $pattern'); // Debug log
+        return Colors.grey.shade700;
     }
   }
 }

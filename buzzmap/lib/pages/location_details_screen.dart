@@ -19,7 +19,7 @@ class LocationDetailsScreen extends StatefulWidget {
   final double longitude;
   final int? cases; // 🔥 ADD THIS
   final String? severity; // 🔥 ADD THIS
-  final String streetName; // 🔥 ADD THIS
+  final String? streetName; // 🔥 Made optional
 
   const LocationDetailsScreen({
     Key? key,
@@ -28,7 +28,7 @@ class LocationDetailsScreen extends StatefulWidget {
     required this.longitude,
     this.cases, // 🔥 not required anymore
     this.severity, // 🔥 not required anymore
-    required this.streetName,
+    this.streetName, // 🔥 Made optional
     this.district,
   }) : super(key: key);
 
@@ -45,21 +45,63 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   List<Map<String, dynamic>> _barangayPosts = [];
   bool _isLoadingPosts = true;
 
+  String? _currentUsername;
+
   @override
   void initState() {
     super.initState();
     _loadDengueData();
     _loadReports();
+    _loadCurrentUsername();
+  }
+
+  Future<void> _loadCurrentUsername() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _currentUsername = prefs.getString('email');
+    });
+  }
+
+  Future<void> _loadDengueData() async {
+    try {
+      final response = await http.get(
+        Uri.parse('${Config.baseUrl}/api/v1/barangays/get-all-barangays'),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final barangayData = data.firstWhere(
+          (item) => item['name'] == widget.location,
+          orElse: () => null,
+        );
+
+        if (barangayData != null) {
+          setState(() {
+            // Use the length of _barangayPosts for cases count
+            cases = _barangayPosts.length;
+            severity = barangayData['status_and_recommendation']
+                        ?['pattern_based']?['status']
+                    ?.toString()
+                    .toLowerCase() ??
+                'Unknown';
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading dengue data: $e');
+    }
   }
 
   Color _getSeverityColor(String severity) {
-    switch (severity) {
-      case 'Severe':
+    switch (severity.toLowerCase()) {
+      case 'spike':
         return Colors.red;
-      case 'Moderate':
+      case 'gradual_rise':
         return Colors.orange;
-      case 'Low':
+      case 'decline':
         return Colors.green;
+      case 'stability':
+        return Colors.blue;
       default:
         return Colors.grey;
     }
@@ -144,20 +186,13 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
         print('Filtered reports: ${_barangayPosts.length}');
         _isLoadingPosts = false;
+
+        // Update cases count after loading reports
+        _loadDengueData();
       });
     } catch (e) {
       print('❌ Error filtering reports: $e');
       setState(() => _isLoadingPosts = false);
-    }
-  }
-
-  void _loadDengueData() {
-    final data = dengueData[widget.location];
-    if (data != null) {
-      setState(() {
-        cases = data['cases'] ?? 0;
-        severity = data['severity'] ?? 'Unknown';
-      });
     }
   }
 
@@ -233,7 +268,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                         ),
                         // Street name (big bold)
                         AutoSizeText(
-                          widget.streetName,
+                          widget.streetName ?? '',
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           minFontSize: 14,
@@ -268,7 +303,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                         '${cases > 0 ? cases : 0} Reported Cases',
                                         style: const TextStyle(
                                           color: Color(0xFF35505A),
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight: FontWeight.w500,
                                           fontSize: 13,
                                         ),
                                         overflow: TextOverflow.ellipsis,
@@ -296,11 +331,11 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                     Flexible(
                                       child: Text(
                                         severity != 'Unknown'
-                                            ? 'Risk Level: $severity'
+                                            ? 'Status: $severity'
                                             : 'Severity N/A',
                                         style: const TextStyle(
                                           color: Colors.white,
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight: FontWeight.w500,
                                           fontSize: 13,
                                         ),
                                         overflow: TextOverflow.ellipsis,
@@ -394,21 +429,30 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 16, horizontal: 16),
                                       child: PostCard(
-                                        username: report['username'],
-                                        whenPosted: report['whenPosted'],
-                                        location: report['location'],
-                                        date: report['date'],
-                                        time: report['time'],
-                                        reportType: report['reportType'],
-                                        description: report['description'],
+                                        username:
+                                            report['username'] ?? 'Anonymous',
+                                        whenPosted:
+                                            report['whenPosted'] ?? 'Just now',
+                                        location: report['location'] ??
+                                            'Unknown Location',
+                                        date: report['date'] ?? 'N/A',
+                                        time: report['time'] ?? 'N/A',
+                                        reportType:
+                                            report['reportType'] ?? 'General',
+                                        description: report['description'] ??
+                                            'No description provided',
                                         numUpvotes: report['numUpvotes'] ?? 0,
                                         numDownvotes:
                                             report['numDownvotes'] ?? 0,
-                                        images:
-                                            List<String>.from(report['images']),
-                                        iconUrl: report['iconUrl'],
+                                        images: List<String>.from(
+                                            report['images'] ?? []),
+                                        iconUrl: report['iconUrl'] ??
+                                            'assets/icons/person_1.svg',
                                         type: 'bordered',
-                                        postId: report['id'],
+                                        postId: report['id'] ?? '',
+                                        isOwner:
+                                            report['email'] == _currentUsername,
+                                        post: report,
                                       ),
                                     ),
                                   )),

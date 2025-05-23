@@ -36,11 +36,12 @@ class NotificationTemplate extends StatelessWidget {
           print('📝 Message: $message');
           print('📍 Location: $latitude, $longitude');
           print('📊 Status: $status');
-          
-          if (status?.toLowerCase() == 'validated' && 
-              latitude != null && 
+
+          if (status?.toLowerCase() == 'validated' &&
+              latitude != null &&
               longitude != null) {
-            print('✅ Validated report with location data, navigating to map...');
+            print(
+                '✅ Validated report with location data, navigating to map...');
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -105,7 +106,8 @@ class NotificationTemplate extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey[800],
-                        fontWeight: isRead ? FontWeight.normal : FontWeight.w500,
+                        fontWeight:
+                            isRead ? FontWeight.normal : FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 4),

@@ -2,17 +2,13 @@ import 'package:buzzmap/pages/otp_screen.dart';
 import 'package:buzzmap/pages/register_screen.dart';
 import 'package:buzzmap/pages/welcome_screen.dart';
 import 'package:buzzmap/pages/home_screen.dart';
+import 'package:buzzmap/pages/forgot_password_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
-import 'package:buzzmap/widgets/webs/street_view_screen.dart';
 import 'package:buzzmap/errors/flushbar.dart'; // Import the new AppFlushBar utility
-
-//Firebase Imports
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 //Share preferences for saving local instances
 import 'package:shared_preferences/shared_preferences.dart';
@@ -32,15 +28,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscureText = true;
   bool _rememberMe = false;
   bool _isLoading = false;
-
-  // Google Sign-In instance
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  // Button Dimensions
-  static const double buttonWidth = 200;
-  static const double buttonHeight = 45;
-  static const double buttonRadius = 30;
 
   @override
   void initState() {
@@ -127,6 +114,13 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('username', username);
         print('👤 Username saved to SharedPreferences: $username');
 
+        // Save user ID to SharedPreferences
+        final userId = responseData['user']?['_id'] ?? '';
+        if (userId.isNotEmpty) {
+          await prefs.setString('userId', userId);
+          print('👤 User ID saved to SharedPreferences: $userId');
+        }
+
         await _saveCredentials();
 
         if (responseData['user']?['verified'] == false) {
@@ -149,73 +143,6 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       print('❌ Login error: $e');
       _showError('Network error. Please check your connection.');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  // Handle Google Sign-In
-  Future<void> _signInWithGoogle() async {
-    try {
-      setState(() => _isLoading = true);
-
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return;
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in with Firebase first
-      final UserCredential userCredential =
-          await _auth.signInWithCredential(credential);
-
-      // Then send to your backend
-      final response = await http.post(
-        Uri.parse('${Config.baseUrl}/api/v1/auth/google-login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': userCredential.user?.email,
-          'name': userCredential.user?.displayName,
-          'googleId': userCredential.user?.uid,
-          'idToken': googleAuth.idToken,
-          'role': 'user',
-        }),
-      );
-      print('🔐 Raw login response: ${response.body}');
-      final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-
-        if (responseData['user']?['verified'] == false) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  OTPScreen(email: userCredential.user?.email ?? ''),
-            ),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => HomeScreen()),
-          );
-        }
-      } else {
-        await _auth.signOut(); // Sign out from Firebase if backend fails
-        await _googleSignIn.signOut();
-        final errorData = jsonDecode(response.body);
-        _showError(errorData['message'] ?? 'Google login failed');
-      }
-    } catch (e) {
-      _showError('Google sign-in failed. Please try again.');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -373,10 +300,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                     });
                                   },
                                   fillColor:
-                                      MaterialStateProperty.resolveWith<Color>(
-                                          (Set<MaterialState> states) {
-                                    if (states
-                                        .contains(MaterialState.selected)) {
+                                      WidgetStateProperty.resolveWith<Color>(
+                                          (Set<WidgetState> states) {
+                                    if (states.contains(WidgetState.selected)) {
                                       return Colors.blue;
                                     }
                                     return const Color.fromARGB(
@@ -398,270 +324,21 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                           TextButton(
-                            onPressed: () async {
-                              // Show dialog to enter email
-                              final TextEditingController
-                                  _forgotEmailController =
-                                  TextEditingController();
-                              final result = await showDialog<String>(
-                                context: context,
-                                builder: (context) {
-                                  return AlertDialog(
-                                    backgroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(18),
-                                    ),
-                                    insetPadding: const EdgeInsets.symmetric(
-                                        horizontal: 30, vertical: 24),
-                                    contentPadding: const EdgeInsets.fromLTRB(
-                                        20, 18, 20, 8),
-                                    title: const Text('Forgot Password',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.bold)),
-                                    content: SizedBox(
-                                      width: 340,
-                                      child: TextField(
-                                        controller: _forgotEmailController,
-                                        keyboardType:
-                                            TextInputType.emailAddress,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Enter your email',
-                                        ),
-                                      ),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(context),
-                                        child: const Text('Cancel'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.pop(
-                                              context,
-                                              _forgotEmailController.text
-                                                  .trim());
-                                        },
-                                        child: const Text('Submit'),
-                                      ),
-                                    ],
-                                  );
-                                },
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const ForgotPasswordScreen(),
+                                ),
                               );
-                              if (result != null && result.isNotEmpty) {
-                                // Send forgot password request
-                                try {
-                                  final response = await http.post(
-                                    Uri.parse(
-                                        '${Config.baseUrl}/api/v1/auth/forgot-password'),
-                                    headers: {
-                                      'Content-Type': 'application/json'
-                                    },
-                                    body: jsonEncode({'email': result}),
-                                  );
-                                  final data = jsonDecode(response.body);
-                                  if (response.statusCode == 200 &&
-                                      data['status'] == 'Success') {
-                                    AppFlushBar.showSuccess(
-                                      context,
-                                      message: data['message'] ??
-                                          'Password reset email sent!',
-                                    );
-                                    // Show dialog to enter OTP and new password
-                                    final TextEditingController _otpController =
-                                        TextEditingController();
-                                    final TextEditingController
-                                        _newPasswordController =
-                                        TextEditingController();
-                                    final TextEditingController
-                                        _confirmPasswordController =
-                                        TextEditingController();
-                                    final resetResult = await showDialog<bool>(
-                                      context: context,
-                                      builder: (context) {
-                                        return AlertDialog(
-                                          backgroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(18),
-                                          ),
-                                          insetPadding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 30, vertical: 24),
-                                          contentPadding:
-                                              const EdgeInsets.fromLTRB(
-                                                  20, 18, 20, 8),
-                                          title: const Text('Reset Password',
-                                              style: TextStyle(
-                                                  fontWeight: FontWeight.bold)),
-                                          content: SizedBox(
-                                            width: 340,
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                TextField(
-                                                  controller: _otpController,
-                                                  keyboardType:
-                                                      TextInputType.number,
-                                                  decoration:
-                                                      const InputDecoration(
-                                                    labelText: 'Enter OTP',
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 12),
-                                                TextField(
-                                                  controller:
-                                                      _newPasswordController,
-                                                  obscureText: true,
-                                                  decoration:
-                                                      const InputDecoration(
-                                                    labelText: 'New Password',
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 12),
-                                                TextField(
-                                                  controller:
-                                                      _confirmPasswordController,
-                                                  obscureText: true,
-                                                  decoration:
-                                                      const InputDecoration(
-                                                    labelText:
-                                                        'Confirm Password',
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context, false),
-                                              child: const Text('Cancel'),
-                                            ),
-                                            TextButton(
-                                              onPressed: () async {
-                                                final otp =
-                                                    _otpController.text.trim();
-                                                final newPassword =
-                                                    _newPasswordController.text;
-                                                final confirmPassword =
-                                                    _confirmPasswordController
-                                                        .text;
-                                                if (otp.isEmpty ||
-                                                    newPassword.isEmpty ||
-                                                    confirmPassword.isEmpty) {
-                                                  AppFlushBar.showError(context,
-                                                      message:
-                                                          'All fields are required.');
-                                                  return;
-                                                }
-                                                if (newPassword !=
-                                                    confirmPassword) {
-                                                  AppFlushBar.showError(context,
-                                                      message:
-                                                          'Passwords do not match.');
-                                                  return;
-                                                }
-                                                // Verify OTP and reset password
-                                                try {
-                                                  final verifyResponse =
-                                                      await http.post(
-                                                    Uri.parse(
-                                                        '${Config.baseUrl}/api/v1/otp/verify'),
-                                                    headers: {
-                                                      'Content-Type':
-                                                          'application/json'
-                                                    },
-                                                    body: jsonEncode({
-                                                      'email': result,
-                                                      'otp': otp,
-                                                      'purpose':
-                                                          'password-reset',
-                                                    }),
-                                                  );
-                                                  final verifyData = jsonDecode(
-                                                      verifyResponse.body);
-                                                  if (verifyResponse
-                                                              .statusCode ==
-                                                          200 &&
-                                                      verifyData[
-                                                              'resetToken'] !=
-                                                          null) {
-                                                    // Now reset the password
-                                                    final resetResponse =
-                                                        await http.post(
-                                                      Uri.parse(
-                                                          '${Config.baseUrl}/api/v1/auth/reset-password'),
-                                                      headers: {
-                                                        'Content-Type':
-                                                            'application/json'
-                                                      },
-                                                      body: jsonEncode({
-                                                        'resetToken':
-                                                            verifyData[
-                                                                'resetToken'],
-                                                        'newPassword':
-                                                            newPassword,
-                                                      }),
-                                                    );
-                                                    final resetData =
-                                                        jsonDecode(
-                                                            resetResponse.body);
-                                                    if (resetResponse
-                                                                .statusCode ==
-                                                            200 &&
-                                                        resetData['status'] ==
-                                                            'Success') {
-                                                      AppFlushBar.showSuccess(
-                                                          context,
-                                                          message: resetData[
-                                                                  'message'] ??
-                                                              'Password reset successful!');
-                                                      Navigator.pop(
-                                                          context, true);
-                                                    } else {
-                                                      AppFlushBar.showError(
-                                                          context,
-                                                          message: resetData[
-                                                                  'message'] ??
-                                                              'Failed to reset password.');
-                                                    }
-                                                  } else {
-                                                    AppFlushBar.showError(
-                                                        context,
-                                                        message: verifyData[
-                                                                'message'] ??
-                                                            'Invalid OTP.');
-                                                  }
-                                                } catch (e) {
-                                                  AppFlushBar.showNetworkError(
-                                                      context);
-                                                }
-                                              },
-                                              child:
-                                                  const Text('Reset Password'),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    );
-                                  } else {
-                                    AppFlushBar.showError(
-                                      context,
-                                      message: data['message'] ??
-                                          'Failed to send password reset email.',
-                                    );
-                                  }
-                                } catch (e) {
-                                  AppFlushBar.showNetworkError(context);
-                                }
-                              }
                             },
                             child: const Text(
                               "Forgot Password?",
                               style: TextStyle(
-                                fontFamily: 'Inter-Regular',
-                                fontSize: 14.0,
-                                fontWeight: FontWeight.w400,
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                color: const Color(0xFF1D4C5E),
                               ),
                             ),
                           ),
@@ -670,8 +347,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 20),
                       Center(
                         child: SizedBox(
-                          width: buttonWidth,
-                          height: buttonHeight,
+                          width: 200,
+                          height: 45,
                           child: _isLoading
                               ? const Center(
                                   child: CircularProgressIndicator(
@@ -680,8 +357,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 )
                               : Material(
-                                  borderRadius:
-                                      BorderRadius.circular(buttonRadius),
+                                  borderRadius: BorderRadius.circular(30),
                                   color: Colors.transparent,
                                   child: Ink(
                                     decoration: BoxDecoration(
@@ -693,8 +369,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           begin: Alignment.centerLeft,
                                           end: Alignment.centerRight,
                                         ),
-                                        borderRadius:
-                                            BorderRadius.circular(buttonRadius),
+                                        borderRadius: BorderRadius.circular(30),
                                         boxShadow: [
                                           BoxShadow(
                                             color:
@@ -706,8 +381,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ]),
                                     child: InkWell(
                                       onTap: _handleLogin,
-                                      borderRadius:
-                                          BorderRadius.circular(buttonRadius),
+                                      borderRadius: BorderRadius.circular(30),
                                       child: const Center(
                                         child: Text(
                                           "Login",
@@ -721,45 +395,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                 ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: Colors.grey[400])),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10),
-                            child: Text("or Login with"),
-                          ),
-                          Expanded(child: Divider(color: Colors.grey[400])),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Center(
-                        child: SizedBox(
-                          width: buttonWidth,
-                          height: buttonHeight,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(buttonRadius),
-                                side: const BorderSide(color: Colors.grey),
-                              ),
-                            ),
-                            onPressed: _isLoading ? null : _signInWithGoogle,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Image.asset(
-                                  'assets/icons/google_logo.png',
-                                  height: buttonHeight * 1.7,
-                                ),
-                                const SizedBox(width: 10),
-                              ],
-                            ),
-                          ),
                         ),
                       ),
                       const SizedBox(height: 20),

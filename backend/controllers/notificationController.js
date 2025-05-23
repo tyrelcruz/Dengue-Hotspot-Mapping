@@ -6,12 +6,12 @@ const User = require("../models/User");
 const cleanupDeletedReports = asyncErrorHandler(async (req, res) => {
   // Find all notifications where report is null (deleted)
   const result = await Notification.deleteMany({
-    report: null
+    report: null,
   });
 
   res.status(200).json({
     message: `Cleaned up ${result.deletedCount} notifications with deleted reports`,
-    deletedCount: result.deletedCount
+    deletedCount: result.deletedCount,
   });
 });
 
@@ -21,7 +21,8 @@ const getNotifications = asyncErrorHandler(async (req, res) => {
   const notifications = await Notification.find({ user: userId })
     .populate({
       path: "report",
-      select: "report_type barangay images date_and_time status"
+      select:
+        "report_type barangay images date_and_time status specific_location",
     })
     .sort({ createdAt: -1 }); // Sort by newest first
 
@@ -47,19 +48,19 @@ const markAsRead = asyncErrorHandler(async (req, res) => {
 // Clean up old notifications
 const cleanupNotifications = asyncErrorHandler(async (req, res) => {
   const userId = req.user.userId;
-  
+
   // Delete notifications older than 30 days
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   const result = await Notification.deleteMany({
     user: userId,
-    createdAt: { $lt: thirtyDaysAgo }
+    createdAt: { $lt: thirtyDaysAgo },
   });
 
   res.status(200).json({
     message: `Cleaned up ${result.deletedCount} old notifications`,
-    deletedCount: result.deletedCount
+    deletedCount: result.deletedCount,
   });
 });
 
@@ -78,7 +79,7 @@ const deleteUserNotifications = asyncErrorHandler(async (req, res) => {
 
   res.status(200).json({
     message: `Deleted ${result.deletedCount} notifications for user ${username}`,
-    deletedCount: result.deletedCount
+    deletedCount: result.deletedCount,
   });
 });
 
@@ -87,5 +88,5 @@ module.exports = {
   markAsRead,
   cleanupNotifications,
   cleanupDeletedReports,
-  deleteUserNotifications
+  deleteUserNotifications,
 };
