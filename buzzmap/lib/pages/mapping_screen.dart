@@ -574,6 +574,79 @@ class _MappingScreenState extends State<MappingScreen>
     }
   }
 
+  void _updatePolygonsWithRiskLevels() {
+    Set<Polygon> updatedPolygons = {};
+
+    // Name mapping for special cases
+    final nameMapping = {
+      'E. Rodriguez Sr.': 'E. Rodriguez',
+      // Add more mappings if needed
+    };
+
+    for (var polygon in _barangayPolygons) {
+      final barangayName = polygon.polygonId.value;
+      // Check if we need to map this name
+      final lookupName = nameMapping[barangayName] ?? barangayName;
+      final pattern = _barangayPatterns[lookupName]?.toLowerCase();
+      print(
+          'Updating polygon for $barangayName (mapped to $lookupName) with pattern: $pattern'); // Debug log
+
+      Color polygonColor;
+      Color borderColor;
+
+      // If no data is available, use gray
+      if (pattern == null) {
+        print(
+            'No pattern data for polygon $barangayName (mapped to $lookupName)'); // Debug log
+        polygonColor = Colors.grey.shade700;
+        borderColor = Colors.grey.shade800;
+      } else {
+        // Color based on pattern status
+        switch (pattern) {
+          case 'spike':
+            polygonColor = Colors.red.shade700;
+            borderColor = Colors.red.shade900;
+            break;
+          case 'gradual_rise':
+            polygonColor = Colors.orange.shade500;
+            borderColor = Colors.orange.shade700;
+            break;
+          case 'decline':
+            polygonColor = Colors.green.shade600;
+            borderColor = Colors.green.shade800;
+            break;
+          case 'stability':
+            polygonColor = Colors.lightBlue.shade600;
+            borderColor = Colors.lightBlue.shade800;
+            break;
+          default:
+            print(
+                'Unknown pattern for polygon $barangayName (mapped to $lookupName): $pattern'); // Debug log
+            polygonColor = Colors.grey.shade700;
+            borderColor = Colors.grey.shade800;
+        }
+      }
+
+      updatedPolygons.add(Polygon(
+        polygonId: polygon.polygonId,
+        points: polygon.points,
+        strokeColor: _selectedPolygonId == polygon.polygonId
+            ? Colors.redAccent
+            : borderColor,
+        strokeWidth: _selectedPolygonId == polygon.polygonId ? 4 : 2,
+        fillColor: polygonColor.withOpacity(0.3),
+        consumeTapEvents: true,
+        onTap: () {
+          _onBarangayPolygonTapped(barangayName);
+        },
+      ));
+    }
+
+    setState(() {
+      _barangayPolygons = updatedPolygons;
+    });
+  }
+
   Future<Set<Marker>> _loadVerifiedReportMarkers() async {
     if (!_layerOptions['Markers']!) return {};
 
@@ -850,21 +923,19 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   Color _getColorForSeverity(String severity) {
+    print('Getting color for severity: $severity');
     switch (severity.toLowerCase()) {
-      case 'stability':
-        return Colors.green;
-      case 'low':
-        return Colors.amber;
-      case 'decline':
-        return Colors.lightGreen;
-      case 'moderate':
-        return Colors.orange;
       case 'spike':
-        return Colors.deepOrange;
-      case 'high':
-        return Colors.red;
+        return Colors.red.shade700;
+      case 'gradual_rise':
+        return Colors.orange.shade500;
+      case 'decline':
+        return Colors.green.shade600;
+      case 'stability':
+        return Colors.lightBlue.shade600;
       default:
-        return Colors.grey;
+        print('Unknown severity: $severity, using grey');
+        return Colors.grey.shade700;
     }
   }
 
@@ -2454,42 +2525,17 @@ class _MappingScreenState extends State<MappingScreen>
               print('Processing barangay: $name');
               print('Item data: $item');
 
-              // Handle risk level
-              if (item['risk_level'] != null) {
-                _barangayRiskLevels[name] =
-                    item['risk_level'].toString().toLowerCase();
-                print('Set risk level for $name: ${_barangayRiskLevels[name]}');
-              }
+              // Handle pattern directly from the pattern field
+              String pattern =
+                  item['pattern']?.toString().toLowerCase() ?? 'stability';
+              _barangayPatterns[name] = pattern;
+              print('Set pattern for $name: ${_barangayPatterns[name]}');
 
-              // Handle pattern from status_and_recommendation
-              if (item['status_and_recommendation'] != null &&
-                  item['status_and_recommendation']['pattern_based'] != null) {
-                String pattern = item['status_and_recommendation']
-                            ['pattern_based']['status']
-                        ?.toString()
-                        .toLowerCase() ??
-                    '';
-                // Normalize pattern names
-                if (pattern == 'spike_pattern') pattern = 'spike';
-                if (pattern == 'gradual_rise') pattern = 'gradual rise';
-                if (pattern == 'decline_pattern') pattern = 'decline';
-                if (pattern == 'stability_pattern') pattern = 'stability';
-                _barangayPatterns[name] = pattern;
-                print('Set pattern for $name: ${_barangayPatterns[name]}');
-              }
-
-              // Handle alert from status_and_recommendation
-              if (item['status_and_recommendation'] != null &&
-                  item['status_and_recommendation']['pattern_based'] != null) {
-                _barangayAlerts[name] = item['status_and_recommendation']
-                            ['pattern_based']['alert']
-                        ?.toString() ??
-                    '';
-                print('Set alert for $name: ${_barangayAlerts[name]}');
-              }
+              // Handle alert
+              _barangayAlerts[name] = item['alert']?.toString() ?? '';
+              print('Set alert for $name: ${_barangayAlerts[name]}');
             }
 
-            print('Final _barangayRiskLevels: $_barangayRiskLevels');
             print('Final _barangayPatterns: $_barangayPatterns');
             print('Final _barangayAlerts: $_barangayAlerts');
           });
@@ -2508,83 +2554,6 @@ class _MappingScreenState extends State<MappingScreen>
       print('Error fetching risk levels: $e');
       print('Error stack trace: ${StackTrace.current}');
     }
-  }
-
-  void _updatePolygonsWithRiskLevels() {
-    Set<Polygon> updatedPolygons = {};
-
-    // Name mapping for special cases
-    final nameMapping = {
-      'E. Rodriguez Sr.': 'E. Rodriguez',
-      // Add more mappings if needed
-    };
-
-    for (var polygon in _barangayPolygons) {
-      final barangayName = polygon.polygonId.value;
-      // Check if we need to map this name
-      final lookupName = nameMapping[barangayName] ?? barangayName;
-      final pattern = _barangayPatterns[lookupName]?.toLowerCase();
-      print(
-          'Updating polygon for $barangayName (mapped to $lookupName) with pattern: $pattern'); // Debug log
-
-      Color polygonColor;
-      Color borderColor;
-
-      // If no data is available, use gray
-      if (pattern == null) {
-        print(
-            'No pattern data for polygon $barangayName (mapped to $lookupName)'); // Debug log
-        polygonColor = Colors.grey.shade700;
-        borderColor = Colors.grey.shade800;
-      } else {
-        // Color based on pattern status
-        switch (pattern) {
-          case 'spike':
-          case 'spike_pattern':
-            polygonColor = Colors.red.shade700;
-            borderColor = Colors.red.shade900;
-            break;
-          case 'gradual rise':
-          case 'gradual_rise':
-            polygonColor = Colors.orange.shade500;
-            borderColor = Colors.orange.shade700;
-            break;
-          case 'decline':
-          case 'decline_pattern':
-            polygonColor = Colors.green.shade600;
-            borderColor = Colors.green.shade800;
-            break;
-          case 'stability':
-          case 'stability_pattern':
-            polygonColor = Colors.lightBlue.shade600;
-            borderColor = Colors.lightBlue.shade800;
-            break;
-          default:
-            print(
-                'Unknown pattern for polygon $barangayName (mapped to $lookupName): $pattern'); // Debug log
-            polygonColor = Colors.grey.shade700;
-            borderColor = Colors.grey.shade800;
-        }
-      }
-
-      updatedPolygons.add(Polygon(
-        polygonId: polygon.polygonId,
-        points: polygon.points,
-        strokeColor: _selectedPolygonId == polygon.polygonId
-            ? Colors.redAccent
-            : borderColor,
-        strokeWidth: _selectedPolygonId == polygon.polygonId ? 4 : 2,
-        fillColor: polygonColor.withOpacity(0.3),
-        consumeTapEvents: true,
-        onTap: () {
-          _onBarangayPolygonTapped(barangayName);
-        },
-      ));
-    }
-
-    setState(() {
-      _barangayPolygons = updatedPolygons;
-    });
   }
 
   Future<void> _fetchDengueData() async {
