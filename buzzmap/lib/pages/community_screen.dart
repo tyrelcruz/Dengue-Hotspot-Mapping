@@ -11,6 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
+import 'package:buzzmap/widgets/post_detail_screen.dart';
+import 'package:buzzmap/errors/flushbar.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -48,14 +50,18 @@ class _CommunityScreenState extends State<CommunityScreen> {
       _prefs = await SharedPreferences.getInstance();
       String? username = _prefs.getString('username');
       String? email = _prefs.getString('email');
+      String? userId = _prefs.getString('userId');
       print(
           '👤 Loading username from SharedPreferences: $username'); // Debug log
       print('📧 Loading email from SharedPreferences: $email'); // Debug log
+      print('👤 Loading userId from SharedPreferences: $userId'); // Debug log
 
       if (username == null ||
           username.isEmpty ||
           email == null ||
-          email.isEmpty) {
+          email.isEmpty ||
+          userId == null ||
+          userId.isEmpty) {
         // Fetch from backend if missing
         final token = _prefs.getString('authToken');
         if (token != null && token.isNotEmpty) {
@@ -72,6 +78,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
               // Try both 'username' and 'name' keys
               final fetchedUsername = data['username'] ?? data['name'] ?? '';
               final fetchedEmail = data['email'] ?? '';
+              final fetchedUserId = data['_id'] ?? '';
               if (fetchedUsername.isNotEmpty) {
                 username = fetchedUsername;
                 await _prefs.setString('username', fetchedUsername);
@@ -82,6 +89,12 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 email = fetchedEmail;
                 await _prefs.setString('email', fetchedEmail);
                 print('📧 Email fetched from backend and saved: $fetchedEmail');
+              }
+              if (fetchedUserId.isNotEmpty) {
+                userId = fetchedUserId;
+                await _prefs.setString('userId', fetchedUserId);
+                print(
+                    '👤 User ID fetched from backend and saved: $fetchedUserId');
               }
             } else {
               print('❌ Failed to fetch user profile: ${response.body}');
@@ -111,9 +124,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Future<List<Map<String, dynamic>>> fetchReports() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('authToken');
-    final currentEmail = prefs.getString('email');
-    print(
-        '📧 Current email from SharedPreferences: $currentEmail'); // Debug log
+    final currentUserId = prefs.getString('userId');
 
     final response = await http.get(
       Uri.parse('${Config.baseUrl}/api/v1/reports'),
@@ -125,57 +136,69 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
-      print('📱 Fetched reports: ${data.length}'); // Debug log
 
-      return data
-          .where((report) => report['status'] == 'Validated')
-          .map<Map<String, dynamic>>((report) {
-        final DateTime reportDate = DateTime.parse(report['date_and_time']);
-        final DateTime now = DateTime.now();
-        final Duration difference = now.difference(reportDate);
+      // Process reports in parallel
+      final reports = await Future.wait(
+        data
+            .where((report) => report['status'] == 'Validated')
+            .map((report) async {
+          final DateTime reportDate = DateTime.parse(report['date_and_time']);
+          final DateTime now = DateTime.now();
+          final Duration difference = now.difference(reportDate);
 
-        String whenPosted;
-        if (difference.inDays > 0) {
-          whenPosted = '${difference.inDays} days ago';
-        } else if (difference.inHours > 0) {
-          whenPosted = '${difference.inHours} hours ago';
-        } else if (difference.inMinutes > 0) {
-          whenPosted = '${difference.inMinutes} minutes ago';
-        } else {
-          whenPosted = 'Just now';
-        }
+          String whenPosted;
+          if (difference.inDays > 0) {
+            whenPosted = '${difference.inDays} days ago';
+          } else if (difference.inHours > 0) {
+            whenPosted = '${difference.inHours} hours ago';
+          } else if (difference.inMinutes > 0) {
+            whenPosted = '${difference.inMinutes} minutes ago';
+          } else {
+            whenPosted = 'Just now';
+          }
 
-        final username = report['user']?['username'] ?? 'Anonymous';
-        final email = report['user']?['email'] ?? '';
-        print('👤 Report username: $username'); // Debug log
-        print('📧 Report email: $email'); // Debug log
-        print('📧 Is current user? ${email == currentEmail}'); // Debug log
+          final username = report['user']?['username'] ?? 'Anonymous';
+          final email = report['user']?['email'] ?? '';
+          final userId = report['user']?['_id'] ?? '';
 
-        return {
-          'id': report['_id'],
-          'username': username,
-          'email': email,
-          'whenPosted': whenPosted,
-          'location': '${report['barangay']}, Quezon City',
-          'barangay': report['barangay'],
-          'date': '${reportDate.month}/${reportDate.day}/${reportDate.year}',
-          'time':
-              '${reportDate.hour.toString().padLeft(2, '0')}:${reportDate.minute.toString().padLeft(2, '0')}',
-          'reportType': report['report_type'],
-          'description': report['description'],
-          'images': report['images'] != null
-              ? List<String>.from(report['images'])
-              : <String>[],
-          'iconUrl': 'assets/icons/person_1.svg',
-          'status': report['status'],
-        };
-      }).toList();
+          return {
+            'id': report['_id'],
+            'username': username,
+            'email': email,
+            'userId': userId,
+            'whenPosted': whenPosted,
+            'location': '${report['barangay']}, Quezon City',
+            'barangay': report['barangay'],
+            'date': '${reportDate.month}/${reportDate.day}/${reportDate.year}',
+            'time':
+                '${reportDate.hour.toString().padLeft(2, '0')}:${reportDate.minute.toString().padLeft(2, '0')}',
+            'reportType': report['report_type'],
+            'description': report['description'],
+            'images': report['images'] != null
+                ? List<String>.from(report['images'])
+                : <String>[],
+            'iconUrl': 'assets/icons/person_1.svg',
+            'status': report['status'],
+            'numUpvotes': report['upvotes']?.length ?? 0,
+            'numDownvotes': report['downvotes']?.length ?? 0,
+            'date_and_time': report['date_and_time'],
+          };
+        }),
+      );
+
+      return reports;
     } else {
-      throw Exception('Failed to fetch reports');
+      throw Exception('Failed to load reports');
     }
   }
 
   Future<void> _loadReports() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       final reports = await fetchReports();
       if (mounted) {
@@ -185,38 +208,79 @@ class _CommunityScreenState extends State<CommunityScreen> {
         });
       }
     } catch (e) {
-      print('❌ Error loading reports: $e');
+      print('Error loading reports: $e');
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
+        AppFlushBar.showError(
+          context,
+          title: 'Loading Failed',
+          message: 'Unable to load reports. Please try again.',
+        );
       }
     }
   }
 
   List<Map<String, dynamic>> get _currentPosts {
     final query = _searchQuery.toLowerCase();
-    final filtered = _allPosts.where((post) {
+    var filtered = _allPosts.where((post) {
       return post['username'].toLowerCase().contains(query) ||
           post['description'].toLowerCase().contains(query) ||
           post['reportType'].toLowerCase().contains(query) ||
           post['barangay'].toLowerCase().contains(query);
     }).toList();
 
-    if (selectedIndex == 2) {
+    // Apply sorting based on selected tab
+    if (selectedIndex == 0) {
+      // Popular tab
+      filtered.sort(
+          (a, b) => (b['numUpvotes'] as int).compareTo(a['numUpvotes'] as int));
+    } else if (selectedIndex == 1) {
+      // Latest tab
+      filtered.sort((a, b) => (b['date_and_time'] as String)
+          .compareTo(a['date_and_time'] as String));
+    } else if (selectedIndex == 2) {
+      // My Posts tab
       print('🔍 Filtering for My Posts'); // Debug log
-      final currentEmail = _prefs.getString('email')?.toLowerCase() ?? '';
-      print('📧 Current email: $currentEmail'); // Debug log
+      final currentUserId = _prefs.getString('userId');
+      print('👤 Current user ID: $currentUserId'); // Debug log
+      print(
+          '📱 Total posts before filtering: ${_allPosts.length}'); // Debug log
 
-      final myPosts = filtered.where((post) {
-        final postEmail = (post['email'] ?? '').toString().toLowerCase();
-        final isMyPost = postEmail == currentEmail;
-        print('📧 Post email: $postEmail');
+      if (currentUserId == null || currentUserId.isEmpty) {
+        print('❌ No user ID found in SharedPreferences');
+        return [];
+      }
+
+      // Filter posts by current user's ID
+      filtered = _allPosts.where((post) {
+        final postUserId = post['userId'] ?? '';
+        final isMyPost = postUserId == currentUserId;
+        print('👤 Post user ID: $postUserId');
         print('🔒 Is my post? $isMyPost');
+        print('📝 Post data: $post'); // Debug log for post data
         return isMyPost;
       }).toList();
 
-      print('📱 Found ${myPosts.length} of my posts'); // Debug log
-      return myPosts;
+      print('📱 Posts after filtering: ${filtered.length}'); // Debug log
+
+      // Then apply search filter if there's a search query
+      if (query.isNotEmpty) {
+        filtered = filtered.where((post) {
+          return post['username'].toLowerCase().contains(query) ||
+              post['description'].toLowerCase().contains(query) ||
+              post['reportType'].toLowerCase().contains(query) ||
+              post['barangay'].toLowerCase().contains(query);
+        }).toList();
+      }
+
+      // Sort my posts by date (newest first)
+      filtered.sort((a, b) => (b['date_and_time'] as String)
+          .compareTo(a['date_and_time'] as String));
+      print('📱 Found ${filtered.length} of my posts'); // Debug log
     }
+
     return filtered;
   }
 
@@ -393,30 +457,48 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     )
                   else
                     ..._currentPosts.map((post) {
-                      final isOwner = post['email'] == _currentUsername;
-                      print('👤 Post username: ${post['username']}');
-                      print('📧 Post email: ${post['email']}');
-                      print('📧 Current email: $_currentUsername');
-                      print('🔒 Is owner: $isOwner');
-                      print('🔍 Post data: $post'); // Debug log
+                      final isOwner =
+                          post['userId'] == _prefs.getString('userId');
+                      print('👤 Post username: \\${post['username']}');
+                      print('👤 Post userId: \\${post['userId']}');
+                      print(
+                          '👤 Current userId: \\${_prefs.getString('userId')}');
+                      print('🔒 Is owner: \\${isOwner}');
+                      print('🔍 Post data: \\${post}'); // Debug log
 
-                      return PostCard(
-                        username: post['username'],
-                        whenPosted: post['whenPosted'],
-                        location: post['location'],
-                        date: post['date'],
-                        time: post['time'],
-                        reportType: post['reportType'],
-                        description: post['description'],
-                        numUpvotes: post['numUpvotes'] ?? 0,
-                        numDownvotes: post['numDownvotes'] ?? 0,
-                        images: List<String>.from(post['images']),
-                        iconUrl: post['iconUrl'],
-                        type: 'bordered',
-                        onReport: () => _reportPost(post),
-                        onDelete: () => _deletePost(post),
-                        isOwner: isOwner,
-                        postId: post['id'],
+                      return GestureDetector(
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  PostDetailScreen(post: post),
+                            ),
+                          );
+                          setState(
+                              () {}); // Refresh EngagementRow/comment count
+                        },
+                        child: PostCard(
+                          key: ValueKey(
+                              post['id']), // Ensure unique key for rebuild
+                          post: post,
+                          username: post['username'],
+                          whenPosted: post['whenPosted'],
+                          location: post['location'],
+                          date: post['date'],
+                          time: post['time'],
+                          reportType: post['reportType'],
+                          description: post['description'],
+                          numUpvotes: post['numUpvotes'] ?? 0,
+                          numDownvotes: post['numDownvotes'] ?? 0,
+                          images: List<String>.from(post['images']),
+                          iconUrl: post['iconUrl'],
+                          type: 'bordered',
+                          onReport: () => _reportPost(post),
+                          onDelete: () => _deletePost(post),
+                          isOwner: isOwner,
+                          postId: post['id'],
+                        ),
                       );
                     }),
                 ],

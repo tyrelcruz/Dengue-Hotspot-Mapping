@@ -1,2 +1,0 @@
-C:/Users/tyrel/OneDrive/Documents/NEO GITHUB/buzzmap/android/app/.cxx/Debug/124e584p/x86/CMakeFiles/edit_cache.dir
-C:/Users/tyrel/OneDrive/Documents/NEO GITHUB/buzzmap/android/app/.cxx/Debug/124e584p/x86/CMakeFiles/rebuild_cache.dir

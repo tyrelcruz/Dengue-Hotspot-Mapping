@@ -5,15 +5,19 @@ import 'package:http/http.dart' as http;
 //Login
 class Config {
   static String get baseUrl {
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:4000';
+    if (Platform.isIOS) {
+      return 'http://127.0.0.1:4000'; // For iOS simulator
+    } else if (Platform.isAndroid) {
+      return 'http://10.0.2.2:4000'; // For Android emulator
+    } else {
+      // For physical devices, try to detect the local network
+      return 'http://192.168.1.45:4000'; // Default fallback
     }
-    return 'http://localhost:4000';
   }
 
   // Add these URLs
-  static String get verifyOtpUrl => '$baseUrl/api/v1/auth/verify-otp';
-  static String get resendOtpUrl => '$baseUrl/api/v1/auth/resend-otp';
+  static String get verifyOtpUrl => '$baseUrl/api/v1/otp/verify';
+  static String get resendOtpUrl => '$baseUrl/api/v1/otp/request';
   static String get googleLoginUrl => '$baseUrl/api/v1/auth/google-login';
   static String get createPostUrl => '$baseUrl/api/v1/reports';
   static String get createPostwImageUrl => '$baseUrl/api/v1/posts';
@@ -22,8 +26,7 @@ class Config {
 
 //AuthService
 class AuthService {
-  static final String baseUrl =
-      Platform.isAndroid ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
+  static String get baseUrl => Config.baseUrl;
 
   static Future<bool> checkEmailExists(String email) async {
     try {
@@ -44,7 +47,7 @@ class AuthService {
         Uri.parse(Config.googleLoginUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'token': idToken, // Pass the actual Google ID token
+          'token': idToken,
         }),
       );
 

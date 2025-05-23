@@ -66,7 +66,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   // Password requirements check
-  bool get _hasMinLength => _passwordController.text.length >= 8 && _passwordController.text.length <= 20;
+  bool get _hasMinLength =>
+      _passwordController.text.length >= 8 &&
+      _passwordController.text.length <= 20;
   bool get _hasCapital => RegExp(r'[A-Z]').hasMatch(_passwordController.text);
   bool get _hasNumber => RegExp(r'[0-9]').hasMatch(_passwordController.text);
   bool get _noSpaces => !_passwordController.text.contains(' ');
@@ -270,21 +272,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
           link: _layerLink,
           showWhenUnlinked: false,
           offset: const Offset(0, 45),
-      child: Center(
-          child: Container(
+          child: Center(
+            child: Container(
               width: 240,
               margin: const EdgeInsets.symmetric(horizontal: 20),
-            decoration: BoxDecoration(
-              color: Colors.white,
+              decoration: BoxDecoration(
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(6),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
               child: Stack(
                 children: [
                   // Arrow pointing up
@@ -298,11 +300,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   Padding(
                     padding: const EdgeInsets.all(10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
                           'Password Requirements:',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
@@ -310,13 +312,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             fontSize: 12,
                             decoration: TextDecoration.none,
                           ),
-                ),
+                        ),
                         const SizedBox(height: 6),
-                _buildReqRow(_hasMinLength, '8-20 ', 'Characters'),
-                _buildReqRow(_hasCapital, 'At least ', 'one capital letter', highlightRed: !_hasCapital),
-                _buildReqRow(_hasNumber, 'At least ', 'one number'),
-                _buildReqRow(_noSpaces, '', 'No spaces'),
-              ],
+                        _buildReqRow(_hasMinLength, '8-20 ', 'Characters'),
+                        _buildReqRow(
+                            _hasCapital, 'At least ', 'one capital letter',
+                            highlightRed: !_hasCapital),
+                        _buildReqRow(_hasNumber, 'At least ', 'one number'),
+                        _buildReqRow(_noSpaces, '', 'No spaces'),
+                      ],
                     ),
                   ),
                 ],
@@ -335,7 +339,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _overlayEntry = null;
   }
 
-  Widget _buildReqRow(bool met, String prefix, String main, {bool highlightRed = false}) {
+  Widget _buildReqRow(bool met, String prefix, String main,
+      {bool highlightRed = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1),
       child: Row(
@@ -350,7 +355,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Text(
             prefix,
             style: TextStyle(
-              color: met ? const Color(0xFF1D4C5E) : (highlightRed ? Colors.red : Colors.black87),
+              color: met
+                  ? const Color(0xFF1D4C5E)
+                  : (highlightRed ? Colors.red : Colors.black87),
               fontWeight: FontWeight.w500,
               fontSize: 11,
               decoration: TextDecoration.none,
@@ -358,10 +365,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           Flexible(
             child: Text(
-            main,
-            style: TextStyle(
-                color: met ? const Color(0xFF1D4C5E) : (highlightRed ? Colors.red : Colors.black87),
-                fontWeight: highlightRed && !met ? FontWeight.bold : FontWeight.w500,
+              main,
+              style: TextStyle(
+                color: met
+                    ? const Color(0xFF1D4C5E)
+                    : (highlightRed ? Colors.red : Colors.black87),
+                fontWeight:
+                    highlightRed && !met ? FontWeight.bold : FontWeight.w500,
                 fontSize: 11,
                 decoration: TextDecoration.none,
               ),
@@ -383,17 +393,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               const SizedBox(height: 50),
               Padding(
-                padding:
-                    const EdgeInsets.only(top: 1, left: 20, right: 20, bottom: 0),
+                padding: const EdgeInsets.only(
+                    top: 1, left: 20, right: 20, bottom: 0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Color(0xFF1D4C5E)),
+                      icon: const Icon(Icons.arrow_back,
+                          color: Color(0xFF1D4C5E)),
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => WelcomeScreen()),
+                          MaterialPageRoute(
+                              builder: (context) => WelcomeScreen()),
                         );
                       },
                     ),
@@ -414,8 +426,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     color: Color(0xFF1D4C5E)),
               ),
               Padding(
-                padding:
-                    const EdgeInsets.only(top: 0, bottom: 0, left: 40, right: 40),
+                padding: const EdgeInsets.only(
+                    top: 0, bottom: 0, left: 40, right: 40),
                 child: Text(
                   "Sign Up to join us today and be part of the movement to track, report, and prevent dengue outbreaks.",
                   textAlign: TextAlign.center,
@@ -557,289 +569,332 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         height: textFieldHeight,
                         child: CompositedTransformTarget(
                           link: _layerLink,
-                        child: TextField(
-                          focusNode: _passwordFocusNode,
-                          obscureText: _obscurePassword,
-                          controller: _passwordController,
-                          onChanged: (val) {
+                          child: TextField(
+                            focusNode: _passwordFocusNode,
+                            obscureText: _obscurePassword,
+                            controller: _passwordController,
+                            onChanged: (val) {
                               if (_overlayEntry != null) {
                                 _showOverlay();
-                            }
-                          },
+                              }
+                            },
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: textFieldFillColor,
+                              contentPadding: textFieldContentPadding,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                    textFieldBorderRadius),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                    textFieldBorderRadius),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                    textFieldBorderRadius),
+                                borderSide: BorderSide.none,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      const Text(
+                        "Confirm Password",
+                        style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white),
+                      ),
+                      const SizedBox(height: 5),
+                      SizedBox(
+                        height: textFieldHeight,
+                        child: TextField(
+                          obscureText: _obscureConfirmPassword,
+                          controller: _confirmPasswordController,
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: textFieldFillColor,
                             contentPadding: textFieldContentPadding,
                             border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(textFieldBorderRadius),
+                              borderRadius:
+                                  BorderRadius.circular(textFieldBorderRadius),
                               borderSide: BorderSide.none,
                             ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(textFieldBorderRadius),
-                              borderSide: BorderSide.none,
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscureConfirmPassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: Colors.grey,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscureConfirmPassword =
+                                      !_obscureConfirmPassword;
+                                });
+                              },
                             ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(textFieldBorderRadius),
-                          borderSide: BorderSide.none,
-                        ),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: Colors.grey,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                      ),
-                  const SizedBox(height: 15),
-                  const Text(
-                    "Confirm Password",
-                    style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white),
-                  ),
-                  const SizedBox(height: 5),
-                  SizedBox(
-                    height: textFieldHeight,
-                    child: TextField(
-                      obscureText: _obscureConfirmPassword,
-                      controller: _confirmPasswordController,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: textFieldFillColor,
-                        contentPadding: textFieldContentPadding,
-                        border: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(textFieldBorderRadius),
-                          borderSide: BorderSide.none,
-                        ),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscureConfirmPassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: Colors.grey,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _obscureConfirmPassword =
-                                  !_obscureConfirmPassword;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      ClipOval(
-                        child: Checkbox(
-                          value: _agreeToTerms,
-                          onChanged: (value) {
-                            setState(() {
-                              _agreeToTerms = value ?? false;
-                            });
-                          },
-                          fillColor: MaterialStateProperty.resolveWith<Color>(
-                              (Set<MaterialState> states) {
-                            if (states.contains(MaterialState.selected)) {
-                              return Colors
-                                  .blue; // Background color when checked
-                            }
-                            return const Color.fromARGB(0, 255, 255,
-                                255); // Background color when unchecked
-                          }),
-                          checkColor: Colors.white, // Color of the checkmark
-                          side: const BorderSide(
-                              color: Color.fromARGB(255, 255, 255, 255),
-                              width: 2), // Border color and width
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      GestureDetector(
-                        onTap: _showTermsAndConditions,
-                        child: Text(
-                          "I agree to the Terms and Conditions",
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 13,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  if (_errorMessage.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 5),
-                      child: Text(
-                        _errorMessage,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.red,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-
-                  const SizedBox(height: 10),
-                  Center(
-                    child: SizedBox(
-                      width: 180,
-                      height: 50,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFF7B84B),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                            onPressed: _isRegistering ? null : () async {
-                              setState(() { _isRegistering = true; });
-                          final firstName = _firstNameController.text.trim();
-                          final lastName = _lastNameController.text.trim();
-                          final email = _emailController.text.trim();
-                          final password = _passwordController.text;
-                              final confirmPassword = _confirmPasswordController.text;
-
-                          // Validation checks
-                          if (firstName.isEmpty ||
-                              lastName.isEmpty ||
-                              email.isEmpty ||
-                              password.isEmpty ||
-                              confirmPassword.isEmpty) {
-                            AppFlushBar.showError(
-                              context,
-                              message: 'All fields are required!',
-                            );
-                                setState(() { _isRegistering = false; });
-                            return;
-                          }
-
-                          if (!_agreeToTerms) {
-                            AppFlushBar.showCustom(
-                              context,
-                              title: 'Terms Required',
-                                  message: 'Please agree to the Terms and Conditions.',
-                              backgroundColor: Colors.orange,
-                            );
-                                setState(() { _isRegistering = false; });
-                            return;
-                          }
-
-                          if (!_isValidEmail(email)) {
-                            AppFlushBar.showCustom(
-                              context,
-                              title: 'Invalid Email',
-                              message: 'Please enter a valid email address.',
-                              backgroundColor: Colors.orange,
-                            );
-                                setState(() { _isRegistering = false; });
-                            return;
-                          }
-
-                          if (!_isValidPassword(password)) {
-                            AppFlushBar.showCustom(
-                              context,
-                              title: 'Weak Password',
-                                  message: 'Password must have at least 8 characters, uppercase, lowercase, number, and a special character.',
-                              backgroundColor: Colors.orange,
-                            );
-                                setState(() { _isRegistering = false; });
-                            return;
-                          }
-
-                          if (password != confirmPassword) {
-                            AppFlushBar.showError(
-                              context,
-                              title: 'Mismatch',
-                              message: 'Passwords do not match.',
-                            );
-                                setState(() { _isRegistering = false; });
-                            return;
-                          }
-
-                          final baseUrl = Platform.isAndroid
-                              ? 'http://10.0.2.2:4000'
-                              : 'http://localhost:4000';
-                          final checkEmailUrl =
-                              Uri.parse('$baseUrl/api/v1/auth/check-email');
-
-                          try {
-                            final response = await http.post(
-                              checkEmailUrl,
-                              headers: {"Content-Type": "application/json"},
-                              body: jsonEncode({"email": email}),
-                            );
-
-                            if (response.statusCode == 200 &&
-                                response.body == 'true') {
-                              AppFlushBar.showError(
-                                context,
-                                title: 'Account Exists',
-                                    message: 'An account with this email already exists.',
-                              );
-                                  setState(() { _isRegistering = false; });
-                              return;
-                            }
-
-                            final registerUrl =
-                                Uri.parse('$baseUrl/api/v1/auth/register');
-                            final registerResponse = await http.post(
-                              registerUrl,
-                              headers: {"Content-Type": "application/json"},
-                              body: jsonEncode({
-                                "username": "$firstName $lastName",
-                                "email": email,
-                                "password": password,
-                                "role": "user",
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          ClipOval(
+                            child: Checkbox(
+                              value: _agreeToTerms,
+                              onChanged: (value) {
+                                setState(() {
+                                  _agreeToTerms = value ?? false;
+                                });
+                              },
+                              fillColor:
+                                  MaterialStateProperty.resolveWith<Color>(
+                                      (Set<MaterialState> states) {
+                                if (states.contains(MaterialState.selected)) {
+                                  return Colors
+                                      .blue; // Background color when checked
+                                }
+                                return const Color.fromARGB(0, 255, 255,
+                                    255); // Background color when unchecked
                               }),
-                            );
+                              checkColor:
+                                  Colors.white, // Color of the checkmark
+                              side: const BorderSide(
+                                  color: Color.fromARGB(255, 255, 255, 255),
+                                  width: 2), // Border color and width
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          GestureDetector(
+                            onTap: _showTermsAndConditions,
+                            child: Text(
+                              "I agree to the Terms and Conditions",
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 13,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_errorMessage.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 5),
+                          child: Text(
+                            _errorMessage,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.red,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
 
-                            if (registerResponse.statusCode == 200 ||
-                                registerResponse.statusCode == 201) {
-                              AppFlushBar.showSuccess(
-                                context,
-                                message: 'Account created successfully!',
-                              );
+                      const SizedBox(height: 10),
+                      Center(
+                        child: SizedBox(
+                          width: 180,
+                          height: 50,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF7B84B),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                            ),
+                            onPressed: _isRegistering
+                                ? null
+                                : () async {
+                                    setState(() {
+                                      _isRegistering = true;
+                                    });
+                                    final firstName =
+                                        _firstNameController.text.trim();
+                                    final lastName =
+                                        _lastNameController.text.trim();
+                                    final email = _emailController.text.trim();
+                                    final password = _passwordController.text;
+                                    final confirmPassword =
+                                        _confirmPasswordController.text;
 
-                              Future.delayed(Duration(seconds: 1), () {
-                                    setState(() { _isRegistering = false; });
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) => OTPScreen(
-                                          email: _emailController.text)),
-                                );
-                              });
-                            } else {
-                              final errorData = jsonDecode(registerResponse.body);
-                              final errorMessage = errorData['errors']?[0] ?? 
-                                  errorData['message'] ?? 
-                                  'Registration failed. Please try again.';
-                              AppFlushBar.showError(
-                                context,
-                                message: errorMessage,
-                              );
-                                  setState(() { _isRegistering = false; });
-                            }
-                          } catch (e) {
-                            AppFlushBar.showNetworkError(context);
-                                setState(() { _isRegistering = false; });
-                          }
-                        },
+                                    // Validation checks
+                                    if (firstName.isEmpty ||
+                                        lastName.isEmpty ||
+                                        email.isEmpty ||
+                                        password.isEmpty ||
+                                        confirmPassword.isEmpty) {
+                                      AppFlushBar.showError(
+                                        context,
+                                        message: 'All fields are required!',
+                                      );
+                                      setState(() {
+                                        _isRegistering = false;
+                                      });
+                                      return;
+                                    }
+
+                                    if (!_agreeToTerms) {
+                                      AppFlushBar.showCustom(
+                                        context,
+                                        title: 'Terms Required',
+                                        message:
+                                            'Please agree to the Terms and Conditions.',
+                                        backgroundColor: Colors.orange,
+                                      );
+                                      setState(() {
+                                        _isRegistering = false;
+                                      });
+                                      return;
+                                    }
+
+                                    if (!_isValidEmail(email)) {
+                                      AppFlushBar.showCustom(
+                                        context,
+                                        title: 'Invalid Email',
+                                        message:
+                                            'Please enter a valid email address.',
+                                        backgroundColor: Colors.orange,
+                                      );
+                                      setState(() {
+                                        _isRegistering = false;
+                                      });
+                                      return;
+                                    }
+
+                                    if (!_isValidPassword(password)) {
+                                      AppFlushBar.showCustom(
+                                        context,
+                                        title: 'Weak Password',
+                                        message:
+                                            'Password must have at least 8 characters, uppercase, lowercase, number, and a special character.',
+                                        backgroundColor: Colors.orange,
+                                      );
+                                      setState(() {
+                                        _isRegistering = false;
+                                      });
+                                      return;
+                                    }
+
+                                    if (password != confirmPassword) {
+                                      AppFlushBar.showError(
+                                        context,
+                                        title: 'Mismatch',
+                                        message: 'Passwords do not match.',
+                                      );
+                                      setState(() {
+                                        _isRegistering = false;
+                                      });
+                                      return;
+                                    }
+
+                                    final baseUrl = Platform.isAndroid
+                                        ? 'http://10.0.2.2:4000'
+                                        : 'http://localhost:4000';
+                                    final checkEmailUrl = Uri.parse(
+                                        '$baseUrl/api/v1/auth/check-email');
+
+                                    try {
+                                      final response = await http.post(
+                                        checkEmailUrl,
+                                        headers: {
+                                          "Content-Type": "application/json"
+                                        },
+                                        body: jsonEncode({"email": email}),
+                                      );
+
+                                      if (response.statusCode == 200 &&
+                                          response.body == 'true') {
+                                        AppFlushBar.showError(
+                                          context,
+                                          title: 'Account Exists',
+                                          message:
+                                              'An account with this email already exists.',
+                                        );
+                                        setState(() {
+                                          _isRegistering = false;
+                                        });
+                                        return;
+                                      }
+
+                                      final registerUrl = Uri.parse(
+                                          '$baseUrl/api/v1/auth/register');
+                                      final registerResponse = await http.post(
+                                        registerUrl,
+                                        headers: {
+                                          "Content-Type": "application/json"
+                                        },
+                                        body: jsonEncode({
+                                          "username": "$firstName $lastName",
+                                          "email": email,
+                                          "password": password,
+                                          "role": "user",
+                                        }),
+                                      );
+
+                                      if (registerResponse.statusCode == 200 ||
+                                          registerResponse.statusCode == 201) {
+                                        AppFlushBar.showSuccess(
+                                          context,
+                                          message:
+                                              'Account created successfully!',
+                                        );
+
+                                        Future.delayed(Duration(seconds: 1),
+                                            () {
+                                          setState(() {
+                                            _isRegistering = false;
+                                          });
+                                          Navigator.pushReplacement(
+                                            context,
+                                            MaterialPageRoute(
+                                                builder: (context) => OTPScreen(
+                                                    email:
+                                                        _emailController.text)),
+                                          );
+                                        });
+                                      } else {
+                                        final errorData =
+                                            jsonDecode(registerResponse.body);
+                                        final errorMessage = errorData['errors']
+                                                ?[0] ??
+                                            errorData['message'] ??
+                                            'Registration failed. Please try again.';
+                                        AppFlushBar.showError(
+                                          context,
+                                          message: errorMessage,
+                                        );
+                                        setState(() {
+                                          _isRegistering = false;
+                                        });
+                                      }
+                                    } catch (e) {
+                                      AppFlushBar.showNetworkError(context);
+                                      setState(() {
+                                        _isRegistering = false;
+                                      });
+                                    }
+                                  },
                             child: _isRegistering
                                 ? SizedBox(
                                     width: 22,
@@ -850,95 +905,48 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     ),
                                   )
                                 : const Text(
-                          "Sign Up",
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
+                                    "Sign Up",
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
                                       color: Colors.white,
                                     ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      Expanded(child: Divider(color: Colors.white70)),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Text(
-                          "or Sign Up with",
-                          style: TextStyle(color: Colors.white, fontSize: 12),
-                        ),
-                      ),
-                      Expanded(child: Divider(color: Colors.white70)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  // Google Sign Up Button
-                  Center(
-                    child: SizedBox(
-                      width: 180,
-                      height: 50,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
+                                  ),
                           ),
                         ),
-                        onPressed: _handleGoogleSignIn,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Image.asset('assets/icons/google_logo.png',
-                                height: 74),
-                            const SizedBox(width: 10),
-                            const Text(
-                              "",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1D4C5E),
-                              ),
-                            ),
-                          ],
-                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 0),
 
-                  // "Already have an account?" Text
-                  Center(
-                    child: TextButton(
-                      onPressed: () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => LoginScreen()),
-                        );
-                      },
-                      child: RichText(
-                        text: const TextSpan(
-                          style: TextStyle(fontSize: 14.0, color: Colors.white),
-                          children: [
-                            TextSpan(text: "Already have an account? "),
-                            TextSpan(
-                              text: "Login",
+                      // "Already have an account?" Text
+                      Center(
+                        child: TextButton(
+                          onPressed: () {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => LoginScreen()),
+                            );
+                          },
+                          child: RichText(
+                            text: const TextSpan(
                               style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                decoration: TextDecoration.underline,
-                              ),
+                                  fontSize: 14.0, color: Colors.white),
+                              children: [
+                                TextSpan(text: "Already have an account? "),
+                                TextSpan(
+                                  text: "Login",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
               ),
             ],
           ),

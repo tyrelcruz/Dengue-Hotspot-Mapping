@@ -1,2 +1,0 @@
-C:/Users/tyrel/OneDrive/Documents/ONGOING PROJECT BUZZMAP/Dengue_Hotspot_Mapping/buzzmap/android/app/.cxx/Debug/u164z2v4/arm64-v8a/CMakeFiles/edit_cache.dir
-C:/Users/tyrel/OneDrive/Documents/ONGOING PROJECT BUZZMAP/Dengue_Hotspot_Mapping/buzzmap/android/app/.cxx/Debug/u164z2v4/arm64-v8a/CMakeFiles/rebuild_cache.dir

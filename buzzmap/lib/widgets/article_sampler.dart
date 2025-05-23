@@ -22,28 +22,19 @@ class ArticleSampler extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (context) => ArticleScreen(article: article)),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: bgColor,
-        ),
-        child: SizedBox(
-          height: height,
-          child: Padding(
-            padding: isInInterest
-                ? const EdgeInsets.only(left: 8, top: 4, bottom: 2, right: 3)
-                : const EdgeInsets.all(0),
-            child: Stack(
-              children: [_buildContentRow(), _buildForwardButton()],
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: bgColor,
+      ),
+      child: SizedBox(
+        height: height,
+        child: Padding(
+          padding: isInInterest
+              ? const EdgeInsets.only(left: 8, top: 4, bottom: 2, right: 3)
+              : const EdgeInsets.all(0),
+          child: Stack(
+            children: [_buildContentRow(), _buildForwardButton()],
           ),
         ),
       ),
@@ -59,6 +50,8 @@ class ArticleSampler extends StatelessWidget {
   }
 
   Widget _buildArticleImage() {
+    final String imagePath = article['articleImage'] ?? '';
+    final bool isNetwork = imagePath.startsWith('http');
     return Padding(
       padding: EdgeInsets.only(top: 8, bottom: 8, left: isInInterest ? 10 : 0),
       child: SizedBox(
@@ -66,22 +59,31 @@ class ArticleSampler extends StatelessWidget {
         height: double.infinity,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: CachedNetworkImage(
-            imageUrl: article['articleImage'],
-            fit: BoxFit.cover,
-            placeholder: (context, url) => Container(
-              color: Colors.grey[200],
-              child: const Center(
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
+          child: isNetwork
+              ? CachedNetworkImage(
+                  imageUrl: imagePath,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: Colors.grey[200],
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.grey[200],
+                    child: const Icon(Icons.error),
+                  ),
+                )
+              : Image.asset(
+                  imagePath,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: Colors.grey[200],
+                    child: const Icon(Icons.error),
+                  ),
                 ),
-              ),
-            ),
-            errorWidget: (context, url, error) => Container(
-              color: Colors.grey[200],
-              child: const Icon(Icons.error),
-            ),
-          ),
         ),
       ),
     );
@@ -93,32 +95,33 @@ class ArticleSampler extends StatelessWidget {
         height: height,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const SizedBox(height: 5),
-          CachedNetworkImage(
-            imageUrl: article['publicationLogo'],
-            width: 47,
-            height: 10,
-            fit: BoxFit.cover,
-            placeholder: (context, url) => Container(
+          if (article['publicationLogo'] != null)
+            CachedNetworkImage(
+              imageUrl: article['publicationLogo'],
               width: 47,
               height: 10,
-              color: Colors.grey[200],
-              child: const Center(
-                child: SizedBox(
-                  width: 8,
-                  height: 8,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => Container(
+                width: 47,
+                height: 10,
+                color: Colors.grey[200],
+                child: const Center(
+                  child: SizedBox(
+                    width: 8,
+                    height: 8,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                    ),
                   ),
                 ),
               ),
+              errorWidget: (context, url, error) => Container(
+                width: 47,
+                height: 10,
+                color: Colors.grey[200],
+                child: const Icon(Icons.error, size: 8),
+              ),
             ),
-            errorWidget: (context, url, error) => Container(
-              width: 47,
-              height: 10,
-              color: Colors.grey[200],
-              child: const Icon(Icons.error, size: 8),
-            ),
-          ),
           Text(article['articleTitle'],
               maxLines: 3,
               softWrap: true,

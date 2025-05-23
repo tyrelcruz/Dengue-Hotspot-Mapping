@@ -1,15 +1,23 @@
+import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:buzzmap/widgets/utils/notification_template.dart';
 import 'package:another_flushbar/flushbar.dart';
 import 'package:buzzmap/errors/flushbar.dart';
 import 'package:buzzmap/config/config.dart';
+import 'package:buzzmap/services/http_client.dart';
+import 'package:buzzmap/errors/flushbar.dart';
 
 class NotificationService with ChangeNotifier {
   final storage = FlutterSecureStorage();
+  static final NotificationService _instance = NotificationService._internal();
+  factory NotificationService() => _instance;
+  NotificationService._internal();
+
+  final _httpClient = HttpClient();
 
   static Future<void> showLocationToast(
     BuildContext context,
@@ -30,25 +38,31 @@ class NotificationService with ChangeNotifier {
       BuildContext context, String message) async {
     await AppFlushBar.showCustom(
       context,
-      title: 'Report Submitted',
+      title: 'Thank You for Reporting!',
       message: message,
       backgroundColor: Colors.green,
-      duration: Duration(seconds: 3),
     );
+  }
+
+  Future<String?> _getAuthToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('authToken');
   }
 
   Future<Map<String, dynamic>?> fetchReportDetails(String reportId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('authToken');
-
+      final token = await _getAuthToken();
       if (token == null) {
-        throw Exception('No auth token found');
+        print('❌ No auth token found');
+        return null;
       }
 
-      print('🔍 Fetching report details for ID: $reportId');
-      final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/$reportId'),
+      print('🔑 Using auth token: $token');
+      final url = '${Config.baseUrl}/api/v1/reports/$reportId';
+      print('🌐 Fetching report details from: $url');
+
+      final response = await _httpClient.get(
+        url,
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -56,21 +70,63 @@ class NotificationService with ChangeNotifier {
       );
 
       print('📡 API Response Status: ${response.statusCode}');
+      print('📡 API Response Headers: ${response.headers}');
       print('📡 API Response Body: ${response.body}');
 
       if (response.statusCode == 200) {
-        final report = jsonDecode(response.body);
-        print('📄 Fetched report details:');
-        print(json.encode(report));
-        return report;
+        final data = json.decode(response.body);
+        print('📄 Decoded response data:');
+        print(json.encode(data));
+
+        if (data['success'] == true && data['data'] != null) {
+          final report = data['data'];
+          print('📄 Full report data:');
+          print(json.encode(report));
+
+          // Check for location data in different possible fields
+          if (report['specific_location'] != null) {
+            print('✅ Found specific_location in report');
+            final location = report['specific_location'];
+            print('📍 Location data:');
+            print(json.encode(location));
+
+            if (location['coordinates'] != null) {
+              print('🎯 Found coordinates in location');
+              final coordinates = location['coordinates'];
+              print('📌 Raw coordinates: $coordinates');
+
+              if (coordinates is List && coordinates.length >= 2) {
+                // Note: coordinates are in [longitude, latitude] format
+                final longitude = coordinates[0].toDouble();
+                final latitude = coordinates[1].toDouble();
+                print(
+                    '✅ Successfully extracted coordinates: $latitude, $longitude');
+                return report;
+              } else {
+                print('❌ Invalid coordinates format: $coordinates');
+              }
+            } else {
+              print('❌ No coordinates found in location data');
+            }
+          } else {
+            print('❌ No specific_location found in report');
+          }
+        } else {
+          print('❌ Invalid response format or missing data');
+          print('Response data:');
+          print(json.encode(data));
+        }
       } else {
         print(
             '❌ Failed to fetch report details. Status: ${response.statusCode}');
-        print('❌ Response body: ${response.body}');
-        return null;
+        print('Response body: ${response.body}');
       }
+      return null;
     } catch (e) {
       print('❌ Error fetching report details: $e');
+      if (e is TimeoutException) {
+        print('⏰ Request timed out');
+      }
       return null;
     }
   }
@@ -78,113 +134,62 @@ class NotificationService with ChangeNotifier {
   Future<List<Map<String, dynamic>>> fetchNotifications(
       BuildContext context) async {
     try {
-      print('🔑 Starting to fetch notifications...');
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('authToken');
-      print(
-          '🔑 Retrieved token: ${token != null ? 'Token exists' : 'No token found'}');
 
       if (token == null) {
-        print('❌ No auth token found in SharedPreferences');
         throw Exception('No auth token found');
       }
 
-      print('🔑 Using token for API request');
       // First, clean up notifications for deleted reports
       await cleanupDeletedReports(token);
 
       // Then fetch the updated notifications
-      final url = '${Config.baseUrl}/api/v1/notifications';
-      print('🌐 Fetching notifications from: $url');
-
-      final response = await http.get(
-        Uri.parse(url),
+      final response = await _httpClient.get(
+        '${Config.baseUrl}/api/v1/notifications',
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
       );
 
-      print('📡 API Response Status: ${response.statusCode}');
-      print('📡 API Response Body: ${response.body}');
-
       if (response.statusCode == 200) {
         final List<dynamic> rawNotifications = jsonDecode(response.body);
         print('📱 Fetched notifications: ${rawNotifications.length}');
 
-        // Process notifications to include location data and ensure proper typing
-        final List<Map<String, dynamic>> processedNotifications =
-            await Future.wait(rawNotifications.map((notification) async {
-          final Map<String, dynamic> typedNotification =
-              Map<String, dynamic>.from(notification);
-          print('🔍 Processing notification: ${typedNotification['_id']}');
+        // Debug log the raw notification data
+        for (var notification in rawNotifications) {
+          print('📄 Raw notification data:');
+          print(json.encode(notification));
 
-          if (typedNotification['report'] != null) {
-            final report =
-                Map<String, dynamic>.from(typedNotification['report']);
-            print('📄 Report data:');
-            print(json.encode(report));
-            print('📊 Report status: ${report['status']}');
+          if (notification['report'] != null) {
+            print('📍 Report data:');
+            print(json.encode(notification['report']));
 
-            typedNotification['report'] = report;
-
-            // If the report is validated, fetch its full details to get location data
-            if (report['status']?.toLowerCase() == 'validated') {
-              print('✅ Found validated report, fetching details...');
-              final reportDetails = await fetchReportDetails(report['_id']);
-              if (reportDetails != null) {
-                print('✅ Successfully fetched report details');
-                // Update the report with full details
-                typedNotification['report'] = reportDetails;
-
-                // Extract location data
-                if (reportDetails['specific_location'] != null) {
-                  final location = reportDetails['specific_location'];
-                  print('📍 Found specific_location: $location');
-                  if (location['coordinates'] != null) {
-                    final coordinates = location['coordinates'];
-                    print('📍 Found coordinates: $coordinates');
-                    if (coordinates is List && coordinates.length >= 2) {
-                      typedNotification['latitude'] = coordinates[1].toDouble();
-                      typedNotification['longitude'] =
-                          coordinates[0].toDouble();
-                      print(
-                          '✅ Extracted coordinates - Lat: ${typedNotification['latitude']}, Long: ${typedNotification['longitude']}');
-                    }
-                  }
-                } else {
-                  print('❌ No specific_location found in report details');
-                }
-              } else {
-                print('❌ Failed to fetch report details');
-              }
+            if (notification['report']['specific_location'] != null) {
+              print('🗺️ Location data:');
+              print(json.encode(notification['report']['specific_location']));
             }
-
-            typedNotification['streetName'] =
-                report['street_name'] ?? 'Unknown Street';
-            print('📍 Street name: ${typedNotification['streetName']}');
           }
+        }
 
-          return typedNotification;
-        }));
-
-        return processedNotifications;
+        return rawNotifications.cast<Map<String, dynamic>>();
       } else {
         print(
-            '❌ Failed to fetch notifications. Status code: ${response.statusCode}');
+            '❌ Failed to fetch notifications. Status: ${response.statusCode}');
         print('❌ Response body: ${response.body}');
-        throw Exception('Failed to fetch notifications');
+        return [];
       }
     } catch (e) {
       print('❌ Error fetching notifications: $e');
-      rethrow;
+      return [];
     }
   }
 
   Future<void> cleanupDeletedReports(String token) async {
     try {
-      final response = await http.delete(
-        Uri.parse('${Config.baseUrl}/api/v1/notifications/cleanup-deleted'),
+      final response = await _httpClient.delete(
+        '${Config.baseUrl}/api/v1/notifications/cleanup-deleted',
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -203,8 +208,8 @@ class NotificationService with ChangeNotifier {
 
   Future<void> deleteUserNotifications(String token, String username) async {
     try {
-      final response = await http.delete(
-        Uri.parse('${Config.baseUrl}/api/v1/notifications/user/$username'),
+      final response = await _httpClient.delete(
+        '${Config.baseUrl}/api/v1/notifications/user/$username',
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -243,8 +248,7 @@ class NotificationService with ChangeNotifier {
 // Retrieve the token from secure storage
 Future<String?> getToken() async {
   final prefs = await SharedPreferences.getInstance();
-  String? token =
-      prefs.getString('authToken'); // Retrieve from SharedPreferences
-  print('Retrieved Token: $token'); // Debugging line
+  String? token = prefs.getString('authToken');
+  print('Retrieved Token: $token');
   return token;
 }

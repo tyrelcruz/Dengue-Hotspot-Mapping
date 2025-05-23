@@ -87,7 +87,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return statusFiltered;
   }
 
-  void _handleNotificationTap(Map<String, dynamic> notification) {
+  void _handleNotificationTap(Map<String, dynamic> notification) async {
     final report = notification['report'] as Map<String, dynamic>?;
     if (report == null) {
       print('❌ No report data found in notification');
@@ -97,29 +97,72 @@ class _NotificationScreenState extends State<NotificationScreen> {
     print('🔍 Handling notification tap:');
     print('📝 Report ID: ${report['_id']}');
     print('📊 Status: ${report['status']}');
-    print(
-        '📍 Location data: ${notification['latitude']}, ${notification['longitude']}');
 
-    if (report['status']?.toLowerCase() == 'validated' &&
-        notification['latitude'] != null &&
-        notification['longitude'] != null) {
+    // Fetch full report details
+    final reportDetails =
+        await _notificationService.fetchReportDetails(report['_id']);
+    if (reportDetails == null) {
+      print('❌ Failed to fetch report details');
+      return;
+    }
+
+    print('📄 Full report details:');
+    print(json.encode(reportDetails));
+
+    // Extract location data from the full report details
+    double? latitude;
+    double? longitude;
+
+    if (reportDetails['specific_location'] != null) {
+      print('🗺️ Found specific_location in report');
+      final location = reportDetails['specific_location'];
+      print('📍 Location data:');
+      print(json.encode(location));
+
+      if (location['coordinates'] != null) {
+        print('🎯 Found coordinates in location');
+        final coordinates = location['coordinates'];
+        print('📌 Raw coordinates: $coordinates');
+
+        if (coordinates is List && coordinates.length >= 2) {
+          // Note: coordinates are in [longitude, latitude] format
+          longitude = coordinates[0].toDouble();
+          latitude = coordinates[1].toDouble();
+          print('✅ Successfully extracted coordinates: $latitude, $longitude');
+        } else {
+          print('❌ Invalid coordinates format: $coordinates');
+        }
+      } else {
+        print('❌ No coordinates found in location data');
+      }
+    } else {
+      print('❌ No specific_location found in report');
+    }
+
+    if (reportDetails['status']?.toLowerCase() == 'validated' &&
+        latitude != null &&
+        longitude != null) {
       print('✅ Validated report with location data, navigating to map...');
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => MappingScreen(
-            initialLatitude: notification['latitude'].toDouble(),
-            initialLongitude: notification['longitude'].toDouble(),
-            initialZoom: 15.0,
-            reportId: report['_id'],
+      print('📍 Using coordinates: $latitude, $longitude');
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MappingScreen(
+              initialLatitude: latitude!,
+              initialLongitude: longitude!,
+              initialZoom: 18.0, // Increased zoom level for better visibility
+              reportId: reportDetails['_id'],
+            ),
           ),
-        ),
-      );
+        );
+      }
     } else {
       print('❌ Cannot navigate: Invalid status or missing location data');
-      print('Status: ${report['status']}');
-      print('Latitude: ${notification['latitude']}');
-      print('Longitude: ${notification['longitude']}');
+      print('Status: ${reportDetails['status']}');
+      print('Latitude: $latitude');
+      print('Longitude: $longitude');
     }
   }
 
@@ -181,29 +224,27 @@ class _NotificationScreenState extends State<NotificationScreen> {
                             final report =
                                 notification['report'] as Map<String, dynamic>?;
 
-                            // Extract location data from the notification
-                            double? latitude =
-                                notification['latitude'] as double?;
-                            double? longitude =
-                                notification['longitude'] as double?;
+                            // Extract location data from the report
+                            double? latitude;
+                            double? longitude;
 
-                            if (report != null) {
-                              if (report['specific_location'] != null) {
-                                final location = report['specific_location'];
-                                if (location['coordinates'] != null) {
-                                  final coordinates = location['coordinates'];
-                                  if (coordinates is List &&
-                                      coordinates.length >= 2) {
-                                    latitude = coordinates[1].toDouble();
-                                    longitude = coordinates[0].toDouble();
-                                  }
-                                }
-                              } else if (report['coordinates'] != null) {
-                                final coordinates =
-                                    report['coordinates'] as List;
-                                if (coordinates.length >= 2) {
-                                  latitude = coordinates[1].toDouble();
+                            if (report != null &&
+                                report['specific_location'] != null) {
+                              final location = report['specific_location'];
+                              print('📄 Raw location data:');
+                              print(json.encode(location));
+
+                              if (location['coordinates'] != null) {
+                                final coordinates = location['coordinates'];
+                                print('📌 Raw coordinates: $coordinates');
+
+                                if (coordinates is List &&
+                                    coordinates.length >= 2) {
+                                  // Note: coordinates are in [longitude, latitude] format
                                   longitude = coordinates[0].toDouble();
+                                  latitude = coordinates[1].toDouble();
+                                  print(
+                                      '✅ Extracted coordinates: $latitude, $longitude');
                                 }
                               }
                             }
