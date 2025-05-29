@@ -66,7 +66,6 @@ class AlertService {
                 'severity': latestAlert['severity'],
                 'barangays': latestAlert['barangays'] ?? [],
               };
-
               debugPrint('Formatted alert for UI: $formattedAlert');
               _alertController.add(formattedAlert);
             } else {
