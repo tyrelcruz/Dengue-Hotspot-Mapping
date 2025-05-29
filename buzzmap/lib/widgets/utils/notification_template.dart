@@ -42,13 +42,14 @@ class NotificationTemplate extends StatelessWidget {
               longitude != null) {
             print(
                 '✅ Validated report with location data, navigating to map...');
+            print('📍 Using coordinates: $latitude, $longitude');
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => MappingScreen(
                   initialLatitude: latitude!,
                   initialLongitude: longitude!,
-                  initialZoom: 15.0,
+                  initialZoom: 18.0,
                   reportId: reportId,
                 ),
               ),

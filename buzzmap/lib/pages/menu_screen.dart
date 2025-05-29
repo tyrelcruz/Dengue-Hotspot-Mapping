@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class MenuScreen extends StatelessWidget {
+class MenuScreen extends StatefulWidget {
   final String currentRoute;
 
   const MenuScreen({super.key, required this.currentRoute});
 
+  @override
+  State<MenuScreen> createState() => _MenuScreenState();
+}
+
+class _MenuScreenState extends State<MenuScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -62,7 +66,7 @@ class MenuScreen extends StatelessWidget {
 
   Widget _buildMenuButton(
       BuildContext context, String title, String route, ThemeData theme) {
-    final bool isActive = currentRoute == route;
+    final bool isActive = widget.currentRoute == route;
 
     return TextButton(
       onPressed: () {
@@ -108,26 +112,30 @@ class MenuScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          onPressed: () async {
-            try {
-              await FirebaseAuth.instance.signOut();
-
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.clear();
-
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                '/login',
-                (route) => false,
-              );
-            } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Logout failed: ${e.toString()}')),
-              );
-            }
-          },
+          onPressed: _handleLogout,
         ),
       ),
     );
+  }
+
+  Future<void> _handleLogout() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/welcome',
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Logout failed: ${e.toString()}')),
+        );
+      }
+    }
   }
 }

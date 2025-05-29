@@ -11,8 +11,6 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:buzzmap/pages/login_screen.dart';
-//Firebase Imports
-import 'package:firebase_core/firebase_core.dart';
 
 import 'package:provider/provider.dart';
 
@@ -20,10 +18,15 @@ import 'package:buzzmap/services/notification_service.dart';
 import 'package:buzzmap/services/alert_service.dart';
 import 'package:buzzmap/widgets/global_alert_overlay.dart';
 import 'package:buzzmap/providers/vote_provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:buzzmap/config/config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+
+  // Load environment variables
+  await dotenv.load(fileName: ".env");
+
   runApp(
     MultiProvider(
       providers: [

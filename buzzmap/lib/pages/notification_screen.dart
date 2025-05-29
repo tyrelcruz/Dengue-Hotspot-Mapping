@@ -5,6 +5,17 @@ import 'package:buzzmap/services/notification_service.dart';
 import 'package:buzzmap/widgets/utils/notification_template.dart';
 import 'package:buzzmap/pages/mapping_screen.dart';
 
+// Add a simple logging utility
+class Logger {
+  static bool _isDebugMode = false; // Set to false in production
+
+  static void log(String message, {String? tag}) {
+    if (_isDebugMode) {
+      print('${tag != null ? '[$tag] ' : ''}$message');
+    }
+  }
+}
+
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({Key? key}) : super(key: key);
 
@@ -15,15 +26,27 @@ class NotificationScreen extends StatefulWidget {
 class _NotificationScreenState extends State<NotificationScreen> {
   final NotificationService _notificationService = NotificationService();
   List<Map<String, dynamic>> _notifications = [];
+  List<Map<String, dynamic>> _adminAlerts = [];
+  List<Map<String, dynamic>> _adminAnnouncements = [];
   bool _isLoading = true;
   bool _showAllToday = false;
   bool _showAllWeek = false;
-  String _selectedFilter = 'All';
+  Set<String> _selectedFilters = {}; // Allow multiple selection
+  int _displayCount = 10;
+
+  final List<String> _filters = [
+    'All',
+    'Reviewing',
+    'Validated',
+    'Rejected',
+    'Admin Alerts'
+  ];
 
   @override
   void initState() {
     super.initState();
     _loadNotifications();
+    _loadAdminAlertsAndAnnouncements();
   }
 
   Future<void> _loadNotifications() async {
@@ -53,97 +76,127 @@ class _NotificationScreenState extends State<NotificationScreen> {
     }
   }
 
-  List<Map<String, dynamic>> _getFilteredNotifications() {
-    print('🔍 Filtering notifications with status: $_selectedFilter');
-    print('📱 Total notifications before filtering: ${_notifications.length}');
+  Future<void> _loadAdminAlertsAndAnnouncements() async {
+    try {
+      // Fetch admin alerts (last 3)
+      final alertsResponse =
+          await http.get(Uri.parse('http://localhost:4000/api/v1/alerts'));
+      if (alertsResponse.statusCode == 200) {
+        final body = jsonDecode(alertsResponse.body);
+        final List<dynamic> alertsData = body['data'] ?? [];
+        setState(() {
+          _adminAlerts =
+              alertsData.take(3).map((e) => e as Map<String, dynamic>).toList();
+        });
+      }
+      // Fetch important announcements
+      final annResponse =
+          await http.get(Uri.parse('http://localhost:4000/api/v1/adminPosts'));
+      if (annResponse.statusCode == 200) {
+        final List<dynamic> annData = jsonDecode(annResponse.body);
+        setState(() {
+          _adminAnnouncements =
+              annData.take(3).map((e) => e as Map<String, dynamic>).toList();
+        });
+      }
+    } catch (e) {
+      // Optionally show error
+    }
+  }
 
-    // Filter by status only
-    List<Map<String, dynamic>> statusFiltered =
-        _notifications.where((notification) {
+  void _toggleFilter(String filter) {
+    setState(() {
+      if (_selectedFilters.contains(filter)) {
+        _selectedFilters.remove(filter);
+      } else {
+        _selectedFilters.add(filter);
+      }
+    });
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _selectedFilters.clear();
+    });
+  }
+
+  List<Map<String, dynamic>> _getFilteredNotifications() {
+    if (_selectedFilters.contains('Admin Alerts')) {
+      final combined = [..._adminAlerts, ..._adminAnnouncements];
+      combined.sort((a, b) {
+        final dateA =
+            DateTime.tryParse(a['createdAt'] ?? a['publishDate'] ?? '');
+        final dateB =
+            DateTime.tryParse(b['createdAt'] ?? b['publishDate'] ?? '');
+        if (dateA == null || dateB == null) return 0;
+        return dateB.compareTo(dateA);
+      });
+      return combined;
+    }
+    List<Map<String, dynamic>> filtered = _notifications.where((notification) {
       final report = notification['report'] as Map<String, dynamic>?;
       final status = report?['status']?.toString().toLowerCase();
-      print('📄 Notification status: $status');
-
-      // Skip notifications with unknown status
-      if (status == null || status == 'unknown') {
-        return false;
+      final createdAt = DateTime.parse(notification['createdAt']);
+      final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
+      if (status == null || status == 'unknown') return false;
+      if (_selectedFilters.isEmpty || _selectedFilters.contains('All')) {
+        return createdAt.isAfter(sevenDaysAgo);
       }
-
-      // Handle "Reviewing" filter to match "pending" status
-      if (_selectedFilter.toLowerCase() == 'reviewing') {
-        return status == 'pending';
-      }
-
-      // For "All" filter, show all notifications
-      if (_selectedFilter.toLowerCase() == 'all') {
-        return true;
-      }
-
-      // For other filters, do normal comparison
-      return status == _selectedFilter.toLowerCase();
+      return _selectedFilters.any((filter) {
+        if (filter.toLowerCase() == 'reviewing') {
+          return status == 'pending' && createdAt.isAfter(sevenDaysAgo);
+        }
+        return status == filter.toLowerCase() &&
+            createdAt.isAfter(sevenDaysAgo);
+      });
     }).toList();
-    print('✅ Notifications after status filter: ${statusFiltered.length}');
-
-    return statusFiltered;
+    filtered.sort((a, b) {
+      final dateA = DateTime.parse(a['createdAt']);
+      final dateB = DateTime.parse(b['createdAt']);
+      return dateB.compareTo(dateA);
+    });
+    return filtered.take(_displayCount).toList();
   }
 
   void _handleNotificationTap(Map<String, dynamic> notification) async {
     final report = notification['report'] as Map<String, dynamic>?;
     if (report == null) {
-      print('❌ No report data found in notification');
+      Logger.log('No report data found in notification', tag: 'ERROR');
       return;
     }
 
-    print('🔍 Handling notification tap:');
-    print('📝 Report ID: ${report['_id']}');
-    print('📊 Status: ${report['status']}');
+    Logger.log('Handling notification tap for report ID: ${report['_id']}',
+        tag: 'NOTIFICATION');
 
     // Fetch full report details
     final reportDetails =
         await _notificationService.fetchReportDetails(report['_id']);
     if (reportDetails == null) {
-      print('❌ Failed to fetch report details');
+      Logger.log('Failed to fetch report details', tag: 'ERROR');
       return;
     }
 
-    print('📄 Full report details:');
-    print(json.encode(reportDetails));
-
-    // Extract location data from the full report details
     double? latitude;
     double? longitude;
 
     if (reportDetails['specific_location'] != null) {
-      print('🗺️ Found specific_location in report');
       final location = reportDetails['specific_location'];
-      print('📍 Location data:');
-      print(json.encode(location));
-
       if (location['coordinates'] != null) {
-        print('🎯 Found coordinates in location');
         final coordinates = location['coordinates'];
-        print('📌 Raw coordinates: $coordinates');
-
         if (coordinates is List && coordinates.length >= 2) {
-          // Note: coordinates are in [longitude, latitude] format
           longitude = coordinates[0].toDouble();
           latitude = coordinates[1].toDouble();
-          print('✅ Successfully extracted coordinates: $latitude, $longitude');
-        } else {
-          print('❌ Invalid coordinates format: $coordinates');
         }
-      } else {
-        print('❌ No coordinates found in location data');
       }
-    } else {
-      print('❌ No specific_location found in report');
     }
 
     if (reportDetails['status']?.toLowerCase() == 'validated' &&
         latitude != null &&
         longitude != null) {
-      print('✅ Validated report with location data, navigating to map...');
-      print('📍 Using coordinates: $latitude, $longitude');
+      Logger.log('Validated report with location data, navigating to map...',
+          tag: 'NOTIFICATION');
+      Logger.log('Using coordinates: $latitude, $longitude',
+          tag: 'NOTIFICATION');
 
       if (mounted) {
         Navigator.push(
@@ -159,15 +212,50 @@ class _NotificationScreenState extends State<NotificationScreen> {
         );
       }
     } else {
-      print('❌ Cannot navigate: Invalid status or missing location data');
-      print('Status: ${reportDetails['status']}');
-      print('Latitude: $latitude');
-      print('Longitude: $longitude');
+      Logger.log('Cannot navigate: Invalid status or missing location data',
+          tag: 'ERROR');
+      Logger.log('Status: ${reportDetails['status']}', tag: 'ERROR');
+      Logger.log('Latitude: $latitude', tag: 'ERROR');
+      Logger.log('Longitude: $longitude', tag: 'ERROR');
     }
+  }
+
+  Future<void> _refreshAdminAlerts() async {
+    await _loadAdminAlertsAndAnnouncements();
+    setState(() {});
+  }
+
+  String _formatAdminAlertTitle(Map<String, dynamic> alert) {
+    // Use severity and first message as title
+    final severity = alert['severity']?.toString().toUpperCase() ?? '';
+    final messages = alert['messages'] as List?;
+    final firstMessage =
+        (messages != null && messages.isNotEmpty) ? messages.first : '';
+    return severity.isNotEmpty ? '[$severity] $firstMessage' : firstMessage;
+  }
+
+  String _formatAdminAlertSubtitle(Map<String, dynamic> alert) {
+    final messages = alert['messages'] as List?;
+    if (messages == null || messages.isEmpty) return '';
+    return messages.skip(1).take(2).join(' ');
+  }
+
+  String _formatAdminAlertDetails(Map<String, dynamic> alert) {
+    final barangays = alert['barangays'] as List?;
+    final barangayNames = (barangays != null && barangays.isNotEmpty)
+        ? barangays.map((b) => b['name']).whereType<String>().join(', ')
+        : 'All Areas';
+    final timestamp =
+        alert['timestamp'] ?? alert['createdAt'] ?? alert['publishDate'] ?? '';
+    final date = timestamp.isNotEmpty && timestamp.length >= 10
+        ? timestamp.substring(0, 10)
+        : '';
+    return 'Barangays: $barangayNames\nDate: $date';
   }
 
   @override
   Widget build(BuildContext context) {
+    final primaryGreen = Theme.of(context).colorScheme.primary;
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -190,79 +278,255 @@ class _NotificationScreenState extends State<NotificationScreen> {
       ),
       body: Column(
         children: [
-          // Filter Section
+          // Spotify-style merged filter bar
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildFilterChip('All'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Validated'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Rejected'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Reviewing'),
-                ],
-              ),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_selectedFilters.isNotEmpty)
+                  GestureDetector(
+                    onTap: _clearFilters,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: const BoxDecoration(
+                        color: Colors.black87,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.close, color: Colors.white, size: 24),
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Render merged selected filters as one pill with curved dividers
+                        if (_selectedFilters.isNotEmpty)
+                          Stack(
+                            alignment: Alignment.centerLeft,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children:
+                                    List.generate(_selectedFilters.length, (i) {
+                                  final filter = _selectedFilters.elementAt(i);
+                                  final isFirst = i == 0;
+                                  final isLast =
+                                      i == _selectedFilters.length - 1;
+                                  return Transform.translate(
+                                    offset: Offset(i == 0 ? 0 : -16.0,
+                                        0), // Overlap effect
+                                    child: GestureDetector(
+                                      onTap: () => _toggleFilter(filter),
+                                      child: AnimatedContainer(
+                                        duration:
+                                            const Duration(milliseconds: 200),
+                                        padding: EdgeInsets.only(
+                                          left: isFirst ? 16 : 20,
+                                          right: isLast ? 16 : 20,
+                                          top: 8,
+                                          bottom: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: primaryGreen,
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: Radius.circular(
+                                                isFirst ? 20 : 0),
+                                            bottomLeft: Radius.circular(
+                                                isFirst ? 20 : 0),
+                                            topRight: Radius.circular(
+                                                isLast ? 20 : 0),
+                                            bottomRight: Radius.circular(
+                                                isLast ? 20 : 0),
+                                          ),
+                                          border: Border.all(
+                                            color: primaryGreen,
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          filter,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight:
+                                                FontWeight.normal, // Not bold
+                                            letterSpacing: 0.2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                              // Draw curved dividers between pills (except after last)
+                              ...List.generate(_selectedFilters.length - 1,
+                                  (i) {
+                                return Positioned(
+                                  left: 32.0 +
+                                      i * 36.0, // Adjust for pill width/overlap
+                                  child: CustomPaint(
+                                    size: const Size(24, 32),
+                                    painter: _CurvedDividerPainter(
+                                        color: Colors.black.withOpacity(0.18)),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        // Render unselected filters as individual pills
+                        ..._filters
+                            .where((f) => !_selectedFilters.contains(f))
+                            .map((filter) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: GestureDetector(
+                              onTap: () => _toggleFilter(filter),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[50],
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Colors.grey[200]!,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  filter,
+                                  style: TextStyle(
+                                    color: Colors.grey[700],
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          // Notifications List
+          // Notification List
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _getFilteredNotifications().isEmpty
-                    ? const Center(child: Text('No notifications yet'))
-                    : RefreshIndicator(
-                        onRefresh: _loadNotifications,
-                        child: ListView.builder(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 600),
+              switchInCurve: Curves.easeInOutCubic,
+              switchOutCurve: Curves.easeInOutCubic,
+              child: _isLoading
+                  ? const Center(
+                      key: ValueKey('loading'),
+                      child: CircularProgressIndicator())
+                  : _selectedFilters.contains('Admin Alerts')
+                      ? RefreshIndicator(
+                          key: ValueKey('admin_alerts'),
+                          onRefresh: _refreshAdminAlerts,
+                          child: ListView.builder(
+                            itemCount: _getFilteredNotifications().length,
+                            itemBuilder: (context, index) {
+                              final notification =
+                                  _getFilteredNotifications()[index];
+                              final isAlert =
+                                  notification.containsKey('messages');
+                              if (isAlert) {
+                                // Admin Alert - use NotificationTemplate for consistency
+                                return NotificationTemplate(
+                                  message: _formatAdminAlertTitle(notification),
+                                  reportId: notification['_id']?.toString(),
+                                  barangay: (notification['barangays'] !=
+                                              null &&
+                                          (notification['barangays'] as List)
+                                              .isNotEmpty)
+                                      ? (notification['barangays'][0]['name'] ??
+                                          'All Areas')
+                                      : 'All Areas',
+                                  status: 'alert',
+                                  reportType: 'Admin Alert',
+                                  isRead: false,
+                                  latitude: null,
+                                  longitude: null,
+                                  streetName: null,
+                                );
+                              } else {
+                                // Admin Announcement - use NotificationTemplate for consistency
+                                return NotificationTemplate(
+                                  message:
+                                      notification['title'] ?? 'Announcement',
+                                  reportId: notification['_id']?.toString(),
+                                  barangay: 'All Areas',
+                                  status: 'announcement',
+                                  reportType: 'Admin Announcement',
+                                  isRead: false,
+                                  latitude: null,
+                                  longitude: null,
+                                  streetName: null,
+                                );
+                              }
+                            },
+                          ),
+                        )
+                      : ListView.builder(
+                          key: ValueKey(_selectedFilters.join(',')),
                           itemCount: _getFilteredNotifications().length,
                           itemBuilder: (context, index) {
                             final notification =
                                 _getFilteredNotifications()[index];
-                            final report =
-                                notification['report'] as Map<String, dynamic>?;
-
                             // Extract location data from the report
                             double? latitude;
                             double? longitude;
-
+                            final report =
+                                notification['report'] as Map<String, dynamic>?;
                             if (report != null &&
                                 report['specific_location'] != null) {
                               final location = report['specific_location'];
-                              print('📄 Raw location data:');
-                              print(json.encode(location));
-
                               if (location['coordinates'] != null) {
                                 final coordinates = location['coordinates'];
-                                print('📌 Raw coordinates: $coordinates');
-
                                 if (coordinates is List &&
                                     coordinates.length >= 2) {
-                                  // Note: coordinates are in [longitude, latitude] format
                                   longitude = coordinates[0].toDouble();
                                   latitude = coordinates[1].toDouble();
-                                  print(
-                                      '✅ Extracted coordinates: $latitude, $longitude');
                                 }
                               }
                             }
-
                             return NotificationTemplate(
                               message: _formatNotificationMessage(notification),
-                              reportId: report?['_id'] as String?,
-                              barangay: report?['barangay'] as String?,
-                              status: report?['status'] as String?,
-                              reportType: report?['report_type'] as String?,
-                              isRead: notification['isRead'] as bool? ?? false,
+                              reportId: report?['_id']?.toString(),
+                              barangay: report?['barangay'],
+                              status: report?['status'],
+                              reportType: report?['report_type'],
+                              isRead: notification['isRead'] ?? false,
                               latitude: latitude,
                               longitude: longitude,
-                              streetName: report?['street_name'] as String?,
+                              streetName: report?['street_name'],
                             );
                           },
                         ),
-                      ),
+            ),
           ),
         ],
       ),
@@ -288,23 +552,33 @@ class _NotificationScreenState extends State<NotificationScreen> {
     }
   }
 
-  Widget _buildSeeAllButton(bool isToday) {
-    final totalCount = _notifications.where((notification) {
-      final notificationDate = DateTime.parse(notification['createdAt']);
-      final now = DateTime.now();
-      if (isToday) {
-        return notificationDate.isAfter(now.subtract(Duration(days: 1)));
-      } else {
-        final oneDayAgo = now.subtract(Duration(days: 1));
-        final sevenDaysAgo = now.subtract(Duration(days: 7));
-        return notificationDate.isAfter(sevenDaysAgo) &&
-            notificationDate.isBefore(oneDayAgo);
+  Widget _buildShowMoreButton() {
+    final totalFiltered = _notifications.where((notification) {
+      final report = notification['report'] as Map<String, dynamic>?;
+      final status = report?['status']?.toString().toLowerCase();
+      final createdAt = DateTime.parse(notification['createdAt']);
+      final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
+
+      if (status == null || status == 'unknown') return false;
+
+      if (_selectedFilters.contains('reviewing')) {
+        return status == 'pending' && createdAt.isAfter(sevenDaysAgo);
       }
+
+      if (_selectedFilters.contains('all')) {
+        return createdAt.isAfter(sevenDaysAgo);
+      }
+
+      return status ==
+              _selectedFilters.firstWhere(
+                  (filter) =>
+                      filter.toLowerCase() == 'reviewing' ||
+                      filter.toLowerCase() == 'all',
+                  orElse: () => '') &&
+          createdAt.isAfter(sevenDaysAgo);
     }).length;
 
-    print('🔢 ${isToday ? "Today" : "This Week"} total count: $totalCount');
-
-    if (totalCount <= 10) return SizedBox.shrink();
+    if (totalFiltered <= _displayCount) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -312,15 +586,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
         child: TextButton(
           onPressed: () {
             setState(() {
-              if (isToday) {
-                _showAllToday = !_showAllToday;
-              } else {
-                _showAllWeek = !_showAllWeek;
-              }
+              _displayCount += 10;
             });
           },
           child: Text(
-            (isToday ? _showAllToday : _showAllWeek) ? 'Show Less' : 'See All',
+            'Show More',
             style: TextStyle(
               color: Theme.of(context).colorScheme.primary,
               fontWeight: FontWeight.bold,
@@ -330,35 +600,25 @@ class _NotificationScreenState extends State<NotificationScreen> {
       ),
     );
   }
+}
 
-  Widget _buildFilterChip(String label) {
-    final isSelected = _selectedFilter == label;
-    return FilterChip(
-      label: Text(
-        label,
-        style: TextStyle(
-          color:
-              isSelected ? Colors.white : Theme.of(context).colorScheme.primary,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-        ),
-      ),
-      selected: isSelected,
-      onSelected: (bool selected) {
-        print('🔘 Filter chip selected: $label');
-        setState(() {
-          _selectedFilter = selected ? label : 'All';
-        });
-      },
-      backgroundColor: Colors.white,
-      selectedColor: Theme.of(context).colorScheme.primary,
-      checkmarkColor: Colors.white,
-      side: BorderSide(
-        color: Theme.of(context).colorScheme.primary,
-        width: 1,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
-    );
+class _CurvedDividerPainter extends CustomPainter {
+  final Color color;
+  _CurvedDividerPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final path = Path();
+    path.moveTo(size.width / 2, 8);
+    path.quadraticBezierTo(
+        size.width / 2, size.height / 2, size.width / 2, size.height - 8);
+    canvas.drawPath(path, paint);
   }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

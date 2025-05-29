@@ -13,6 +13,8 @@ import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
 import 'package:buzzmap/widgets/post_detail_screen.dart';
 import 'package:buzzmap/errors/flushbar.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:math';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -31,6 +33,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
   bool _isUsernameLoading = true;
   late SharedPreferences _prefs;
   String? _currentUsername;
+  Position? _currentPosition;
+  bool _isLocationLoading = false;
 
   void _onTabSelected(int index) {
     setState(() {
@@ -43,6 +47,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     super.initState();
     _initializePrefs();
     _loadReports();
+    _getCurrentLocation();
   }
 
   Future<void> _initializePrefs() async {
@@ -182,6 +187,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
             'numUpvotes': report['upvotes']?.length ?? 0,
             'numDownvotes': report['downvotes']?.length ?? 0,
             'date_and_time': report['date_and_time'],
+            'specific_location': report['specific_location'],
           };
         }),
       );
@@ -222,6 +228,98 @@ class _CommunityScreenState extends State<CommunityScreen> {
     }
   }
 
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isLocationLoading = true;
+    });
+
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Location services are disabled. Please enable them to use the "Near Me" feature.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Location permissions are required to use the "Near Me" feature.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Location permissions are permanently denied. Please enable them in app settings.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      print('📍 Current Location: ${position.latitude}, ${position.longitude}');
+
+      if (mounted) {
+        setState(() {
+          _currentPosition = position;
+          _isLocationLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error getting location: $e');
+      if (mounted) {
+        setState(() {
+          _isLocationLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to get your location. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  double _calculateDistance(
+      double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 6371; // km
+    final dLat = (lat2 - lat1) * pi / 180.0;
+    final dLon = (lon2 - lon1) * pi / 180.0;
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1 * pi / 180.0) *
+            cos(lat2 * pi / 180.0) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return earthRadius * c;
+  }
+
   List<Map<String, dynamic>> get _currentPosts {
     final query = _searchQuery.toLowerCase();
     var filtered = _allPosts.where((post) {
@@ -242,43 +340,52 @@ class _CommunityScreenState extends State<CommunityScreen> {
           .compareTo(a['date_and_time'] as String));
     } else if (selectedIndex == 2) {
       // My Posts tab
-      print('🔍 Filtering for My Posts'); // Debug log
       final currentUserId = _prefs.getString('userId');
-      print('👤 Current user ID: $currentUserId'); // Debug log
-      print(
-          '📱 Total posts before filtering: ${_allPosts.length}'); // Debug log
-
       if (currentUserId == null || currentUserId.isEmpty) {
-        print('❌ No user ID found in SharedPreferences');
+        return [];
+      }
+      filtered =
+          _allPosts.where((post) => post['userId'] == currentUserId).toList();
+      filtered.sort((a, b) => (b['date_and_time'] as String)
+          .compareTo(a['date_and_time'] as String));
+    } else if (selectedIndex == 3) {
+      // Near Me tab
+      if (_currentPosition == null) {
+        print('❌ Current position is null');
         return [];
       }
 
-      // Filter posts by current user's ID
-      filtered = _allPosts.where((post) {
-        final postUserId = post['userId'] ?? '';
-        final isMyPost = postUserId == currentUserId;
-        print('👤 Post user ID: $postUserId');
-        print('🔒 Is my post? $isMyPost');
-        print('📝 Post data: $post'); // Debug log for post data
-        return isMyPost;
+      print('🔍 Total posts before filtering: ${filtered.length}');
+
+      // Add distance to each post and filter by radius
+      filtered = filtered.map((post) {
+        final coords = post['specific_location']?['coordinates'];
+        print('📍 Post coordinates: $coords');
+
+        if (coords != null && coords.length == 2) {
+          final distance = _calculateDistance(
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+            coords[1],
+            coords[0],
+          );
+          print('📏 Distance to post: ${distance.toStringAsFixed(2)}km');
+          return {...post, 'distance': distance};
+        }
+        print('⚠️ Post has no valid coordinates');
+        return {...post, 'distance': double.infinity};
       }).toList();
 
-      print('📱 Posts after filtering: ${filtered.length}'); // Debug log
+      // Sort by distance
+      filtered.sort((a, b) =>
+          (a['distance'] as double).compareTo(b['distance'] as double));
 
-      // Then apply search filter if there's a search query
-      if (query.isNotEmpty) {
-        filtered = filtered.where((post) {
-          return post['username'].toLowerCase().contains(query) ||
-              post['description'].toLowerCase().contains(query) ||
-              post['reportType'].toLowerCase().contains(query) ||
-              post['barangay'].toLowerCase().contains(query);
-        }).toList();
-      }
+      // Filter out posts that are too far (more than 2km radius)
+      filtered = filtered
+          .where((post) => (post['distance'] as double) <= 2.0)
+          .toList();
 
-      // Sort my posts by date (newest first)
-      filtered.sort((a, b) => (b['date_and_time'] as String)
-          .compareTo(a['date_and_time'] as String));
-      print('📱 Found ${filtered.length} of my posts'); // Debug log
+      print('🔍 Posts within 2km radius: ${filtered.length}');
     }
 
     return filtered;
@@ -366,6 +473,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
             onRefresh: () async {
               await _initializePrefs();
               await _loadReports();
+              await _getCurrentLocation();
             },
             edgeOffset: 80,
             child: SingleChildScrollView(
@@ -406,6 +514,16 @@ class _CommunityScreenState extends State<CommunityScreen> {
                           isSelected: selectedIndex == 2,
                           onTap: () => _onTabSelected(2),
                         ),
+                        CustomTabBar(
+                          label: 'Near Me',
+                          isSelected: selectedIndex == 3,
+                          onTap: () {
+                            if (_currentPosition == null) {
+                              _getCurrentLocation();
+                            }
+                            _onTabSelected(3);
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -445,7 +563,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       },
                     ),
                   ],
-                  if (_isLoading || _isUsernameLoading)
+                  if (_isLoading || _isUsernameLoading || _isLocationLoading)
                     const Padding(
                       padding: EdgeInsets.all(16),
                       child: Center(child: CircularProgressIndicator()),
@@ -498,6 +616,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
                           onDelete: () => _deletePost(post),
                           isOwner: isOwner,
                           postId: post['id'],
+                          showDistance: selectedIndex ==
+                              3, // Show distance in Near Me tab
                         ),
                       );
                     }),

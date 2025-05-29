@@ -59,7 +59,8 @@ class _MappingScreenState extends State<MappingScreen>
   bool _isCardVisible = false; // 🔥 control floating card visibility
 
   bool _isLoading = true;
-  MapType _currentMapType = MapType.normal;
+  MapType _currentMapType =
+      MapType.normal; // Changed back to normal from satellite
 
   final CameraPosition _initialCameraPosition = const CameraPosition(
     target: LatLng(14.6760, 121.0437), // Center of Quezon City
@@ -887,8 +888,7 @@ class _MappingScreenState extends State<MappingScreen>
         loadedPolygons.add(Polygon(
           polygonId: PolygonId(name),
           points: coords,
-          strokeColor:
-              _selectedPolygonId == PolygonId(name) ? Colors.redAccent : color,
+          strokeColor: Colors.white, // Changed to white
           strokeWidth: _selectedPolygonId == PolygonId(name) ? 4 : 2,
           fillColor: color.withOpacity(0.3),
           consumeTapEvents: true,

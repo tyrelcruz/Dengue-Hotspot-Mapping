@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:buzzmap/main.dart';
@@ -63,6 +64,9 @@ class _PostScreenState extends State<PostScreen> {
   bool _isLoadingLocation = false;
 
   bool _isLoading = false;
+
+  // Tutorial overlay state
+  bool _showMapTutorial = true;
 
   bool _isPointInsideBarangay(LatLng point) {
     for (final polygon in _barangayPolygons) {
@@ -168,9 +172,12 @@ class _PostScreenState extends State<PostScreen> {
     });
 
     _loadGeoJsonPolygons();
+    // Show tutorial only if no location is selected
+    _showMapTutorial = selectedCoordinates == null;
   }
 
   Future<void> _submitPost() async {
+    if (_isLoading) return; // Prevent duplicate submissions
     if (selectedCoordinates == null ||
         selectedBarangay == null ||
         selectedReportType == null ||
@@ -213,6 +220,9 @@ class _PostScreenState extends State<PostScreen> {
           title: 'Invalid Date/Time',
           message: 'Please check your date and time format.',
         );
+        setState(() {
+          _isLoading = false;
+        });
         return;
       }
 
@@ -255,20 +265,29 @@ class _PostScreenState extends State<PostScreen> {
         request.files.addAll(imageFiles);
       }
 
-      final streamedResponse = await request.send();
+      // Add a timeout to the request
+      final streamedResponse = await request
+          .send()
+          .timeout(const Duration(seconds: 15), onTimeout: () {
+        throw TimeoutException('Request timed out');
+      });
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // Show the empathetic feedback notification on success
-        await NotificationService.showEmpatheticFeedback(context,
-            "Thank you for reporting! We'll review your submission and notify you once verified.");
-
-        final responseData = jsonDecode(response.body);
-        debugPrint(
-            '✅ Report submitted successfully: ${responseData['report']}');
+        try {
+          final responseData = jsonDecode(response.body);
+          debugPrint('✅ Report submitted successfully: \\${response.body}');
+        } catch (e) {
+          debugPrint('⚠️ Could not parse response: \\${response.body}');
+        }
 
         // Navigate to the community screen (replace current screen)
         if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          await NotificationService.showEmpatheticFeedback(context,
+              "Thank you for reporting! We'll review your submission and notify you once verified.");
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const CommunityScreen()),
@@ -276,11 +295,26 @@ class _PostScreenState extends State<PostScreen> {
         }
       } else {
         throw Exception(
-            'Failed with status ${response.statusCode}: ${response.body}');
+            'Failed with status \\${response.statusCode}: \\${response.body}');
+      }
+    } on TimeoutException catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        await AppFlushBar.showError(
+          context,
+          title: 'Network Timeout',
+          message:
+              'Submission may have succeeded. Please check your posts in the Community screen before trying again.',
+        );
       }
     } catch (e) {
       debugPrint('❌ Error submitting post: $e');
       if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         await AppFlushBar.showError(
           context,
           title: 'Submission Failed',
@@ -587,8 +621,8 @@ class _PostScreenState extends State<PostScreen> {
 
   Widget _buildBarangayDropdown(BuildContext context) {
     final theme = Theme.of(context);
-    final allBarangays = districtData.values.expand((list) => list).toList()
-      ..sort();
+    // Use all barangay names from barangayCenters, sorted alphabetically
+    final allBarangays = barangayCenters.keys.toList()..sort();
 
     return SizedBox(
       width: double.infinity,
@@ -701,129 +735,187 @@ class _PostScreenState extends State<PostScreen> {
                         const SizedBox(height: 10),
                         _buildBarangayDropdown(context),
                         const SizedBox(height: 8),
-                        ClipRect(
-                          child: SizedBox(
-                            height: 200,
-                            child: Stack(
-                              children: [
-                                Listener(
-                                  onPointerDown: (_) => _disableMapScrolling(),
-                                  onPointerUp: (_) => _enableMapScrolling(),
-                                  child: AbsorbPointer(
-                                    absorbing: false,
-                                    child: GoogleMap(
-                                      polygons: _barangayPolygons,
-                                      onMapCreated: (controller) {
-                                        mapController = controller;
-                                      },
-                                      initialCameraPosition: CameraPosition(
-                                        target: selectedCoordinates ??
-                                            const LatLng(14.6700, 121.0437),
-                                        zoom: 11.8,
+                        Stack(
+                          children: [
+                            ClipRect(
+                              child: SizedBox(
+                                height: 200,
+                                child: Stack(
+                                  children: [
+                                    Listener(
+                                      onPointerDown: (_) =>
+                                          _disableMapScrolling(),
+                                      onPointerUp: (_) => _enableMapScrolling(),
+                                      child: AbsorbPointer(
+                                        absorbing: false,
+                                        child: GoogleMap(
+                                          polygons: _barangayPolygons,
+                                          onMapCreated: (controller) {
+                                            mapController = controller;
+                                          },
+                                          initialCameraPosition: CameraPosition(
+                                            target: selectedCoordinates ??
+                                                const LatLng(14.6700, 121.0437),
+                                            zoom: 11.8,
+                                          ),
+                                          onTap: (LatLng pos) async {
+                                            if (!_isPointInsideBarangay(pos)) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                      'Outside Quezon City'),
+                                                  backgroundColor:
+                                                      Colors.redAccent,
+                                                  duration:
+                                                      Duration(seconds: 2),
+                                                ),
+                                              );
+                                              return;
+                                            }
+
+                                            setState(() {
+                                              selectedCoordinates = pos;
+                                              _showMapTutorial =
+                                                  false; // Hide tutorial after selection
+                                            });
+
+                                            try {
+                                              List<Placemark> placemarks =
+                                                  await placemarkFromCoordinates(
+                                                      pos.latitude,
+                                                      pos.longitude);
+
+                                              if (placemarks.isNotEmpty) {
+                                                final place = placemarks.first;
+                                                setState(() {
+                                                  selectedAddress =
+                                                      '${place.name}, ${place.subLocality}, ${place.locality}';
+                                                  selectedBarangay =
+                                                      place.subLocality;
+                                                  selectedDistrict =
+                                                      guessDistrictFromBarangay(
+                                                          place.subLocality);
+                                                });
+                                              } else {
+                                                // If no placemarks found, try to find the nearest barangay
+                                                String? nearestBarangay =
+                                                    _findNearestBarangay(pos);
+                                                if (nearestBarangay != null) {
+                                                  setState(() {
+                                                    selectedBarangay =
+                                                        nearestBarangay;
+                                                    selectedDistrict =
+                                                        guessDistrictFromBarangay(
+                                                            nearestBarangay);
+                                                    selectedAddress =
+                                                        'Near $nearestBarangay';
+                                                  });
+                                                } else {
+                                                  setState(() {
+                                                    selectedAddress =
+                                                        'Selected Location';
+                                                    selectedBarangay = null;
+                                                    selectedDistrict = null;
+                                                  });
+                                                }
+                                              }
+                                            } catch (e) {
+                                              print(
+                                                  "Reverse geocoding error: $e");
+                                              // Try to find the nearest barangay as fallback
+                                              String? nearestBarangay =
+                                                  _findNearestBarangay(pos);
+                                              if (nearestBarangay != null) {
+                                                setState(() {
+                                                  selectedBarangay =
+                                                      nearestBarangay;
+                                                  selectedDistrict =
+                                                      guessDistrictFromBarangay(
+                                                          nearestBarangay);
+                                                  selectedAddress =
+                                                      'Near $nearestBarangay';
+                                                });
+                                              } else {
+                                                setState(() {
+                                                  selectedAddress =
+                                                      'Selected Location';
+                                                  selectedBarangay = null;
+                                                  selectedDistrict = null;
+                                                });
+                                              }
+                                            }
+                                          },
+                                          markers: selectedCoordinates != null
+                                              ? {
+                                                  Marker(
+                                                    markerId: const MarkerId(
+                                                        'selected'),
+                                                    position:
+                                                        selectedCoordinates!,
+                                                  )
+                                                }
+                                              : {},
+                                          zoomGesturesEnabled: true,
+                                          scrollGesturesEnabled: true,
+                                          rotateGesturesEnabled: true,
+                                          tiltGesturesEnabled: true,
+                                          myLocationEnabled: true,
+                                          myLocationButtonEnabled: true,
+                                        ),
                                       ),
-                                      onTap: (LatLng pos) async {
-                                        if (!_isPointInsideBarangay(pos)) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            const SnackBar(
-                                              content:
-                                                  Text('Outside Quezon City'),
-                                              backgroundColor: Colors.redAccent,
-                                              duration: Duration(seconds: 2),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            // Tutorial overlay
+                            if (_showMapTutorial && selectedCoordinates == null)
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  child: Container(
+                                    alignment: Alignment.bottomCenter,
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        Icon(
+                                          Icons.arrow_downward_rounded,
+                                          size: 48,
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 10),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                Colors.white.withOpacity(0.95),
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black12,
+                                                blurRadius: 8,
+                                                offset: Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Text(
+                                            'Tap the map to select your location',
+                                            style: theme.textTheme.bodyMedium
+                                                ?.copyWith(
+                                              color: theme.colorScheme.primary,
+                                              fontWeight: FontWeight.w600,
                                             ),
-                                          );
-                                          return;
-                                        }
-
-                                        setState(() {
-                                          selectedCoordinates = pos;
-                                        });
-
-                                        try {
-                                          List<Placemark> placemarks =
-                                              await placemarkFromCoordinates(
-                                                  pos.latitude, pos.longitude);
-
-                                          if (placemarks.isNotEmpty) {
-                                            final place = placemarks.first;
-                                            setState(() {
-                                              selectedAddress =
-                                                  '${place.name}, ${place.subLocality}, ${place.locality}';
-                                              selectedBarangay =
-                                                  place.subLocality;
-                                              selectedDistrict =
-                                                  guessDistrictFromBarangay(
-                                                      place.subLocality);
-                                            });
-                                          } else {
-                                            // If no placemarks found, try to find the nearest barangay
-                                            String? nearestBarangay =
-                                                _findNearestBarangay(pos);
-                                            if (nearestBarangay != null) {
-                                              setState(() {
-                                                selectedBarangay =
-                                                    nearestBarangay;
-                                                selectedDistrict =
-                                                    guessDistrictFromBarangay(
-                                                        nearestBarangay);
-                                                selectedAddress =
-                                                    'Near $nearestBarangay';
-                                              });
-                                            } else {
-                                              setState(() {
-                                                selectedAddress =
-                                                    'Selected Location';
-                                                selectedBarangay = null;
-                                                selectedDistrict = null;
-                                              });
-                                            }
-                                          }
-                                        } catch (e) {
-                                          print("Reverse geocoding error: $e");
-                                          // Try to find the nearest barangay as fallback
-                                          String? nearestBarangay =
-                                              _findNearestBarangay(pos);
-                                          if (nearestBarangay != null) {
-                                            setState(() {
-                                              selectedBarangay =
-                                                  nearestBarangay;
-                                              selectedDistrict =
-                                                  guessDistrictFromBarangay(
-                                                      nearestBarangay);
-                                              selectedAddress =
-                                                  'Near $nearestBarangay';
-                                            });
-                                          } else {
-                                            setState(() {
-                                              selectedAddress =
-                                                  'Selected Location';
-                                              selectedBarangay = null;
-                                              selectedDistrict = null;
-                                            });
-                                          }
-                                        }
-                                      },
-                                      markers: selectedCoordinates != null
-                                          ? {
-                                              Marker(
-                                                markerId:
-                                                    const MarkerId('selected'),
-                                                position: selectedCoordinates!,
-                                              )
-                                            }
-                                          : {},
-                                      zoomGesturesEnabled: true,
-                                      scrollGesturesEnabled: true,
-                                      rotateGesturesEnabled: true,
-                                      tiltGesturesEnabled: true,
-                                      myLocationEnabled: true,
-                                      myLocationButtonEnabled: true,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 18),
+                                      ],
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         IgnorePointer(
@@ -866,17 +958,189 @@ class _PostScreenState extends State<PostScreen> {
                             style: theme.textTheme.titleSmall
                                 ?.copyWith(color: theme.colorScheme.primary)),
                         const SizedBox(height: 10),
-                        CustomTextField(
-                          hintText: 'Choose a Report Type',
-                          isRequired: true,
-                          suffixIcon:
-                              const Icon(Icons.arrow_drop_down, size: 20),
-                          choices: reportTypes,
-                          onChanged: (value) {
-                            setState(() {
-                              selectedReportType = value;
-                            });
-                          },
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: CustomTextField(
+                                hintText: 'Choose a Report Type',
+                                isRequired: true,
+                                suffixIcon:
+                                    const Icon(Icons.arrow_drop_down, size: 20),
+                                choices: reportTypes,
+                                onChanged: (value) {
+                                  setState(() {
+                                    selectedReportType = value;
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.info_outline,
+                                  color: Colors.blueGrey),
+                              tooltip: 'Report Type Info',
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Report Type Meanings'),
+                                    content: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            GestureDetector(
+                                              onTap: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (context) => Dialog(
+                                                    backgroundColor:
+                                                        Colors.transparent,
+                                                    child: InteractiveViewer(
+                                                      child: ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(16),
+                                                        child: Image.asset(
+                                                          'assets/images/BreedingPots.jpg',
+                                                          fit: BoxFit.contain,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: Image.asset(
+                                                  'assets/images/BreedingPots.jpg',
+                                                  width: 48,
+                                                  height: 48,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Expanded(
+                                              child: Text(
+                                                'Breeding Site: A place where mosquitoes lay eggs (e.g., containers, tires, pots).',
+                                                style: TextStyle(fontSize: 14),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            GestureDetector(
+                                              onTap: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (context) => Dialog(
+                                                    backgroundColor:
+                                                        Colors.transparent,
+                                                    child: InteractiveViewer(
+                                                      child: ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(16),
+                                                        child: Image.asset(
+                                                          'assets/images/standingwater.jpg',
+                                                          fit: BoxFit.contain,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: Image.asset(
+                                                  'assets/images/standingwater.jpg',
+                                                  width: 48,
+                                                  height: 48,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Expanded(
+                                              child: Text(
+                                                'Standing Water: Any stagnant water that can become a mosquito habitat.',
+                                                style: TextStyle(fontSize: 14),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            GestureDetector(
+                                              onTap: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (context) => Dialog(
+                                                    backgroundColor:
+                                                        Colors.transparent,
+                                                    child: InteractiveViewer(
+                                                      child: ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(16),
+                                                        child: Image.asset(
+                                                          'assets/images/infestation.jpg',
+                                                          fit: BoxFit.contain,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: Image.asset(
+                                                  'assets/images/infestation.jpg',
+                                                  width: 48,
+                                                  height: 48,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Expanded(
+                                              child: Text(
+                                                'Infestation: An area with a high number of mosquitoes or larvae.',
+                                                style: TextStyle(fontSize: 14),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(),
+                                        child: const Text('Close'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -989,20 +1253,29 @@ class _PostScreenState extends State<PostScreen> {
                 height: 30,
                 width: 130,
                 child: FloatingActionButton.extended(
-                  onPressed: _submitPost,
+                  onPressed: _isLoading ? null : _submitPost,
                   backgroundColor: Colors.transparent,
                   elevation: 0,
                   label: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      'Report',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.primary,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            'Report',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.primary,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
                   ),
                 ),
               ),
