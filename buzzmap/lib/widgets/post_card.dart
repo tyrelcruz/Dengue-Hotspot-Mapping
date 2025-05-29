@@ -22,6 +22,7 @@ class PostCard extends StatelessWidget {
   final VoidCallback? onDelete;
   final bool isOwner;
   final String postId;
+  final bool showDistance;
 
   const PostCard({
     super.key,
@@ -42,7 +43,16 @@ class PostCard extends StatelessWidget {
     this.onDelete,
     this.isOwner = false,
     required this.postId,
+    this.showDistance = false,
   });
+
+  String _formatDistance(double distance) {
+    if (distance < 1) {
+      return '${(distance * 1000).round()}m away';
+    } else {
+      return '${distance.toStringAsFixed(1)}km away';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,14 +84,48 @@ class PostCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                UserInfoRow(
-                  title: username,
-                  subtitle: whenPosted,
-                  iconUrl: iconUrl,
-                  type: 'post',
-                  onReport: onReport,
-                  onDelete: onDelete,
-                  isOwner: isOwner,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: UserInfoRow(
+                        title: username,
+                        subtitle: whenPosted,
+                        iconUrl: iconUrl,
+                        type: 'post',
+                        onReport: onReport,
+                        onDelete: onDelete,
+                        isOwner: isOwner,
+                      ),
+                    ),
+                    if (showDistance && post['distance'] != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.location_on_outlined,
+                              size: 14,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatDistance(post['distance']),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 Padding(
@@ -90,6 +134,21 @@ class PostCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (!borderedType)
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              '📍 Location: ',
+                              style: theme.textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              location,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ],
+                        )
+                      else
                         Wrap(
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [

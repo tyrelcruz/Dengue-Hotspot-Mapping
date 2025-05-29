@@ -866,17 +866,189 @@ class _PostScreenState extends State<PostScreen> {
                             style: theme.textTheme.titleSmall
                                 ?.copyWith(color: theme.colorScheme.primary)),
                         const SizedBox(height: 10),
-                        CustomTextField(
-                          hintText: 'Choose a Report Type',
-                          isRequired: true,
-                          suffixIcon:
-                              const Icon(Icons.arrow_drop_down, size: 20),
-                          choices: reportTypes,
-                          onChanged: (value) {
-                            setState(() {
-                              selectedReportType = value;
-                            });
-                          },
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: CustomTextField(
+                                hintText: 'Choose a Report Type',
+                                isRequired: true,
+                                suffixIcon:
+                                    const Icon(Icons.arrow_drop_down, size: 20),
+                                choices: reportTypes,
+                                onChanged: (value) {
+                                  setState(() {
+                                    selectedReportType = value;
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.info_outline,
+                                  color: Colors.blueGrey),
+                              tooltip: 'Report Type Info',
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Report Type Meanings'),
+                                    content: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            GestureDetector(
+                                              onTap: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (context) => Dialog(
+                                                    backgroundColor:
+                                                        Colors.transparent,
+                                                    child: InteractiveViewer(
+                                                      child: ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(16),
+                                                        child: Image.asset(
+                                                          'assets/images/BreedingPots.jpg',
+                                                          fit: BoxFit.contain,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: Image.asset(
+                                                  'assets/images/BreedingPots.jpg',
+                                                  width: 48,
+                                                  height: 48,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Expanded(
+                                              child: Text(
+                                                'Breeding Site: A place where mosquitoes lay eggs (e.g., containers, tires, pots).',
+                                                style: TextStyle(fontSize: 14),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            GestureDetector(
+                                              onTap: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (context) => Dialog(
+                                                    backgroundColor:
+                                                        Colors.transparent,
+                                                    child: InteractiveViewer(
+                                                      child: ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(16),
+                                                        child: Image.asset(
+                                                          'assets/images/standingwater.jpg',
+                                                          fit: BoxFit.contain,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: Image.asset(
+                                                  'assets/images/standingwater.jpg',
+                                                  width: 48,
+                                                  height: 48,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Expanded(
+                                              child: Text(
+                                                'Standing Water: Any stagnant water that can become a mosquito habitat.',
+                                                style: TextStyle(fontSize: 14),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            GestureDetector(
+                                              onTap: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (context) => Dialog(
+                                                    backgroundColor:
+                                                        Colors.transparent,
+                                                    child: InteractiveViewer(
+                                                      child: ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(16),
+                                                        child: Image.asset(
+                                                          'assets/images/infestation.jpg',
+                                                          fit: BoxFit.contain,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                child: Image.asset(
+                                                  'assets/images/infestation.jpg',
+                                                  width: 48,
+                                                  height: 48,
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Expanded(
+                                              child: Text(
+                                                'Infestation: An area with a high number of mosquitoes or larvae.',
+                                                style: TextStyle(fontSize: 14),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(),
+                                        child: const Text('Close'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),

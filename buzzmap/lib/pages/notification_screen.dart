@@ -240,9 +240,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                       report['specific_location'] != null) {
                                     final location =
                                         report['specific_location'];
-                                    latitude = location['latitude']?.toDouble();
-                                    longitude =
-                                        location['longitude']?.toDouble();
+                                    if (location['coordinates'] != null) {
+                                      final coordinates =
+                                          location['coordinates'];
+                                      if (coordinates is List &&
+                                          coordinates.length >= 2) {
+                                        longitude = coordinates[0].toDouble();
+                                        latitude = coordinates[1].toDouble();
+                                      }
+                                    }
                                   }
 
                                   return NotificationTemplate(

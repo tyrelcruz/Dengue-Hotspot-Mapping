@@ -32,6 +32,10 @@ class EngagementRow extends StatefulWidget {
 }
 
 class _EngagementRowState extends State<EngagementRow> {
+  late int _numUpvotes;
+  late int _numDownvotes;
+  bool _isUpvoted = false;
+  bool _isDownvoted = false;
   bool isLoading = false;
   late SharedPreferences _prefs;
   List<Map<String, dynamic>> comments = [];
@@ -43,8 +47,9 @@ class _EngagementRowState extends State<EngagementRow> {
   @override
   void initState() {
     super.initState();
+    _numUpvotes = widget.numUpvotes;
+    _numDownvotes = widget.numDownvotes;
     _initializePrefs();
-    _fetchCommentsCount();
   }
 
   @override
@@ -57,10 +62,8 @@ class _EngagementRowState extends State<EngagementRow> {
     try {
       _prefs = await SharedPreferences.getInstance();
       _isInitialized = true;
-      if (mounted) {
-        final voteProvider = Provider.of<VoteProvider>(context, listen: false);
-        await voteProvider.checkVoteStatus(widget.postId);
-      }
+      await _loadVoteStatus();
+      await _fetchCommentsCount();
     } catch (e) {
       print('Error initializing SharedPreferences: $e');
     }
@@ -69,9 +72,81 @@ class _EngagementRowState extends State<EngagementRow> {
   @override
   void didUpdateWidget(EngagementRow oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.numUpvotes != widget.numUpvotes) {
+      _numUpvotes = widget.numUpvotes;
+    }
+    if (oldWidget.numDownvotes != widget.numDownvotes) {
+      _numDownvotes = widget.numDownvotes;
+    }
     if (oldWidget.postId != widget.postId && _isInitialized) {
-      final voteProvider = Provider.of<VoteProvider>(context, listen: false);
-      voteProvider.checkVoteStatus(widget.postId);
+      _loadVoteStatus();
+    }
+  }
+
+  Future<void> _loadVoteStatus() async {
+    final token = _prefs.getString('authToken');
+    if (token == null) return;
+
+    try {
+      final response = await http.get(
+        Uri.parse(
+            '${Config.baseUrl}/api/v1/reports/${widget.postId}/vote-status'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _isUpvoted = data['voteType'] == 'upvote';
+          _isDownvoted = data['voteType'] == 'downvote';
+        });
+      }
+    } catch (e) {
+      // Handle error silently
+    }
+  }
+
+  Future<void> _handleVote(String voteType) async {
+    if (isLoading) return;
+
+    setState(() => isLoading = true);
+
+    try {
+      final token = _prefs.getString('authToken');
+      if (token == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please log in to vote')),
+        );
+        return;
+      }
+
+      final response = await http.post(
+        Uri.parse('${Config.baseUrl}/api/v1/reports/${widget.postId}/vote'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'voteType': voteType}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _numUpvotes = data['upvotes'];
+          _numDownvotes = data['downvotes'];
+          _isUpvoted = data['userVote'] == 'upvote';
+          _isDownvoted = data['userVote'] == 'downvote';
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to submit vote')),
+      );
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
@@ -212,7 +287,8 @@ class _EngagementRowState extends State<EngagementRow> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final customColors = Theme.of(context).extension<CustomColors>();
-    final iconColor = widget.themeMode == 'dark' ? Colors.white : Colors.black;
+    final isDark = widget.themeMode == 'dark';
+    final iconColor = isDark ? Colors.white : Colors.black;
     final voteProvider = Provider.of<VoteProvider>(context);
     final isUpvoted = voteProvider.isUpvoted(widget.postId);
     final isDownvoted = voteProvider.isDownvoted(widget.postId);
@@ -246,14 +322,15 @@ class _EngagementRowState extends State<EngagementRow> {
                 icon: Icon(
                   Icons.arrow_upward_outlined,
                   color: isUpvoted ? Colors.green : iconColor,
-                  size: 28,
+                  size: 22,
+                  weight: 100,
                 ),
               ),
               Text(
                 formatCount(upvoteCount),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: isUpvoted ? Colors.green : iconColor,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(width: 12),
@@ -277,14 +354,15 @@ class _EngagementRowState extends State<EngagementRow> {
                 icon: Icon(
                   Icons.arrow_downward_outlined,
                   color: isDownvoted ? Colors.red : iconColor,
-                  size: 28,
+                  size: 22,
+                  weight: 100,
                 ),
               ),
               Text(
                 formatCount(downvoteCount),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: isDownvoted ? Colors.red : iconColor,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(width: 15),
@@ -307,7 +385,8 @@ class _EngagementRowState extends State<EngagementRow> {
                     Icon(
                       Icons.chat_bubble_outline,
                       color: iconColor,
-                      size: 24,
+                      size: 22,
+                      weight: 100,
                     ),
                     const SizedBox(width: 6),
                     isLoadingComments

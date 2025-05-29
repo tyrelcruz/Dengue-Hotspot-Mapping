@@ -65,12 +65,46 @@ class PostDetailScreen extends StatelessWidget {
               // User info
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: UserInfoRow(
-                  title: username,
-                  subtitle: whenPosted,
-                  iconUrl: iconUrl,
-                  type: 'post',
-                  isOwner: false,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: UserInfoRow(
+                        title: username,
+                        subtitle: whenPosted,
+                        iconUrl: iconUrl,
+                        type: 'post',
+                        isOwner: false,
+                      ),
+                    ),
+                    if (post['distance'] != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.location_on_outlined,
+                              size: 14,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatDistance(post['distance']),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
               // Post details (captions) above the image
@@ -168,6 +202,14 @@ class PostDetailScreen extends StatelessWidget {
       },
     );
   }
+
+  String _formatDistance(double distance) {
+    if (distance < 1) {
+      return '${(distance * 1000).round()}m away';
+    } else {
+      return '${distance.toStringAsFixed(1)}km away';
+    }
+  }
 }
 
 class CommentsSection extends StatefulWidget {
@@ -183,6 +225,8 @@ class _CommentsSectionState extends State<CommentsSection> {
   bool isLoading = true;
   bool isError = false;
   late SharedPreferences _prefs;
+  Map<String, bool> upvotedComments = {};
+  Map<String, bool> downvotedComments = {};
 
   @override
   void initState() {
@@ -202,6 +246,8 @@ class _CommentsSectionState extends State<CommentsSection> {
     });
     try {
       final token = _prefs.getString('authToken');
+      print('Fetching comments for post: ${widget.postId}'); // Debug log
+
       final response = await http.get(
         Uri.parse('${Config.baseUrl}/api/v1/reports/${widget.postId}/comments'),
         headers: {
@@ -209,6 +255,10 @@ class _CommentsSectionState extends State<CommentsSection> {
           'Content-Type': 'application/json',
         },
       );
+
+      print('Response status: ${response.statusCode}'); // Debug log
+      print('Response body: ${response.body}'); // Debug log
+
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         setState(() {
@@ -218,21 +268,119 @@ class _CommentsSectionState extends State<CommentsSection> {
                     'content': comment['content'],
                     'user': comment['user'],
                     'createdAt': comment['createdAt'],
+                    'upvotes': comment['upvotes'] ?? [],
+                    'downvotes': comment['downvotes'] ?? [],
                   })
               .toList();
+
+          // Initialize vote states
+          for (var comment in comments) {
+            final userId = _prefs.getString('userId');
+            if (userId != null) {
+              upvotedComments[comment['id']] =
+                  (comment['upvotes'] as List).contains(userId);
+              downvotedComments[comment['id']] =
+                  (comment['downvotes'] as List).contains(userId);
+            }
+          }
+
           isLoading = false;
         });
       } else {
+        print(
+            'Error loading comments: ${response.statusCode} - ${response.body}'); // Debug log
         setState(() {
           isError = true;
           isLoading = false;
         });
       }
     } catch (e) {
+      print('Exception loading comments: $e'); // Debug log
       setState(() {
         isError = true;
         isLoading = false;
       });
+    }
+  }
+
+  Future<void> _handleVote(String commentId, String voteType) async {
+    try {
+      final token = _prefs.getString('authToken');
+      if (token == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please log in to vote')),
+        );
+        return;
+      }
+
+      // Check if already voted
+      bool isUpvoted = upvotedComments[commentId] == true;
+      bool isDownvoted = downvotedComments[commentId] == true;
+
+      // If clicking the same vote type, remove the vote
+      if ((voteType == 'upvote' && isUpvoted) ||
+          (voteType == 'downvote' && isDownvoted)) {
+        final response = await http.delete(
+          Uri.parse('${Config.baseUrl}/api/v1/comments/$commentId/$voteType'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          setState(() {
+            final commentIndex =
+                comments.indexWhere((c) => c['id'] == commentId);
+            if (commentIndex != -1) {
+              comments[commentIndex]['upvotes'] = data['upvotes'] ?? [];
+              comments[commentIndex]['downvotes'] = data['downvotes'] ?? [];
+              upvotedComments[commentId] = false;
+              downvotedComments[commentId] = false;
+            }
+          });
+        } else {
+          print(
+              'Error removing vote: ${response.statusCode} - ${response.body}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to remove vote')),
+          );
+        }
+      } else {
+        // Add new vote
+        final response = await http.post(
+          Uri.parse('${Config.baseUrl}/api/v1/comments/$commentId/$voteType'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          setState(() {
+            final commentIndex =
+                comments.indexWhere((c) => c['id'] == commentId);
+            if (commentIndex != -1) {
+              comments[commentIndex]['upvotes'] = data['upvotes'] ?? [];
+              comments[commentIndex]['downvotes'] = data['downvotes'] ?? [];
+              upvotedComments[commentId] = voteType == 'upvote';
+              downvotedComments[commentId] = voteType == 'downvote';
+            }
+          });
+        } else {
+          print('Error adding vote: ${response.statusCode} - ${response.body}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to submit vote')),
+          );
+        }
+      }
+    } catch (e) {
+      print('Exception during vote: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to submit vote')),
+      );
     }
   }
 
@@ -251,16 +399,40 @@ class _CommentsSectionState extends State<CommentsSection> {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
     }
     if (isError) {
       return Center(
-        child: Text('Failed to load comments'),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'Failed to load comments',
+              style: TextStyle(color: Colors.red),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _fetchComments,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
       );
     }
     if (comments.isEmpty) {
       return const Center(
-        child: Text('No comments yet. Be the first to comment!'),
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text(
+            'No comments yet. Be the first to comment!',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
       );
     }
     return Column(
@@ -331,6 +503,97 @@ class _CommentsSectionState extends State<CommentsSection> {
                               _getTimeAgo(comment['createdAt']),
                               style: TextStyle(
                                   fontSize: 12, color: Colors.grey[600]),
+                            ),
+                            const SizedBox(width: 16),
+                            // Upvote button
+                            GestureDetector(
+                              onTap: () => _handleVote(comment['id'], 'upvote'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: upvotedComments[comment['id']] == true
+                                      ? Theme.of(context)
+                                          .primaryColor
+                                          .withOpacity(0.1)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      upvotedComments[comment['id']] == true
+                                          ? Icons.arrow_upward_rounded
+                                          : Icons.arrow_upward_outlined,
+                                      size: 16,
+                                      color:
+                                          upvotedComments[comment['id']] == true
+                                              ? Theme.of(context).primaryColor
+                                              : Colors.grey[600],
+                                      weight: 100,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${(comment['upvotes'] as List).length}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: upvotedComments[comment['id']] ==
+                                                true
+                                            ? Theme.of(context).primaryColor
+                                            : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // Downvote button
+                            GestureDetector(
+                              onTap: () =>
+                                  _handleVote(comment['id'], 'downvote'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color:
+                                      downvotedComments[comment['id']] == true
+                                          ? Theme.of(context)
+                                              .primaryColor
+                                              .withOpacity(0.1)
+                                          : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      downvotedComments[comment['id']] == true
+                                          ? Icons.arrow_downward_rounded
+                                          : Icons.arrow_downward_outlined,
+                                      size: 16,
+                                      color: downvotedComments[comment['id']] ==
+                                              true
+                                          ? Theme.of(context).primaryColor
+                                          : Colors.grey[600],
+                                      weight: 100,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${(comment['downvotes'] as List).length}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color:
+                                            downvotedComments[comment['id']] ==
+                                                    true
+                                                ? Theme.of(context).primaryColor
+                                                : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ],
                         ),
