@@ -864,14 +864,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.0.2"
-  pinput:
+  pin_code_fields:
     dependency: "direct main"
     description:
-      name: pinput
-      sha256: a92b55ecf9c25d1b9e100af45905385d5bc34fc9b6b04177a9e82cb88fe4d805
+      name: pin_code_fields
+      sha256: "4c0db7fbc889e622e7c71ea54b9ee624bb70c7365b532abea0271b17ea75b729"
       url: "https://pub.dev"
     source: hosted
-    version: "3.0.1"
+    version: "8.0.1"
   platform:
     dependency: transitive
     description:
@@ -981,14 +981,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  smart_auth:
-    dependency: transitive
-    description:
-      name: smart_auth
-      sha256: a25229b38c02f733d0a4e98d941b42bed91a976cb589e934895e60ccfa674cf6
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.1"
   source_span:
     dependency: transitive
     description:
@@ -1109,14 +1101,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
-  universal_platform:
-    dependency: transitive
-    description:
-      name: universal_platform
-      sha256: "64e16458a0ea9b99260ceb5467a214c1f298d647c659af1bff6d3bf82536b1ec"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.0"
   url_launcher:
     dependency: "direct main"
     description:

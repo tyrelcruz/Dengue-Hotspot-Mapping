@@ -90,6 +90,7 @@ class MyApp extends StatelessWidget {
         builder: (context, child) {
           return MaterialApp(
             title: 'BuzzMap App',
+            debugShowCheckedModeBanner: false,
             theme: ThemeData(
               colorScheme: const ColorScheme(
                 primary: primaryColor,

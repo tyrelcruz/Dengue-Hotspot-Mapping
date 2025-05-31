@@ -89,7 +89,7 @@ class PostCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: UserInfoRow(
-                        title: username,
+                        title: post['isAnonymous'] ? 'Anonymous' : username,
                         subtitle: whenPosted,
                         iconUrl: iconUrl,
                         type: 'post',
@@ -133,48 +133,16 @@ class PostCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (!borderedType)
-                        Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              '📍 Location: ',
-                              style: theme.textTheme.bodyMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              location,
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                          ],
-                        )
-                      else
-                        Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              '📍 Location: ',
-                              style: theme.textTheme.bodyMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              location,
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      const SizedBox(height: 4),
                       Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
-                            '🕒 Date & Time:',
+                            '📍 Address: ',
                             style: theme.textTheme.bodyMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(width: 8),
                           Text(
-                            '$date, $time',
+                            location,
                             style: theme.textTheme.bodyMedium,
                           ),
                         ],
@@ -184,11 +152,25 @@ class PostCard extends StatelessWidget {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
-                            '⚠️ Report Type:',
+                            '🏘️ Barangay: ',
                             style: theme.textTheme.bodyMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(width: 8),
+                          Text(
+                            post['barangay'] ?? 'Unknown',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            '⚠️ Report Type: ',
+                            style: theme.textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
                           Text(
                             reportType,
                             style: theme.textTheme.bodyMedium,
@@ -197,28 +179,23 @@ class PostCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.start,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
-                            '📝 Description',
+                            '📝 Description: ',
                             style: theme.textTheme.bodyMedium
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(width: 8),
                           Text(
                             description,
                             style: theme.textTheme.bodyMedium,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 8),
-                          _buildImageGrid(images, context),
-                        ],
-                      ),
+                      if (images.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _buildImageGrid(images, context),
+                      ],
                     ],
                   ),
                 ),

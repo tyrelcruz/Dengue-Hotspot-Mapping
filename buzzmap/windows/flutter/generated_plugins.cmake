@@ -7,7 +7,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_secure_storage_windows
   geolocator_windows
   permission_handler_windows
-  smart_auth
   url_launcher_windows
 )
 

@@ -40,7 +40,7 @@ class MappingScreen extends StatefulWidget {
 }
 
 class _MappingScreenState extends State<MappingScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late GoogleMapController _mapController;
   String? selectedDistrict;
   String? selectedBarangay;
@@ -56,11 +56,23 @@ class _MappingScreenState extends State<MappingScreen>
   PolygonId? _selectedPolygonId;
 
   Map<String, LatLng> _barangayCentroids = {};
-  bool _isCardVisible = false; // 🔥 control floating card visibility
+  bool _isCardVisible = false;
 
   bool _isLoading = true;
-  MapType _currentMapType =
-      MapType.normal; // Changed back to normal from satellite
+  bool _isLoadingMarkers = false;
+  bool _isLoadingRiskLevels = false;
+  bool _isLoadingInterventions = false;
+  MapType _currentMapType = MapType.normal;
+
+  // Animation controllers and animations
+  late AnimationController _animationController;
+  late Animation<double> _bounceAnimation;
+  bool _showTooltip = false;
+  Timer? _tooltipTimer;
+  late AnimationController _tooltipAnimationController;
+  late Animation<double> _tooltipAnimation;
+  late AnimationController _pulseAnimationController;
+  late Animation<double> _pulseAnimation;
 
   final CameraPosition _initialCameraPosition = const CameraPosition(
     target: LatLng(14.6760, 121.0437), // Center of Quezon City
@@ -71,7 +83,11 @@ class _MappingScreenState extends State<MappingScreen>
   final Map<String, bool> _layerOptions = {
     'Borders': true,
     'Markers': false,
+    'Interventions': false,
   };
+
+  // Add new set for intervention markers
+  Set<Marker> _interventionMarkers = {};
 
   final Map<String, List<String>> districtData = {
     'District I': [
@@ -202,8 +218,6 @@ class _MappingScreenState extends State<MappingScreen>
       'Pasong Tamo',
     ],
   };
-  late AnimationController _animationController;
-  late Animation<double> _bounceAnimation;
 
   // Barangay boundary data - coordinates for polygon borders
   final Map<String, List<LatLng>> barangayBoundaries = {
@@ -238,6 +252,7 @@ class _MappingScreenState extends State<MappingScreen>
   @override
   void initState() {
     super.initState();
+    // Initialize bounce animation
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -249,10 +264,33 @@ class _MappingScreenState extends State<MappingScreen>
       ),
     );
 
+    // Initialize tooltip animation
+    _tooltipAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _tooltipAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _tooltipAnimationController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    // Initialize pulse animation
+    _pulseAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
+      CurvedAnimation(
+        parent: _pulseAnimationController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
     // Initialize layer options
     _layerOptions['Borders'] = true;
-    _layerOptions['Markers'] = widget.reportId !=
-        null; // Enable markers if navigating from notification
+    _layerOptions['Markers'] = widget.reportId != null;
     _layerOptions['Heatmap'] = false;
 
     // Call the GeoJSON loading function for borders
@@ -282,9 +320,10 @@ class _MappingScreenState extends State<MappingScreen>
 
     // Using a slight delay to ensure Google Maps is fully loaded
     Timer(const Duration(milliseconds: 500), () {
-      _updateMapLayers();
-      setState(() {
-        _isLoading = false;
+      _updateMapLayers().then((_) {
+        setState(() {
+          _isLoading = false;
+        });
       });
     });
 
@@ -306,8 +345,10 @@ class _MappingScreenState extends State<MappingScreen>
     _locationCheckTimer?.cancel();
     _locationCheckTimer = null;
 
-    // Dispose the map controller
-    _mapController.dispose();
+    // Safely dispose the map controller if it exists
+    if (_mapController != null) {
+      _mapController.dispose();
+    }
 
     // Dispose the bounce controller
     _animationController.dispose();
@@ -316,6 +357,10 @@ class _MappingScreenState extends State<MappingScreen>
     LocationNotificationService.dismiss();
 
     _alertService.dispose();
+
+    _tooltipTimer?.cancel();
+    _tooltipAnimationController.dispose();
+    _pulseAnimationController.dispose();
 
     super.dispose();
   }
@@ -534,39 +579,92 @@ class _MappingScreenState extends State<MappingScreen>
     return isInside;
   }
 
-  void _updateMapLayers() async {
+  Future<void> _updateMapLayers() async {
     Set<Polygon> polygons = {};
     Set<Marker> markers = {};
 
-    // Add polygons if Borders is enabled or if Markers is enabled
-    if (_layerOptions['Borders']! || _layerOptions['Markers']!) {
-      if (_layerOptions['Markers']!) {
-        // When markers are enabled, show all polygons in green
-        for (var polygon in _barangayPolygons) {
-          polygons.add(Polygon(
-            polygonId: polygon.polygonId,
-            points: polygon.points,
-            strokeColor: const Color(0xFF388E3C), // Lighter green border
-            strokeWidth: 2,
-            fillColor: const Color(0xFF4CAF50).withOpacity(0.3),
-            consumeTapEvents: false,
-          ));
+    // Add polygons if Borders is enabled
+    if (_layerOptions['Borders']!) {
+      // Update polygon styles based on whether markers are enabled
+      Set<Polygon> updatedPolygons = _barangayPolygons.map((polygon) {
+        final barangayName = polygon.polygonId.value;
+        final pattern = _barangayPatterns[barangayName]?.toLowerCase();
+
+        Color borderColor;
+        Color fillColor;
+
+        if (_layerOptions['Markers']!) {
+          // When markers are enabled, all borders should be green
+          borderColor = Colors.green;
+          fillColor = Colors.green.withOpacity(0.4); // Increased opacity
+        } else {
+          // When markers are disabled, use pattern-based colors
+          switch (pattern) {
+            case 'spike':
+              borderColor = _selectedPolygonId == polygon.polygonId
+                  ? Colors.red.shade900
+                  : Colors.red.shade800;
+              fillColor =
+                  Colors.red.shade700.withOpacity(0.5); // Increased opacity
+              break;
+            case 'gradual_rise':
+              borderColor = _selectedPolygonId == polygon.polygonId
+                  ? Colors.orange.shade900
+                  : Colors.orange.shade800;
+              fillColor =
+                  Colors.orange.shade500.withOpacity(0.5); // Increased opacity
+              break;
+            case 'decline':
+              borderColor = _selectedPolygonId == polygon.polygonId
+                  ? Colors.green.shade900
+                  : Colors.green.shade800;
+              fillColor =
+                  Colors.green.shade600.withOpacity(0.5); // Increased opacity
+              break;
+            case 'stability':
+              borderColor = _selectedPolygonId == polygon.polygonId
+                  ? Colors.lightBlue.shade900
+                  : Colors.lightBlue.shade800;
+              fillColor = Colors.lightBlue.shade600
+                  .withOpacity(0.5); // Increased opacity
+              break;
+            default:
+              borderColor = _selectedPolygonId == polygon.polygonId
+                  ? Colors.grey.shade900
+                  : Colors.grey.shade800;
+              fillColor =
+                  Colors.grey.shade700.withOpacity(0.5); // Increased opacity
+          }
         }
-      } else {
-        // When only borders are enabled, show polygons with their risk level colors
-        polygons = polygons.union(_barangayPolygons);
-      }
+
+        return Polygon(
+          polygonId: polygon.polygonId,
+          points: polygon.points,
+          strokeColor: borderColor,
+          strokeWidth: _selectedPolygonId == polygon.polygonId
+              ? 3
+              : 2, // Increased stroke width
+          fillColor: fillColor,
+          consumeTapEvents: true,
+          onTap: () {
+            _onBarangayPolygonTapped(polygon.polygonId.value);
+          },
+        );
+      }).toSet();
+      polygons = updatedPolygons;
     }
 
     // Add markers if Markers is enabled
     if (_layerOptions['Markers']!) {
       markers = await _loadVerifiedReportMarkers();
-    } else {
-      // Clear markers when Markers layer is disabled
-      markers = {};
     }
 
-    // Apply the layers to the map
+    // Add intervention markers if Interventions is enabled
+    if (_layerOptions['Interventions']!) {
+      await _fetchInterventions();
+      markers = markers.union(_interventionMarkers);
+    }
+
     if (mounted) {
       setState(() {
         _polygons = polygons;
@@ -595,36 +693,42 @@ class _MappingScreenState extends State<MappingScreen>
       Color polygonColor;
       Color borderColor;
 
-      // If no data is available, use gray
-      if (pattern == null) {
-        print(
-            'No pattern data for polygon $barangayName (mapped to $lookupName)'); // Debug log
-        polygonColor = Colors.grey.shade700;
-        borderColor = Colors.grey.shade800;
+      // If report markers are enabled, use green borders
+      if (_layerOptions['Markers']!) {
+        polygonColor = Colors.transparent;
+        borderColor = Colors.green;
       } else {
-        // Color based on pattern status
-        switch (pattern) {
-          case 'spike':
-            polygonColor = Colors.red.shade700;
-            borderColor = Colors.red.shade900;
-            break;
-          case 'gradual_rise':
-            polygonColor = Colors.orange.shade500;
-            borderColor = Colors.orange.shade700;
-            break;
-          case 'decline':
-            polygonColor = Colors.green.shade600;
-            borderColor = Colors.green.shade800;
-            break;
-          case 'stability':
-            polygonColor = Colors.lightBlue.shade600;
-            borderColor = Colors.lightBlue.shade800;
-            break;
-          default:
-            print(
-                'Unknown pattern for polygon $barangayName (mapped to $lookupName): $pattern'); // Debug log
-            polygonColor = Colors.grey.shade700;
-            borderColor = Colors.grey.shade800;
+        // If no data is available, use gray
+        if (pattern == null) {
+          print(
+              'No pattern data for polygon $barangayName (mapped to $lookupName)'); // Debug log
+          polygonColor = Colors.grey.shade700;
+          borderColor = Colors.grey.shade800;
+        } else {
+          // Color based on pattern status
+          switch (pattern) {
+            case 'spike':
+              polygonColor = Colors.red.shade700;
+              borderColor = Colors.red.shade900;
+              break;
+            case 'gradual_rise':
+              polygonColor = Colors.orange.shade500;
+              borderColor = Colors.orange.shade700;
+              break;
+            case 'decline':
+              polygonColor = Colors.green.shade600;
+              borderColor = Colors.green.shade800;
+              break;
+            case 'stability':
+              polygonColor = Colors.lightBlue.shade600;
+              borderColor = Colors.lightBlue.shade800;
+              break;
+            default:
+              print(
+                  'Unknown pattern for polygon $barangayName (mapped to $lookupName): $pattern'); // Debug log
+              polygonColor = Colors.grey.shade700;
+              borderColor = Colors.grey.shade800;
+          }
         }
       }
 
@@ -714,7 +818,8 @@ class _MappingScreenState extends State<MappingScreen>
             .toList();
 
         // Apply clustering based on zoom level
-        if (_currentZoom < 14) {
+        if (_currentZoom < 12) {
+          // Changed from 14 to 12
           return _createClusters(markers);
         } else {
           return markers.toSet();
@@ -1124,8 +1229,13 @@ class _MappingScreenState extends State<MappingScreen>
                           },
                           circles: _circles,
                           markers: _layerOptions['Markers']!
-                              ? _clusterMarkers
-                              : _markers,
+                              ? _clusterMarkers.union(
+                                  _layerOptions['Interventions']!
+                                      ? _interventionMarkers
+                                      : {})
+                              : _layerOptions['Interventions']!
+                                  ? _interventionMarkers
+                                  : _markers,
                           polygons: _polygons,
                           polylines: _polylines,
                           myLocationEnabled: true,
@@ -1135,6 +1245,9 @@ class _MappingScreenState extends State<MappingScreen>
                           onCameraMove: (position) {
                             setState(() {
                               _currentZoom = position.zoom;
+                              if (_currentZoom > 12 && !_showTooltip) {
+                                _showResetTooltip();
+                              }
                             });
                           },
                           onCameraIdle: () {
@@ -1147,20 +1260,42 @@ class _MappingScreenState extends State<MappingScreen>
                             }
                           },
                         ),
-                        if (_isLoading)
+                        if (_isLoading ||
+                            _isLoadingMarkers ||
+                            _isLoadingRiskLevels ||
+                            _isLoadingInterventions)
                           Center(
                             child: Container(
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
-                              child: const Column(
+                              child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  CircularProgressIndicator(),
-                                  SizedBox(height: 8),
-                                  Text('Loading map data...'),
+                                  const CircularProgressIndicator(),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _isLoadingMarkers
+                                        ? 'Loading report markers...'
+                                        : _isLoadingRiskLevels
+                                            ? 'Loading risk levels...'
+                                            : _isLoadingInterventions
+                                                ? 'Loading interventions...'
+                                                : 'Loading map data...',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -1385,32 +1520,59 @@ class _MappingScreenState extends State<MappingScreen>
 
   Widget _buildLayerControls() {
     return Positioned(
-      top: 12,
+      top: 80, // Moved down to avoid overlap with header
       right: 12,
       child: Column(
         children: [
           Container(
-            decoration: _buttonStyle(),
+            decoration: _buttonStyle().copyWith(
+              color: Colors.white.withOpacity(0.9),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
             child: IconButton(
-              icon: const Icon(Icons.layers),
+              icon: const Icon(Icons.layers, color: Colors.blue),
               onPressed: () => _showLayerOptions(context),
               tooltip: 'Layer Controls',
             ),
           ),
           const SizedBox(height: 8),
           Container(
-            decoration: _buttonStyle(),
+            decoration: _buttonStyle().copyWith(
+              color: Colors.white.withOpacity(0.9),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
             child: IconButton(
-              icon: const Icon(Icons.info_outline),
+              icon: const Icon(Icons.info_outline, color: Colors.blue),
               onPressed: () => _showMapLegend(context),
               tooltip: 'Map Legend',
             ),
           ),
           const SizedBox(height: 8),
           Container(
-            decoration: _buttonStyle(),
+            decoration: _buttonStyle().copyWith(
+              color: Colors.white.withOpacity(0.9),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
             child: IconButton(
-              icon: const Icon(Icons.map),
+              icon: const Icon(Icons.map, color: Colors.blue),
               onPressed: () {
                 setState(() {
                   _currentMapType = _currentMapType == MapType.normal
@@ -1421,6 +1583,129 @@ class _MappingScreenState extends State<MappingScreen>
               tooltip: 'Toggle Map/Satellite View',
             ),
           ),
+          if (_currentZoom > 12) ...[
+            const SizedBox(height: 8),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AnimatedBuilder(
+                  animation: _pulseAnimation,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _pulseAnimation.value,
+                      child: Container(
+                        decoration: _buttonStyle().copyWith(
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.3),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.center_focus_strong,
+                            color: Colors.blue,
+                          ),
+                          onPressed: () {
+                            _mapController.animateCamera(
+                              CameraUpdate.newCameraPosition(
+                                const CameraPosition(
+                                  target: LatLng(14.6760, 121.0437),
+                                  zoom: 11.4,
+                                ),
+                              ),
+                            );
+                          },
+                          tooltip: 'Reset View',
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                if (_showTooltip)
+                  Positioned(
+                    right: 50,
+                    top: -35,
+                    child: FadeTransition(
+                      opacity: _tooltipAnimation,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.info_outline,
+                                  size: 16,
+                                  color: Colors.blue,
+                                ),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'Reset to city view',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.blue,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Arrow pointer
+                          Positioned(
+                            right: -6,
+                            bottom: -6,
+                            child: Transform.rotate(
+                              angle: -0.785398, // 45 degrees in radians
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1460,15 +1745,45 @@ class _MappingScreenState extends State<MappingScreen>
                   'Markers',
                   setState,
                 ),
+                _buildLayerSwitch(
+                  'Interventions',
+                  'Shows locations of dengue interventions',
+                  'Interventions',
+                  setState,
+                ),
               ],
             );
           },
         ),
         actions: [
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(context).pop();
-              _updateMapLayers(); // Apply the layer settings
+
+              // Set loading state based on which options are enabled
+              setState(() {
+                if (_layerOptions['Markers']!) {
+                  _isLoadingMarkers = true;
+                }
+                if (_layerOptions['Borders']!) {
+                  _isLoadingRiskLevels = true;
+                }
+                if (_layerOptions['Interventions']!) {
+                  _isLoadingInterventions = true;
+                }
+              });
+
+              // Update map layers
+              await _updateMapLayers();
+
+              // Clear loading states
+              if (mounted) {
+                setState(() {
+                  _isLoadingMarkers = false;
+                  _isLoadingRiskLevels = false;
+                  _isLoadingInterventions = false;
+                });
+              }
             },
             child: const Text('Apply'),
           ),
@@ -1487,24 +1802,23 @@ class _MappingScreenState extends State<MappingScreen>
       title: Text(title),
       subtitle: Text(description),
       trailing: Switch(
-        value: _layerOptions[optionKey]!,
+        value: _layerOptions[optionKey] ?? false,
         onChanged: (value) {
           setState(() {
-            // If turning on this option, turn off all others
             if (value) {
-              _layerOptions.forEach((key, _) {
-                _layerOptions[key] = key == optionKey;
-              });
-            } else {
-              // If turning off the last active option, don't allow it
-              if (_layerOptions.values.where((v) => v).length <= 1) {
-                // Instead of preventing the turn off, turn on a default layer
-                _layerOptions['Heatmap'] = true;
-                _layerOptions[optionKey] = false;
-              } else {
-                _layerOptions[optionKey] = false;
+              // If turning on Report Markers, ensure Borders stay enabled
+              if (optionKey == 'Markers') {
+                _layerOptions['Borders'] = true;
               }
+              // Turn off other options except Borders
+              _layerOptions.forEach((key, _) {
+                if (key != 'Borders') {
+                  _layerOptions[key] = false;
+                }
+              });
             }
+            // Set the selected option
+            _layerOptions[optionKey] = value;
           });
         },
       ),
@@ -2542,6 +2856,9 @@ class _MappingScreenState extends State<MappingScreen>
 
           // Update polygons with new risk levels and patterns
           _updatePolygonsWithRiskLevels();
+
+          // Force a map update
+          _updateMapLayers();
         } else {
           print('API response indicates failure or no data');
           print('Success flag: ${data['success']}');
@@ -2591,7 +2908,104 @@ class _MappingScreenState extends State<MappingScreen>
       }
     } catch (e) {
       print('Error fetching dengue data: $e');
-      setState(() => _isLoadingData = false);
+      print('Error stack trace: ${StackTrace.current}');
+    }
+  }
+
+  Future<void> _fetchInterventions() async {
+    try {
+      print('Fetching interventions...'); // Debug log
+
+      // Get the auth token
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken');
+
+      if (token == null) {
+        print('No auth token found for interventions');
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('${Config.baseUrl}/api/v1/interventions'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      print(
+          'Interventions response status: ${response.statusCode}'); // Debug log
+      print('Interventions response body: ${response.body}'); // Debug log
+
+      if (response.statusCode == 200) {
+        final List<dynamic> interventions = jsonDecode(response.body);
+        print(
+            'Number of interventions found: ${interventions.length}'); // Debug log
+
+        setState(() {
+          _interventionMarkers = interventions.map((intervention) {
+            final coords = intervention['specific_location']['coordinates'];
+            final position = LatLng(coords[1], coords[0]);
+            final status =
+                intervention['status']?.toString().toLowerCase() ?? 'scheduled';
+            final interventionType =
+                intervention['interventionType'] ?? 'Unknown';
+            final date = DateTime.parse(intervention['date']);
+            final formattedDate = '${date.day}/${date.month}/${date.year}';
+
+            print(
+                'Creating marker for intervention: $interventionType at ${position.latitude}, ${position.longitude}'); // Debug log
+
+            // Choose marker color based on status
+            BitmapDescriptor markerIcon;
+            switch (status) {
+              case 'complete':
+                markerIcon = BitmapDescriptor.defaultMarkerWithHue(
+                    BitmapDescriptor.hueGreen);
+                break;
+              case 'scheduled':
+                markerIcon = BitmapDescriptor.defaultMarkerWithHue(
+                    BitmapDescriptor.hueBlue);
+                break;
+              default:
+                markerIcon = BitmapDescriptor.defaultMarkerWithHue(
+                    BitmapDescriptor.hueYellow);
+            }
+
+            return Marker(
+              markerId: MarkerId(intervention['_id']),
+              position: position,
+              icon: markerIcon,
+              infoWindow: InfoWindow(
+                title: interventionType,
+                snippet:
+                    'Status: ${status.toUpperCase()}\nDate: $formattedDate',
+              ),
+              onTap: () {
+                _showInterventionDetails(intervention);
+              },
+            );
+          }).toSet();
+        });
+
+        print(
+            'Number of intervention markers created: ${_interventionMarkers.length}'); // Debug log
+      } else {
+        print('Failed to fetch interventions: ${response.statusCode}');
+        if (response.statusCode == 401) {
+          print('Authentication failed. Please log in again.');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please log in to view interventions'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching interventions: $e');
     }
   }
 
@@ -2630,5 +3044,109 @@ class _MappingScreenState extends State<MappingScreen>
             'Unknown pattern for $barangayName (mapped to $lookupName): $pattern'); // Debug log
         return Colors.grey.shade700;
     }
+  }
+
+  void _showResetTooltip() {
+    setState(() {
+      _showTooltip = true;
+    });
+    _tooltipAnimationController.forward();
+
+    // Cancel any existing timer
+    _tooltipTimer?.cancel();
+
+    // Set new timer to hide tooltip
+    _tooltipTimer = Timer(const Duration(seconds: 3), () {
+      _tooltipAnimationController.reverse().then((_) {
+        if (mounted) {
+          setState(() {
+            _showTooltip = false;
+          });
+        }
+      });
+    });
+  }
+
+  // Add function to show intervention details
+  void _showInterventionDetails(Map<String, dynamic> intervention) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              intervention['interventionType'] ?? 'Unknown Intervention',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildInfoRow('Status',
+                intervention['status']?.toString().toUpperCase() ?? 'Unknown'),
+            _buildInfoRow('Date',
+                DateTime.parse(intervention['date']).toString().split(' ')[0]),
+            _buildInfoRow('Address', intervention['address'] ?? 'Unknown'),
+            _buildInfoRow('Barangay', intervention['barangay'] ?? 'Unknown'),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _zoomToLocation(
+                    LatLng(
+                      intervention['specific_location']['coordinates'][1],
+                      intervention['specific_location']['coordinates'][0],
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text('View on Map'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.black54,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(value),
+          ),
+        ],
+      ),
+    );
   }
 }

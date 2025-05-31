@@ -141,12 +141,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
+      print('📊 Raw API response: ${response.body}');
 
       // Process reports in parallel
       final reports = await Future.wait(
-        data
-            .where((report) => report['status'] == 'Validated')
-            .map((report) async {
+        data.map((report) async {
           final DateTime reportDate = DateTime.parse(report['date_and_time']);
           final DateTime now = DateTime.now();
           final Duration difference = now.difference(reportDate);
@@ -188,6 +187,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
             'numDownvotes': report['downvotes']?.length ?? 0,
             'date_and_time': report['date_and_time'],
             'specific_location': report['specific_location'],
+            'isAnonymous': report['isAnonymous'] ?? false,
+            'anonymousId': report['anonymousId'],
+            '_commentCount': report['_commentCount'] ?? 0,
+            '_latestComment': report['_latestComment'],
           };
         }),
       );

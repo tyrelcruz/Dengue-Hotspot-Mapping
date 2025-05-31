@@ -6,22 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 //Login
 class Config {
   static String get baseUrl {
-    if (Platform.isAndroid) {
-      if (Platform.environment.containsKey('ANDROID_EMULATOR')) {
-        return dotenv.env['API_BASE_URL_ANDROID_EMULATOR'] ??
-            'http://10.0.2.2:4000';
-      }
-      return dotenv.env['API_BASE_URL_PHYSICAL_DEVICE'] ??
-          'http://192.168.1.45:4000';
-    } else if (Platform.isIOS) {
-      if (Platform.environment.containsKey('SIMULATOR_DEVICE_NAME')) {
-        return dotenv.env['API_BASE_URL_IOS_SIMULATOR'] ??
-            'http://localhost:4000';
-      }
-      return dotenv.env['API_BASE_URL_PHYSICAL_DEVICE'] ??
-          'http://192.168.1.45:4000';
-    }
-    return dotenv.env['API_BASE_URL_IOS_SIMULATOR'] ?? 'http://localhost:4000';
+    return 'https://buzzmap-server.vercel.app';
   }
 
   // Add these URLs
