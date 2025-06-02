@@ -779,9 +779,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       return;
                                     }
 
-                                    final baseUrl = Platform.isAndroid
-                                        ? 'http://10.0.2.2:4000'
-                                        : 'http://localhost:4000';
+                                    final baseUrl = Config.baseUrl;
                                     final checkEmailUrl = Uri.parse(
                                         '$baseUrl/api/v1/auth/check-email');
 

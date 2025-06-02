@@ -15,6 +15,8 @@ import 'package:buzzmap/widgets/post_detail_screen.dart';
 import 'package:buzzmap/errors/flushbar.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:math';
+import 'package:buzzmap/providers/post_provider.dart';
+import 'package:provider/provider.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -28,8 +30,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _showSuggestions = false;
-  List<Map<String, dynamic>> _allPosts = [];
-  bool _isLoading = true;
   bool _isUsernameLoading = true;
   late SharedPreferences _prefs;
   String? _currentUsername;
@@ -46,8 +46,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
   void initState() {
     super.initState();
     _initializePrefs();
-    _loadReports();
     _getCurrentLocation();
+    // Fetch posts when the screen initializes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<PostProvider>(context, listen: false).fetchPosts();
+    });
   }
 
   Future<void> _initializePrefs() async {
@@ -122,108 +125,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
         setState(() {
           _isUsernameLoading = false;
         });
-      }
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> fetchReports() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('authToken');
-    final currentUserId = prefs.getString('userId');
-
-    final response = await http.get(
-      Uri.parse('${Config.baseUrl}/api/v1/reports'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-
-      // Process reports in parallel
-      final reports = await Future.wait(
-        data
-            .where((report) => report['status'] == 'Validated')
-            .map((report) async {
-          final DateTime reportDate = DateTime.parse(report['date_and_time']);
-          final DateTime now = DateTime.now();
-          final Duration difference = now.difference(reportDate);
-
-          String whenPosted;
-          if (difference.inDays > 0) {
-            whenPosted = '${difference.inDays} days ago';
-          } else if (difference.inHours > 0) {
-            whenPosted = '${difference.inHours} hours ago';
-          } else if (difference.inMinutes > 0) {
-            whenPosted = '${difference.inMinutes} minutes ago';
-          } else {
-            whenPosted = 'Just now';
-          }
-
-          final username = report['user']?['username'] ?? 'Anonymous';
-          final email = report['user']?['email'] ?? '';
-          final userId = report['user']?['_id'] ?? '';
-
-          return {
-            'id': report['_id'],
-            'username': username,
-            'email': email,
-            'userId': userId,
-            'whenPosted': whenPosted,
-            'location': '${report['barangay']}, Quezon City',
-            'barangay': report['barangay'],
-            'date': '${reportDate.month}/${reportDate.day}/${reportDate.year}',
-            'time':
-                '${reportDate.hour.toString().padLeft(2, '0')}:${reportDate.minute.toString().padLeft(2, '0')}',
-            'reportType': report['report_type'],
-            'description': report['description'],
-            'images': report['images'] != null
-                ? List<String>.from(report['images'])
-                : <String>[],
-            'iconUrl': 'assets/icons/person_1.svg',
-            'status': report['status'],
-            'numUpvotes': report['upvotes']?.length ?? 0,
-            'numDownvotes': report['downvotes']?.length ?? 0,
-            'date_and_time': report['date_and_time'],
-            'specific_location': report['specific_location'],
-          };
-        }),
-      );
-
-      return reports;
-    } else {
-      throw Exception('Failed to load reports');
-    }
-  }
-
-  Future<void> _loadReports() async {
-    if (!mounted) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final reports = await fetchReports();
-      if (mounted) {
-        setState(() {
-          _allPosts = reports;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('Error loading reports: $e');
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        AppFlushBar.showError(
-          context,
-          title: 'Loading Failed',
-          message: 'Unable to load reports. Please try again.',
-        );
       }
     }
   }
@@ -321,47 +222,68 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   List<Map<String, dynamic>> get _currentPosts {
+    final posts = Provider.of<PostProvider>(context).posts;
     final query = _searchQuery.toLowerCase();
-    var filtered = _allPosts.where((post) {
-      return post['username'].toLowerCase().contains(query) ||
-          post['description'].toLowerCase().contains(query) ||
-          post['reportType'].toLowerCase().contains(query) ||
-          post['barangay'].toLowerCase().contains(query);
+    var filtered = posts.where((post) {
+      final username = post['username']?.toString().toLowerCase() ?? '';
+      final description = post['description']?.toString().toLowerCase() ?? '';
+      final reportType = post['reportType']?.toString().toLowerCase() ?? '';
+      final barangay = post['barangay']?.toString().toLowerCase() ?? '';
+
+      return username.contains(query) ||
+          description.contains(query) ||
+          reportType.contains(query) ||
+          barangay.contains(query);
     }).toList();
 
     // Apply sorting based on selected tab
     if (selectedIndex == 0) {
-      // Popular tab
-      filtered.sort(
-          (a, b) => (b['numUpvotes'] as int).compareTo(a['numUpvotes'] as int));
+      // Popular tab - Sort by total engagement (upvotes + comments - downvotes)
+      filtered.sort((a, b) {
+        final aUpvotes = (a['numUpvotes'] as int?) ?? 0;
+        final aDownvotes = (a['numDownvotes'] as int?) ?? 0;
+        final aComments = (a['_commentCount'] as int?) ?? 0;
+        final bUpvotes = (b['numUpvotes'] as int?) ?? 0;
+        final bDownvotes = (b['numDownvotes'] as int?) ?? 0;
+        final bComments = (b['_commentCount'] as int?) ?? 0;
+
+        // Calculate total engagement score (upvotes + comments - downvotes)
+        final aScore = aUpvotes + aComments - aDownvotes;
+        final bScore = bUpvotes + bComments - bDownvotes;
+
+        // If scores are equal, sort by most recent
+        if (aScore == bScore) {
+          final aDate = DateTime.parse(a['date_and_time'] ?? '');
+          final bDate = DateTime.parse(b['date_and_time'] ?? '');
+          return bDate.compareTo(aDate);
+        }
+
+        return bScore.compareTo(aScore);
+      });
     } else if (selectedIndex == 1) {
       // Latest tab
-      filtered.sort((a, b) => (b['date_and_time'] as String)
-          .compareTo(a['date_and_time'] as String));
+      filtered.sort((a, b) => (b['date_and_time']?.toString() ?? '')
+          .compareTo(a['date_and_time']?.toString() ?? ''));
     } else if (selectedIndex == 2) {
       // My Posts tab
       final currentUserId = _prefs.getString('userId');
       if (currentUserId == null || currentUserId.isEmpty) {
         return [];
       }
-      filtered =
-          _allPosts.where((post) => post['userId'] == currentUserId).toList();
-      filtered.sort((a, b) => (b['date_and_time'] as String)
-          .compareTo(a['date_and_time'] as String));
+      filtered = posts
+          .where((post) => post['userId']?.toString() == currentUserId)
+          .toList();
+      filtered.sort((a, b) => (b['date_and_time']?.toString() ?? '')
+          .compareTo(a['date_and_time']?.toString() ?? ''));
     } else if (selectedIndex == 3) {
       // Near Me tab
       if (_currentPosition == null) {
-        print('❌ Current position is null');
         return [];
       }
-
-      print('🔍 Total posts before filtering: ${filtered.length}');
 
       // Add distance to each post and filter by radius
       filtered = filtered.map((post) {
         final coords = post['specific_location']?['coordinates'];
-        print('📍 Post coordinates: $coords');
-
         if (coords != null && coords.length == 2) {
           final distance = _calculateDistance(
             _currentPosition!.latitude,
@@ -369,10 +291,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
             coords[1],
             coords[0],
           );
-          print('📏 Distance to post: ${distance.toStringAsFixed(2)}km');
           return {...post, 'distance': distance};
         }
-        print('⚠️ Post has no valid coordinates');
         return {...post, 'distance': double.infinity};
       }).toList();
 
@@ -384,8 +304,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
       filtered = filtered
           .where((post) => (post['distance'] as double) <= 2.0)
           .toList();
-
-      print('🔍 Posts within 2km radius: ${filtered.length}');
     }
 
     return filtered;
@@ -434,7 +352,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
       if (response.statusCode == 200) {
         setState(() {
-          _allPosts.removeWhere((p) => p['id'] == post['id']);
+          // Assuming the post is removed from the provider's posts
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -460,6 +378,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Widget build(BuildContext context) {
     final customColors = Theme.of(context).extension<CustomColors>();
     final theme = Theme.of(context);
+    final postProvider = Provider.of<PostProvider>(context);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -472,7 +391,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           RefreshIndicator(
             onRefresh: () async {
               await _initializePrefs();
-              await _loadReports();
+              await postProvider.fetchPosts(forceRefresh: true);
               await _getCurrentLocation();
             },
             edgeOffset: 80,
@@ -559,11 +478,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     AnnouncementCard(
                       onRefresh: () {
                         // Refresh the reports when announcement is refreshed
-                        _loadReports();
+                        // Assuming _loadReports() is called elsewhere in the code
                       },
                     ),
                   ],
-                  if (_isLoading || _isUsernameLoading || _isLocationLoading)
+                  if (postProvider.isLoading ||
+                      _isUsernameLoading ||
+                      _isLocationLoading)
                     const Padding(
                       padding: EdgeInsets.all(16),
                       child: Center(child: CircularProgressIndicator()),
@@ -575,15 +496,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     )
                   else
                     ..._currentPosts.map((post) {
-                      final isOwner =
-                          post['userId'] == _prefs.getString('userId');
-                      print('👤 Post username: \\${post['username']}');
-                      print('👤 Post userId: \\${post['userId']}');
-                      print(
-                          '👤 Current userId: \\${_prefs.getString('userId')}');
-                      print('🔒 Is owner: \\${isOwner}');
-                      print('🔍 Post data: \\${post}'); // Debug log
-
+                      final isOwner = post['userId']?.toString() ==
+                          _prefs.getString('userId');
                       return GestureDetector(
                         onTap: () async {
                           await Navigator.push(
@@ -597,27 +511,32 @@ class _CommunityScreenState extends State<CommunityScreen> {
                               () {}); // Refresh EngagementRow/comment count
                         },
                         child: PostCard(
-                          key: ValueKey(
-                              post['id']), // Ensure unique key for rebuild
+                          key: ValueKey(post['id']?.toString() ?? ''),
                           post: post,
-                          username: post['username'],
-                          whenPosted: post['whenPosted'],
-                          location: post['location'],
-                          date: post['date'],
-                          time: post['time'],
-                          reportType: post['reportType'],
-                          description: post['description'],
-                          numUpvotes: post['numUpvotes'] ?? 0,
-                          numDownvotes: post['numDownvotes'] ?? 0,
-                          images: List<String>.from(post['images']),
-                          iconUrl: post['iconUrl'],
+                          username: post['username']?.toString() ?? 'Anonymous',
+                          whenPosted:
+                              post['whenPosted']?.toString() ?? 'Just now',
+                          location: post['location']?.toString() ??
+                              'Unknown location',
+                          date: post['date']?.toString() ?? '',
+                          time: post['time']?.toString() ?? '',
+                          reportType:
+                              post['reportType']?.toString() ?? 'Unknown',
+                          description: post['description']?.toString() ?? '',
+                          numUpvotes: (post['numUpvotes'] as int?) ?? 0,
+                          numDownvotes: (post['numDownvotes'] as int?) ?? 0,
+                          images: (post['images'] as List<dynamic>?)
+                                  ?.map((e) => e.toString())
+                                  .toList() ??
+                              [],
+                          iconUrl: post['iconUrl']?.toString() ??
+                              'assets/icons/person_1.svg',
                           type: 'bordered',
                           onReport: () => _reportPost(post),
                           onDelete: () => _deletePost(post),
                           isOwner: isOwner,
-                          postId: post['id'],
-                          showDistance: selectedIndex ==
-                              3, // Show distance in Near Me tab
+                          postId: post['id']?.toString() ?? '',
+                          showDistance: selectedIndex == 3,
                         ),
                       );
                     }),
@@ -642,7 +561,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   child: Builder(
                     builder: (context) {
                       final query = _searchQuery.toLowerCase();
-                      final suggestions = _allPosts
+                      final suggestions = _currentPosts
                           .where((post) =>
                               post['username'].toLowerCase().contains(query) ||
                               post['barangay'].toLowerCase().contains(query) ||

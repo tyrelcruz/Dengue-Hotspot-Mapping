@@ -1,6 +1,6 @@
 import 'package:buzzmap/pages/login_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:pinput/pinput.dart';
+import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:buzzmap/auth/config.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -170,29 +170,41 @@ class _OTPScreenState extends State<OTPScreen> {
                     ),
                   ),
                   SizedBox(height: 30),
-                  Pinput(
+                  PinCodeTextField(
+                    appContext: context,
                     length: 4,
-                    defaultPinTheme: PinTheme(
-                      width: 70,
-                      height: 90,
-                      textStyle: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white),
-                      ),
+                    onChanged: (value) {
+                      setState(() {
+                        enteredOtp = value;
+                      });
+                      print("DEBUG: OTP entered: $value");
+                    },
+                    onCompleted: (value) {
+                      setState(() {
+                        enteredOtp = value;
+                      });
+                      print("DEBUG: OTP completed: $value");
+                    },
+                    pinTheme: PinTheme(
+                      shape: PinCodeFieldShape.box,
+                      borderRadius: BorderRadius.circular(10),
+                      fieldHeight: 90,
+                      fieldWidth: 70,
+                      activeFillColor: Colors.white,
+                      inactiveFillColor: Colors.transparent,
+                      selectedFillColor: Colors.white,
+                      activeColor: Colors.white,
+                      inactiveColor: Colors.white,
+                      selectedColor: Colors.white,
                     ),
                     keyboardType: TextInputType.number,
-                    onCompleted: (pin) {
-                      setState(() {
-                        enteredOtp = pin;
-                      });
-                      print("DEBUG: OTP entered: $pin");
-                    },
+                    enableActiveFill: true,
+                    textStyle: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF315867),
+                    ),
                   ),
                   SizedBox(height: 20),
                   TextButton(
@@ -248,29 +260,19 @@ class _OTPScreenState extends State<OTPScreen> {
             Positioned(
               left: -120,
               bottom: -30,
-              child: IgnorePointer(
-                child: SizedBox(
-                  width: character1Size,
-                  height: character1Size,
-                  child: Image.asset(
-                    'assets/images/otp_character.png',
-                    fit: BoxFit.cover,
-                  ),
-                ),
+              child: Image.asset(
+                'assets/bgarts/character1.png',
+                width: character1Size,
+                height: character1Size,
               ),
             ),
             Positioned(
-              right: -100,
+              right: -120,
               bottom: -30,
-              child: IgnorePointer(
-                child: SizedBox(
-                  width: character2Size,
-                  height: character2Size,
-                  child: Image.asset(
-                    'assets/images/otp_character1.png',
-                    fit: BoxFit.cover,
-                  ),
-                ),
+              child: Image.asset(
+                'assets/bgarts/character2.png',
+                width: character2Size,
+                height: character2Size,
               ),
             ),
           ],

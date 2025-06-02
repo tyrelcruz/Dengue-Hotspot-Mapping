@@ -173,8 +173,9 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
       return Colors.grey.shade700;
     }
     switch (pattern.toLowerCase()) {
+      case 'stable':
       case 'stability':
-      case 'stability_pattern':
+      case 'stable_pattern':
         return Colors.lightBlue.shade600;
       case 'spike':
       case 'spike_pattern':
@@ -188,6 +189,12 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
       default:
         return Colors.grey.shade700;
     }
+  }
+
+  String displayPattern(String pattern) {
+    if (pattern.toLowerCase() == 'stability') return 'Stable';
+    if (pattern.isEmpty) return '';
+    return pattern[0].toUpperCase() + pattern.substring(1);
   }
 
   Widget _buildPatternCard() {
@@ -225,6 +232,9 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
       );
     }
 
+    // Use displayPattern for user-facing text
+    String displayPatternText = displayPattern(_patternData!.triggeredPattern!);
+
     return Card(
       elevation: 0,
       color: Colors.grey.shade50,
@@ -246,7 +256,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
             ),
             const SizedBox(width: 8),
             Text(
-              'Pattern: ${_patternData!.triggeredPattern!.toUpperCase()}',
+              'Pattern: $displayPatternText',
               style: TextStyle(
                 color: _getPatternColor(_patternData!.triggeredPattern!),
                 fontWeight: FontWeight.w500,

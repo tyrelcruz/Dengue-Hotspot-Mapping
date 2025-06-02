@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pinput/pinput.dart';
+import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
@@ -214,7 +214,8 @@ class _ResetPasswordOTPScreenState extends State<ResetPasswordOTPScreen> {
                 ),
               ),
               const SizedBox(height: 30),
-              Pinput(
+              PinCodeTextField(
+                appContext: context,
                 length: 4,
                 controller: _otpController,
                 onChanged: (value) {
@@ -222,45 +223,23 @@ class _ResetPasswordOTPScreenState extends State<ResetPasswordOTPScreen> {
                     _validateOtp(value);
                   }
                 },
-                showCursor: true,
-                defaultPinTheme: PinTheme(
-                  width: 60,
-                  height: 60,
-                  textStyle: const TextStyle(
-                    fontSize: 24,
-                    color: Colors.white,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white),
-                  ),
+                pinTheme: PinTheme(
+                  shape: PinCodeFieldShape.box,
+                  borderRadius: BorderRadius.circular(10),
+                  fieldHeight: 60,
+                  fieldWidth: 60,
+                  activeFillColor: Colors.white.withOpacity(0.2),
+                  inactiveFillColor: Colors.white.withOpacity(0.1),
+                  selectedFillColor: Colors.white.withOpacity(0.2),
+                  activeColor: Colors.white,
+                  inactiveColor: Colors.white,
+                  selectedColor: Colors.white,
                 ),
-                focusedPinTheme: PinTheme(
-                  width: 60,
-                  height: 60,
-                  textStyle: const TextStyle(
-                    fontSize: 24,
-                    color: Colors.white,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                ),
-                submittedPinTheme: PinTheme(
-                  width: 60,
-                  height: 60,
-                  textStyle: const TextStyle(
-                    fontSize: 24,
-                    color: Colors.white,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
+                keyboardType: TextInputType.number,
+                enableActiveFill: true,
+                textStyle: const TextStyle(
+                  fontSize: 24,
+                  color: Colors.white,
                 ),
               ),
               const SizedBox(height: 20),
@@ -300,7 +279,7 @@ class _ResetPasswordOTPScreenState extends State<ResetPasswordOTPScreen> {
                 ),
                 onPressed: isLoading ? null : verifyOtp,
                 child: isLoading
-                    ? const CircularProgressIndicator(color: Color(0xFF315867))
+                    ? CircularProgressIndicator(color: Color(0xFF315867))
                     : const Text(
                         "Verify",
                         style: TextStyle(

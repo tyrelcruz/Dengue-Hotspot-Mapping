@@ -32,7 +32,7 @@ class PostScreen extends StatefulWidget {
   State<PostScreen> createState() => _PostScreenState();
 }
 
-class _PostScreenState extends State<PostScreen> {
+class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
   final TextEditingController dateController = TextEditingController();
   final TextEditingController timeController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
@@ -67,6 +67,11 @@ class _PostScreenState extends State<PostScreen> {
 
   // Tutorial overlay state
   bool _showMapTutorial = true;
+
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
 
   bool _isPointInsideBarangay(LatLng point) {
     for (final polygon in _barangayPolygons) {
@@ -142,7 +147,49 @@ class _PostScreenState extends State<PostScreen> {
     return (intersectCount % 2) == 1;
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _fadeController,
+        curve: Curves.easeOut,
+      ),
+    );
+
+    loadBarangayCentersFromGeoJson().then((data) {
+      _addQuezonCityMask();
+      setState(() {
+        barangayCenters = data;
+      });
+    });
+
+    _loadGeoJsonPolygons();
+    _showMapTutorial = selectedCoordinates == null;
+  }
+
+  @override
   void dispose() {
+    _pulseController.stop();
+    _pulseController.dispose();
+    _fadeController.dispose();
     dateController.dispose();
     timeController.dispose();
     descriptionController.dispose();
@@ -159,21 +206,6 @@ class _PostScreenState extends State<PostScreen> {
     setState(() {
       _mapScrollable = true;
     });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    loadBarangayCentersFromGeoJson().then((data) {
-      _addQuezonCityMask();
-      setState(() {
-        barangayCenters = data;
-      });
-    });
-
-    _loadGeoJsonPolygons();
-    // Show tutorial only if no location is selected
-    _showMapTutorial = selectedCoordinates == null;
   }
 
   Future<void> _submitPost() async {
@@ -251,18 +283,18 @@ class _PostScreenState extends State<PostScreen> {
 
       // Process images in parallel if there are multiple
       if (_selectedImages.isNotEmpty) {
-        final imageFutures = _selectedImages.map((image) async {
+        for (int i = 0; i < _selectedImages.length; i++) {
+          final image = _selectedImages[i];
           final bytes = await image.readAsBytes();
           final filename = image.path.split('/').last;
-          return http.MultipartFile.fromBytes(
-            'images',
-            bytes,
-            filename: filename,
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'images',
+              bytes,
+              filename: filename,
+            ),
           );
-        });
-
-        final imageFiles = await Future.wait(imageFutures);
-        request.files.addAll(imageFiles);
+        }
       }
 
       // Add a timeout to the request
@@ -358,7 +390,7 @@ class _PostScreenState extends State<PostScreen> {
             polygonId: PolygonId(name),
             points: coords,
             strokeColor: Colors.black,
-            strokeWidth: 1,
+            strokeWidth: 2,
             fillColor: Colors.transparent,
           ),
         );
@@ -416,7 +448,7 @@ class _PostScreenState extends State<PostScreen> {
   }
 
   Future<void> _pickImage() async {
-    if (_selectedImages.length >= 4) return;
+    if (_selectedImages.length >= 3) return;
 
     final XFile? pickedFile =
         await _picker.pickImage(source: ImageSource.gallery);
@@ -774,10 +806,21 @@ class _PostScreenState extends State<PostScreen> {
                                               return;
                                             }
 
+                                            if (_showMapTutorial) {
+                                              print(
+                                                  'Starting fade animation'); // Debug print
+                                              await _fadeController.forward();
+                                              print(
+                                                  'Fade animation completed'); // Debug print
+                                              if (mounted) {
+                                                setState(() {
+                                                  _showMapTutorial = false;
+                                                });
+                                              }
+                                            }
+
                                             setState(() {
                                               selectedCoordinates = pos;
-                                              _showMapTutorial =
-                                                  false; // Hide tutorial after selection
                                             });
 
                                             try {
@@ -878,38 +921,65 @@ class _PostScreenState extends State<PostScreen> {
                                     child: Column(
                                       mainAxisAlignment: MainAxisAlignment.end,
                                       children: [
-                                        Icon(
-                                          Icons.arrow_downward_rounded,
-                                          size: 48,
-                                          color: theme.colorScheme.primary,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 16, vertical: 10),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                Colors.white.withOpacity(0.95),
-                                            borderRadius:
-                                                BorderRadius.circular(16),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black12,
-                                                blurRadius: 8,
-                                                offset: Offset(0, 2),
+                                        AnimatedBuilder(
+                                          animation: _pulseAnimation,
+                                          builder: (context, child) {
+                                            return Opacity(
+                                              opacity: _fadeAnimation.value,
+                                              child: Transform.scale(
+                                                scale: _pulseAnimation.value,
+                                                child: Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 8,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white
+                                                        .withOpacity(0.95),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: Colors.black12,
+                                                        blurRadius: 8,
+                                                        offset:
+                                                            const Offset(0, 2),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.touch_app,
+                                                        size: 16,
+                                                        color: theme.colorScheme
+                                                            .primary,
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Text(
+                                                        'Tap the map to select your location',
+                                                        style: theme
+                                                            .textTheme.bodySmall
+                                                            ?.copyWith(
+                                                          color: theme
+                                                              .colorScheme
+                                                              .primary,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
                                               ),
-                                            ],
-                                          ),
-                                          child: Text(
-                                            'Tap the map to select your location',
-                                            style: theme.textTheme.bodyMedium
-                                                ?.copyWith(
-                                              color: theme.colorScheme.primary,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
+                                            );
+                                          },
                                         ),
-                                        const SizedBox(height: 18),
+                                        const SizedBox(height: 12),
                                       ],
                                     ),
                                   ),
@@ -1282,21 +1352,21 @@ class _PostScreenState extends State<PostScreen> {
             ),
           ),
           Positioned(
-            bottom: -2,
-            left: 35,
+            bottom: 2,
+            left: 38,
             child: IconButton(
-              onPressed: _selectedImages.length >= 4 ? null : _pickImage,
+              onPressed: _selectedImages.length >= 3 ? null : _pickImage,
               icon: SvgPicture.asset(
                 'assets/icons/image.svg',
-                width: 26,
-                height: 26,
+                width: 18,
+                height: 18,
                 colorFilter: ColorFilter.mode(
                   theme.colorScheme.primary,
                   BlendMode.srcIn,
                 ),
               ),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
+              padding: EdgeInsets.all(2),
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             ),
           ),
         ],

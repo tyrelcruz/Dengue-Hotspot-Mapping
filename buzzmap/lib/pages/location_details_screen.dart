@@ -100,7 +100,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
         return Colors.orange;
       case 'decline':
         return Colors.green;
-      case 'stability':
+      case 'stable':
         return Colors.blue;
       default:
         return Colors.grey;

@@ -188,7 +188,12 @@ class PostDetailScreen extends StatelessWidget {
                   numDownvotes: numDownvotes,
                   postId: postId,
                   themeMode: 'light',
-                  post: post,
+                  post: {
+                    ...post,
+                    'isAdminPost': post['category'] != null,
+                    'upvotes': post['upvotes'] ?? [],
+                    'downvotes': post['downvotes'] ?? [],
+                  },
                   disableCommentButton: true,
                 ),
               ),

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:buzzmap/services/notification_service.dart';
 import 'package:buzzmap/widgets/utils/notification_template.dart';
 import 'package:buzzmap/pages/mapping_screen.dart';
+import '../config/config.dart';
 
 // Add a simple logging utility
 class Logger {
@@ -80,7 +81,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     try {
       // Fetch admin alerts (last 3)
       final alertsResponse =
-          await http.get(Uri.parse('http://localhost:4000/api/v1/alerts'));
+          await http.get(Uri.parse('${Config.baseUrl}/api/v1/alerts'));
       if (alertsResponse.statusCode == 200) {
         final body = jsonDecode(alertsResponse.body);
         final List<dynamic> alertsData = body['data'] ?? [];
@@ -91,7 +92,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       }
       // Fetch important announcements
       final annResponse =
-          await http.get(Uri.parse('http://localhost:4000/api/v1/adminPosts'));
+          await http.get(Uri.parse('${Config.baseUrl}/api/v1/adminPosts'));
       if (annResponse.statusCode == 200) {
         final List<dynamic> annData = jsonDecode(annResponse.body);
         setState(() {

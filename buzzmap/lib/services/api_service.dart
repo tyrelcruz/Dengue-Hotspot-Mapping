@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:buzzmap/auth/config.dart';
 
 class ApiService {
   static Future<Map<String, dynamic>> loginUser(
       String email, String password) async {
-    final url = Uri.parse('https://your-domain.com/api/v1/auth/login');
+    final url = Uri.parse('${Config.baseUrl}/api/v1/auth/login');
 
     try {
       final response = await http.post(

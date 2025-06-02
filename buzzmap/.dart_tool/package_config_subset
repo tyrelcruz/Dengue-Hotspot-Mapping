@@ -218,6 +218,10 @@ google_maps_cluster_manager
 3.0
 file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/google_maps_cluster_manager-3.1.0/
 file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/google_maps_cluster_manager-3.1.0/lib/
+google_maps_custom_marker
+3.4
+file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/google_maps_custom_marker-1.0.3/
+file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/google_maps_custom_marker-1.0.3/lib/
 google_maps_flutter
 3.6
 file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/google_maps_flutter-2.12.1/
@@ -422,10 +426,10 @@ petitparser
 3.2
 file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/petitparser-6.0.2/
 file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/petitparser-6.0.2/lib/
-pinput
-2.15
-file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/pinput-3.0.1/
-file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/pinput-3.0.1/lib/
+pin_code_fields
+2.12
+file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/pin_code_fields-8.0.1/
+file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/pin_code_fields-8.0.1/lib/
 platform
 3.2
 file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/platform-3.1.6/
@@ -478,10 +482,6 @@ shared_preferences_windows
 3.3
 file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/shared_preferences_windows-2.4.1/
 file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/shared_preferences_windows-2.4.1/lib/
-smart_auth
-2.16
-file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/smart_auth-1.1.1/
-file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/smart_auth-1.1.1/lib/
 source_span
 3.1
 file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/source_span-1.10.1/
@@ -542,10 +542,6 @@ typed_data
 3.5
 file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/typed_data-1.4.0/
 file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/typed_data-1.4.0/lib/
-universal_platform
-2.12
-file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/universal_platform-1.1.0/
-file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/universal_platform-1.1.0/lib/
 url_launcher
 3.3
 file:///Users/tyrelcruz/.pub-cache/hosted/pub.dev/url_launcher-6.3.1/

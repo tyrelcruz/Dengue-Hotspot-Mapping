@@ -88,24 +88,50 @@ class _EngagementRowState extends State<EngagementRow> {
     if (token == null) return;
 
     try {
+      // Determine if this is an admin post or community report
+      final isAdminPost = widget.post['isAdminPost'] == true;
+      final baseUrl = isAdminPost
+          ? '${Config.baseUrl}/api/v1/adminPosts'
+          : '${Config.baseUrl}/api/v1/reports';
+
+      print('Loading vote status for post: ${widget.postId}');
+      print('Using base URL: $baseUrl');
+      print('Is admin post: $isAdminPost');
+
+      // Get the full post data to check vote status
       final response = await http.get(
-        Uri.parse(
-            '${Config.baseUrl}/api/v1/reports/${widget.postId}/vote-status'),
+        Uri.parse('$baseUrl/${widget.postId}'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
       );
 
+      print('Vote status response: ${response.statusCode}');
+      print('Vote status body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        setState(() {
-          _isUpvoted = data['voteType'] == 'upvote';
-          _isDownvoted = data['voteType'] == 'downvote';
-        });
+        final userId = _prefs.getString('userId');
+
+        if (userId != null && mounted) {
+          setState(() {
+            // Get the upvotes and downvotes arrays
+            final upvotes = List<String>.from(data['upvotes'] ?? []);
+            final downvotes = List<String>.from(data['downvotes'] ?? []);
+
+            // Check if the current user has voted
+            _isUpvoted = upvotes.contains(userId);
+            _isDownvoted = downvotes.contains(userId);
+
+            // Update vote counts
+            _numUpvotes = upvotes.length;
+            _numDownvotes = downvotes.length;
+          });
+        }
       }
     } catch (e) {
-      // Handle error silently
+      print('Error loading vote status: $e');
     }
   }
 
@@ -123,30 +149,97 @@ class _EngagementRowState extends State<EngagementRow> {
         return;
       }
 
-      final response = await http.post(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/${widget.postId}/vote'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'voteType': voteType}),
-      );
+      // Determine if this is an admin post or community report
+      final isAdminPost = widget.post['isAdminPost'] == true;
+      final baseUrl = isAdminPost
+          ? '${Config.baseUrl}/api/v1/adminPosts'
+          : '${Config.baseUrl}/api/v1/reports';
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _numUpvotes = data['upvotes'];
-          _numDownvotes = data['downvotes'];
-          _isUpvoted = data['userVote'] == 'upvote';
-          _isDownvoted = data['userVote'] == 'downvote';
-        });
+      print('Handling vote: $voteType for post: ${widget.postId}');
+      print('Using base URL: $baseUrl');
+      print('Is admin post: $isAdminPost');
+
+      // If clicking the same vote type, remove the vote
+      if ((voteType == 'upvote' && _isUpvoted) ||
+          (voteType == 'downvote' && _isDownvoted)) {
+        final response = await http.delete(
+          Uri.parse('$baseUrl/${widget.postId}/$voteType'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        );
+
+        print('Remove vote response: ${response.statusCode}');
+        print('Remove vote body: ${response.body}');
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final userId = _prefs.getString('userId');
+
+          if (userId != null && mounted) {
+            setState(() {
+              final upvotes = List<String>.from(data['upvotes'] ?? []);
+              final downvotes = List<String>.from(data['downvotes'] ?? []);
+
+              _isUpvoted = upvotes.contains(userId);
+              _isDownvoted = downvotes.contains(userId);
+
+              _numUpvotes = upvotes.length;
+              _numDownvotes = downvotes.length;
+            });
+          }
+        } else {
+          print('Error removing vote: ${response.body}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to remove vote: ${response.body}')),
+          );
+        }
+      } else {
+        // Add new vote
+        final response = await http.post(
+          Uri.parse('$baseUrl/${widget.postId}/$voteType'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        );
+
+        print('Add vote response: ${response.statusCode}');
+        print('Add vote body: ${response.body}');
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final userId = _prefs.getString('userId');
+
+          if (userId != null && mounted) {
+            setState(() {
+              final upvotes = List<String>.from(data['upvotes'] ?? []);
+              final downvotes = List<String>.from(data['downvotes'] ?? []);
+
+              _isUpvoted = upvotes.contains(userId);
+              _isDownvoted = downvotes.contains(userId);
+
+              _numUpvotes = upvotes.length;
+              _numDownvotes = downvotes.length;
+            });
+          }
+        } else {
+          print('Error adding vote: ${response.body}');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to add vote: ${response.body}')),
+          );
+        }
       }
     } catch (e) {
+      print('Error handling vote: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to submit vote')),
+        SnackBar(content: Text('Failed to submit vote: $e')),
       );
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
@@ -290,10 +383,6 @@ class _EngagementRowState extends State<EngagementRow> {
     final isDark = widget.themeMode == 'dark';
     final iconColor = isDark ? Colors.white : Colors.black;
     final voteProvider = Provider.of<VoteProvider>(context);
-    final isUpvoted = voteProvider.isUpvoted(widget.postId);
-    final isDownvoted = voteProvider.isDownvoted(widget.postId);
-    final upvoteCount = voteProvider.getUpvoteCount(widget.postId);
-    final downvoteCount = voteProvider.getDownvoteCount(widget.postId);
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
@@ -305,66 +394,62 @@ class _EngagementRowState extends State<EngagementRow> {
               IconButton(
                 onPressed: isLoading || !_isInitialized
                     ? null
-                    : () async {
-                        setState(() => isLoading = true);
-                        try {
-                          if (isUpvoted) {
-                            await voteProvider.removeUpvote(widget.postId);
-                          } else {
-                            await voteProvider.upvotePost(widget.postId);
-                          }
-                        } finally {
-                          if (mounted) {
-                            setState(() => isLoading = false);
-                          }
-                        }
-                      },
+                    : () => _handleVote('upvote'),
                 icon: Icon(
-                  Icons.arrow_upward_outlined,
-                  color: isUpvoted ? Colors.green : iconColor,
+                  _isUpvoted
+                      ? Icons.arrow_upward_rounded
+                      : Icons.arrow_upward_outlined,
+                  color: _isUpvoted ? Colors.green : iconColor,
                   size: 22,
                   weight: 100,
                 ),
               ),
-              Text(
-                formatCount(upvoteCount),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isUpvoted ? Colors.green : iconColor,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              isLoadingComments
+                  ? SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(iconColor),
+                      ),
+                    )
+                  : Text(
+                      formatCount(_numUpvotes),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: _isUpvoted ? Colors.green : iconColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
               const SizedBox(width: 12),
               IconButton(
                 onPressed: isLoading || !_isInitialized
                     ? null
-                    : () async {
-                        setState(() => isLoading = true);
-                        try {
-                          if (isDownvoted) {
-                            await voteProvider.removeDownvote(widget.postId);
-                          } else {
-                            await voteProvider.downvotePost(widget.postId);
-                          }
-                        } finally {
-                          if (mounted) {
-                            setState(() => isLoading = false);
-                          }
-                        }
-                      },
+                    : () => _handleVote('downvote'),
                 icon: Icon(
-                  Icons.arrow_downward_outlined,
-                  color: isDownvoted ? Colors.red : iconColor,
+                  _isDownvoted
+                      ? Icons.arrow_downward_rounded
+                      : Icons.arrow_downward_outlined,
+                  color: _isDownvoted ? Colors.red : iconColor,
                   size: 22,
                   weight: 100,
                 ),
               ),
-              Text(
-                formatCount(downvoteCount),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isDownvoted ? Colors.red : iconColor,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              isLoadingComments
+                  ? SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(iconColor),
+                      ),
+                    )
+                  : Text(
+                      formatCount(_numDownvotes),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: _isDownvoted ? Colors.red : iconColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
               const SizedBox(width: 15),
               GestureDetector(
                 onTap: !_isInitialized
@@ -403,7 +488,7 @@ class _EngagementRowState extends State<EngagementRow> {
                             commentCount.toString(),
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: iconColor,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                   ],

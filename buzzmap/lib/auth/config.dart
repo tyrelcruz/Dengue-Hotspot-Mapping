@@ -5,30 +5,14 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 //Login
 class Config {
-  static String get baseUrl {
-    if (Platform.isAndroid) {
-      if (Platform.environment.containsKey('ANDROID_EMULATOR')) {
-        return dotenv.env['API_BASE_URL_ANDROID_EMULATOR'] ??
-            'http://10.0.2.2:4000';
-      }
-      return dotenv.env['API_BASE_URL_PHYSICAL_DEVICE'] ??
-          'http://192.168.1.45:4000';
-    } else if (Platform.isIOS) {
-      if (Platform.environment.containsKey('SIMULATOR_DEVICE_NAME')) {
-        return dotenv.env['API_BASE_URL_IOS_SIMULATOR'] ??
-            'http://localhost:4000';
-      }
-      return dotenv.env['API_BASE_URL_PHYSICAL_DEVICE'] ??
-          'http://192.168.1.45:4000';
-    }
-    return dotenv.env['API_BASE_URL_IOS_SIMULATOR'] ?? 'http://localhost:4000';
-  }
+  static const String baseUrl = 'http://localhost:4000';
+  static const String createPostUrl = '$baseUrl/api/v1/reports';
+  static const String postsUrl = '$baseUrl/api/v1/reports';
 
   // Add these URLs
   static String get verifyOtpUrl => '$baseUrl/api/v1/otp/verify';
   static String get resendOtpUrl => '$baseUrl/api/v1/otp/request';
   static String get googleLoginUrl => '$baseUrl/api/v1/auth/google-login';
-  static String get createPostUrl => '$baseUrl/api/v1/reports';
   static String get createPostwImageUrl => '$baseUrl/api/v1/posts';
   static String get userProfileUrl => '$baseUrl/api/v1/auth/me';
 
