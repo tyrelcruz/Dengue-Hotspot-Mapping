@@ -249,6 +249,8 @@ class _MappingScreenState extends State<MappingScreen>
   static const double _clusterDistance =
       0.01; // Distance threshold for clustering
 
+  bool _isMapReady = false; // Add this flag
+
   @override
   void initState() {
     super.initState();
@@ -293,44 +295,54 @@ class _MappingScreenState extends State<MappingScreen>
     _layerOptions['Markers'] = widget.reportId != null;
     _layerOptions['Heatmap'] = false;
 
-    // Call the GeoJSON loading function for borders
-    _loadGeoJSON();
+    // Start the new initialization sequence
+    _initializeMappingScreen();
+  }
 
-    // Fetch risk levels from API
-    _fetchRiskLevels();
-
-    // Initialize location services with a slight delay
-    Future.delayed(const Duration(seconds: 1), () {
-      _initializeLocationServices();
+  Future<void> _initializeMappingScreen() async {
+    setState(() {
+      _isLoading = true;
     });
-
-    // If we have initial coordinates from a notification, add a marker
-    if (widget.initialLatitude != null && widget.initialLongitude != null) {
-      setState(() {
-        _markers.add(
-          Marker(
-            markerId: const MarkerId('notification-marker'),
-            position: LatLng(widget.initialLatitude!, widget.initialLongitude!),
-            icon:
-                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          ),
-        );
+    try {
+      // Fetch dengue data first
+      await _fetchDengueData();
+      // Fetch risk levels
+      await _fetchRiskLevels();
+      // Load GeoJSON
+      await _loadGeoJSON();
+      // Optionally, initialize location services (don't block UI)
+      Future.delayed(const Duration(seconds: 1), () {
+        _initializeLocationServices();
       });
-    }
-
-    // Using a slight delay to ensure Google Maps is fully loaded
-    Timer(const Duration(milliseconds: 500), () {
-      _updateMapLayers().then((_) {
+      // If we have initial coordinates from a notification, add a marker
+      if (widget.initialLatitude != null && widget.initialLongitude != null) {
+        setState(() {
+          _markers.add(
+            Marker(
+              markerId: const MarkerId('notification-marker'),
+              position:
+                  LatLng(widget.initialLatitude!, widget.initialLongitude!),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueRed),
+            ),
+          );
+        });
+      }
+      // Using a slight delay to ensure Google Maps is fully loaded
+      Timer(const Duration(milliseconds: 500), () {
+        _updateMapLayers();
+      });
+      // Start polling for alerts
+      _alertService.startPolling();
+    } catch (e) {
+      print('Error initializing mapping screen: $e');
+    } finally {
+      if (mounted) {
         setState(() {
           _isLoading = false;
         });
-      });
-    });
-
-    _fetchDengueData();
-
-    // Start polling for alerts
-    _alertService.startPolling();
+      }
+    }
   }
 
   void _updateMarkers(Set<Marker> markers) {
@@ -585,7 +597,7 @@ class _MappingScreenState extends State<MappingScreen>
 
     // Add polygons if Borders is enabled
     if (_layerOptions['Borders']!) {
-      // Update polygon styles based on whether markers are enabled
+      // Update polygon styles based on whether markers or interventions are enabled
       Set<Polygon> updatedPolygons = _barangayPolygons.map((polygon) {
         final barangayName = polygon.polygonId.value;
         final pattern = _barangayPatterns[barangayName]?.toLowerCase();
@@ -593,12 +605,12 @@ class _MappingScreenState extends State<MappingScreen>
         Color borderColor;
         Color fillColor;
 
-        if (_layerOptions['Markers']!) {
-          // When markers are enabled, all borders should be green
+        if (_layerOptions['Markers']! || _layerOptions['Interventions']!) {
+          // When markers or interventions are enabled, all borders should be green
           borderColor = Colors.green;
           fillColor = Colors.green.withOpacity(0.4); // Increased opacity
         } else {
-          // When markers are disabled, use pattern-based colors
+          // When markers/interventions are disabled, use pattern-based colors
           switch (pattern) {
             case 'spike':
               borderColor = _selectedPolygonId == polygon.polygonId
@@ -621,6 +633,7 @@ class _MappingScreenState extends State<MappingScreen>
               fillColor =
                   Colors.green.shade600.withOpacity(0.5); // Increased opacity
               break;
+            case 'stable':
             case 'stability':
               borderColor = _selectedPolygonId == polygon.polygonId
                   ? Colors.lightBlue.shade900
@@ -719,6 +732,7 @@ class _MappingScreenState extends State<MappingScreen>
               polygonColor = Colors.green.shade600;
               borderColor = Colors.green.shade800;
               break;
+            case 'stable':
             case 'stability':
               polygonColor = Colors.lightBlue.shade600;
               borderColor = Colors.lightBlue.shade800;
@@ -1036,7 +1050,7 @@ class _MappingScreenState extends State<MappingScreen>
         return Colors.orange.shade500;
       case 'decline':
         return Colors.green.shade600;
-      case 'stability':
+      case 'stable':
         return Colors.lightBlue.shade600;
       default:
         print('Unknown severity: $severity, using grey');
@@ -1226,6 +1240,9 @@ class _MappingScreenState extends State<MappingScreen>
                           ),
                           onMapCreated: (controller) {
                             _mapController = controller;
+                            setState(() {
+                              _isMapReady = true;
+                            });
                           },
                           circles: _circles,
                           markers: _layerOptions['Markers']!
@@ -1260,10 +1277,7 @@ class _MappingScreenState extends State<MappingScreen>
                             }
                           },
                         ),
-                        if (_isLoading ||
-                            _isLoadingMarkers ||
-                            _isLoadingRiskLevels ||
-                            _isLoadingInterventions)
+                        if (_isLoading || !_isMapReady)
                           Center(
                             child: Container(
                               padding: const EdgeInsets.all(16),
@@ -1301,31 +1315,150 @@ class _MappingScreenState extends State<MappingScreen>
                             ),
                           ),
                         _buildLayerControls(),
-                        if (!_isCardVisible)
+                        if (_isCardVisible)
                           Positioned(
                             bottom: 10,
-                            left: 0,
-                            right: 0,
-                            child: Center(
-                              child: AnimatedBuilder(
-                                animation: _bounceAnimation,
-                                builder: (context, child) {
-                                  return Transform.translate(
-                                    offset: Offset(0, -_bounceAnimation.value),
-                                    child: FloatingActionButton(
-                                      mini: true,
-                                      backgroundColor: Colors.white,
-                                      foregroundColor: Colors.black,
-                                      onPressed: () {
-                                        setState(() {
-                                          _isCardVisible = true;
-                                        });
-                                      },
-                                      child:
-                                          const Icon(Icons.keyboard_arrow_up),
+                            left: 20,
+                            right: 20,
+                            child: Material(
+                              elevation: 8,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                height: 300,
+                                child: Column(
+                                  children: [
+                                    // Top Header (Logo + Text + Arrow)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Row(
+                                              children: [
+                                                SvgPicture.asset(
+                                                  'assets/icons/logo_ligthbg.svg',
+                                                  width: 45,
+                                                  height: 45,
+                                                  fit: BoxFit.contain,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: RichText(
+                                                    textAlign: TextAlign.center,
+                                                    text: TextSpan(
+                                                      style: TextStyle(
+                                                        fontFamily: 'Koulen',
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        height: 1.2,
+                                                        letterSpacing: 1.0,
+                                                      ),
+                                                      children: [
+                                                        TextSpan(
+                                                          text:
+                                                              'Broad Urban Zone and Zeroing\n',
+                                                          style: TextStyle(
+                                                            color: Theme.of(
+                                                                    context)
+                                                                .primaryColor,
+                                                          ),
+                                                        ),
+                                                        TextSpan(
+                                                          text:
+                                                              'Metropolitan Active Prevention',
+                                                          style: TextStyle(
+                                                            color: Color(
+                                                                0xFF4AA8C7),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                                Icons.keyboard_arrow_down),
+                                            onPressed: () {
+                                              setState(() {
+                                                _isCardVisible = false;
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  );
-                                },
+
+                                    // Divider line
+                                    Container(
+                                      height: 1,
+                                      color: Colors.grey[300],
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 12),
+                                    ),
+
+                                    Expanded(
+                                      child: SingleChildScrollView(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Dengue Situation Overview',
+                                              style: TextStyle(
+                                                fontFamily: 'Koulen',
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            const Text(
+                                              'Recent dengue cases are rising. Follow health precautions.',
+                                              style: TextStyle(fontSize: 14),
+                                            ),
+                                            const SizedBox(height: 12),
+
+                                            // Call the method to get recommendations based on severity
+                                            RecommendationsWidget(
+                                              severity:
+                                                  selectedSeverity ?? 'Unknown',
+                                              hazardRiskLevels:
+                                                  hazardRiskLevels,
+                                              latitude: _barangayCentroids[
+                                                          selectedBarangay ??
+                                                              '']
+                                                      ?.latitude ??
+                                                  14.6760,
+                                              longitude: _barangayCentroids[
+                                                          selectedBarangay ??
+                                                              '']
+                                                      ?.longitude ??
+                                                  121.0437,
+                                              selectedBarangay:
+                                                  selectedBarangay ?? '',
+                                              barangayColor:
+                                                  _getColorForBarangay(
+                                                      selectedBarangay ?? ''),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -1362,139 +1495,6 @@ class _MappingScreenState extends State<MappingScreen>
               ),
             ],
           ),
-          if (_isCardVisible)
-            Positioned(
-              bottom: 10,
-              left: 20,
-              right: 20,
-              child: Material(
-                elevation: 8,
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  height: 300,
-                  child: Column(
-                    children: [
-                      // Top Header (Logo + Text + Arrow)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  SvgPicture.asset(
-                                    'assets/icons/logo_ligthbg.svg',
-                                    width: 45,
-                                    height: 45,
-                                    fit: BoxFit.contain,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: RichText(
-                                      textAlign: TextAlign.center,
-                                      text: TextSpan(
-                                        style: TextStyle(
-                                          fontFamily: 'Koulen',
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          height: 1.2,
-                                          letterSpacing: 1.0,
-                                        ),
-                                        children: [
-                                          TextSpan(
-                                            text:
-                                                'Broad Urban Zone and Zeroing\n',
-                                            style: TextStyle(
-                                              color: Theme.of(context)
-                                                  .primaryColor,
-                                            ),
-                                          ),
-                                          TextSpan(
-                                            text:
-                                                'Metropolitan Active Prevention',
-                                            style: TextStyle(
-                                              color: Color(0xFF4AA8C7),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.keyboard_arrow_down),
-                              onPressed: () {
-                                setState(() {
-                                  _isCardVisible = false;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Divider line
-                      Container(
-                        height: 1,
-                        color: Colors.grey[300],
-                        margin: const EdgeInsets.symmetric(horizontal: 12),
-                      ),
-
-                      Expanded(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Dengue Situation Overview',
-                                style: TextStyle(
-                                  fontFamily: 'Koulen',
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Recent dengue cases are rising. Follow health precautions.',
-                                style: TextStyle(fontSize: 14),
-                              ),
-                              const SizedBox(height: 12),
-
-                              // Call the method to get recommendations based on severity
-                              RecommendationsWidget(
-                                severity: selectedSeverity ?? 'Unknown',
-                                hazardRiskLevels: hazardRiskLevels,
-                                latitude:
-                                    _barangayCentroids[selectedBarangay ?? '']
-                                            ?.latitude ??
-                                        14.6760,
-                                longitude:
-                                    _barangayCentroids[selectedBarangay ?? '']
-                                            ?.longitude ??
-                                        121.0437,
-                                selectedBarangay: selectedBarangay ?? '',
-                                barangayColor: _getColorForBarangay(
-                                    selectedBarangay ?? ''),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -1843,8 +1843,8 @@ class _MappingScreenState extends State<MappingScreen>
             const SizedBox(height: 8),
             _buildLegendRow(
                 Colors.green.shade600, 'Decline', 'Decreasing trend'),
-            _buildLegendRow(Colors.lightBlue.shade600, 'Stability',
-                'No significant change'),
+            _buildLegendRow(
+                Colors.lightBlue.shade600, 'Stable', 'No significant change'),
             const SizedBox(height: 16),
             const Text(
               'Areas are color-coded based on dengue case patterns. Click on any area to see detailed information.',
@@ -1921,30 +1921,81 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   Widget _buildHeatmapLegend() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(20),
+    // Dynamic legend: show risk levels legend only if Interventions is OFF
+    if (_layerOptions['Interventions'] == true) {
+      // Show a legend for interventions using images and names
+      final interventionTypes = [
+        {'name': 'Fogging', 'asset': 'assets/icons/fogging.png'},
+        {'name': 'Education', 'asset': 'assets/icons/education.png'},
+        {'name': 'Cleanup', 'asset': 'assets/icons/cleanup.png'},
+        {'name': 'Trapping', 'asset': 'assets/icons/trapping.png'},
+        {'name': 'Default', 'asset': 'assets/icons/default.png'},
+      ];
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: interventionTypes.map((type) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      type['asset']!,
+                      width: 28,
+                      height: 28,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      type['name']!,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _legendItem(Colors.grey.shade700, 'No Data'),
-            const SizedBox(width: 8),
-            _legendItem(Colors.lightBlue.shade600, 'Stability'),
-            const SizedBox(width: 8),
-            _legendItem(Colors.green.shade600, 'Decline'),
-            const SizedBox(width: 8),
-            _legendItem(Colors.orange.shade500, 'Gradual Rise'),
-            const SizedBox(width: 8),
-            _legendItem(Colors.red.shade700, 'Spike'),
-          ],
+      );
+    } else {
+      // Default risk levels legend
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _legendItem(Colors.grey.shade700, 'No Data'),
+              const SizedBox(width: 8),
+              _legendItem(Colors.lightBlue.shade600, 'Stable'),
+              const SizedBox(width: 8),
+              _legendItem(Colors.green.shade600, 'Decline'),
+              const SizedBox(width: 8),
+              _legendItem(Colors.orange.shade500, 'Gradual Rise'),
+              const SizedBox(width: 8),
+              _legendItem(Colors.red.shade700, 'Spike'),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   Widget _buildLocationSelector(BuildContext context, ColorScheme colorScheme) {
@@ -2841,7 +2892,7 @@ class _MappingScreenState extends State<MappingScreen>
 
               // Handle pattern directly from the pattern field
               String pattern =
-                  item['pattern']?.toString().toLowerCase() ?? 'stability';
+                  item['pattern']?.toString().toLowerCase() ?? 'stable';
               _barangayPatterns[name] = pattern;
               print('Set pattern for $name: ${_barangayPatterns[name]}');
 
@@ -3080,6 +3131,7 @@ class _MappingScreenState extends State<MappingScreen>
         return Colors.orange.shade500;
       case 'decline':
         return Colors.green.shade600;
+      case 'stable':
       case 'stability':
         return Colors.lightBlue.shade600;
       default:

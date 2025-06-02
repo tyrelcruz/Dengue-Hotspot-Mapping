@@ -20,7 +20,8 @@ class LocationNotification extends StatefulWidget {
   State<LocationNotification> createState() => _LocationNotificationState();
 }
 
-class _LocationNotificationState extends State<LocationNotification> with SingleTickerProviderStateMixin {
+class _LocationNotificationState extends State<LocationNotification>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
@@ -142,20 +143,20 @@ class _LocationNotificationState extends State<LocationNotification> with Single
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      // Dismiss button (moved here)
+                      IconButton(
+                        icon: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        onPressed: _dismiss,
+                        padding: EdgeInsets.zero,
+                        constraints: BoxConstraints(),
+                        tooltip: 'Dismiss',
+                      ),
                     ],
-                  ),
-                ),
-                // Dismiss button
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.close,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    onPressed: _dismiss,
                   ),
                 ),
               ],
@@ -207,4 +208,4 @@ class LocationNotificationService {
     _currentNotification?.remove();
     _currentNotification = null;
   }
-} 
+}
