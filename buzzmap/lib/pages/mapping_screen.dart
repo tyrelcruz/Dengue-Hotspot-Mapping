@@ -2912,6 +2912,51 @@ class _MappingScreenState extends State<MappingScreen>
     }
   }
 
+  Future<BitmapDescriptor> _getInterventionMarkerIcon(
+      String interventionType, String status) async {
+    // Define marker colors based on status
+    final statusColors = {
+      'complete': BitmapDescriptor.hueGreen,
+      'scheduled': BitmapDescriptor.hueBlue,
+      'ongoing': BitmapDescriptor.hueYellow,
+    };
+
+    // Get base color from status
+    final baseColor =
+        statusColors[status.toLowerCase()] ?? BitmapDescriptor.hueYellow;
+
+    // Create custom marker with intervention type icon
+    String iconPath;
+    switch (interventionType.toLowerCase()) {
+      case 'fogging':
+        iconPath = 'assets/icons/fogging.png';
+        break;
+      case 'ovicidal-larvicidal trapping':
+        iconPath = 'assets/icons/trapping.png';
+        break;
+      case 'clean-up drive':
+        iconPath = 'assets/icons/cleanup.png';
+        break;
+      case 'education campaign':
+        iconPath = 'assets/icons/education.png';
+        break;
+      default:
+        iconPath = 'assets/icons/default.png';
+    }
+
+    try {
+      // Try to load the custom marker image
+      return await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        iconPath,
+      );
+    } catch (e) {
+      print('Error loading custom marker icon: $e');
+      // Fallback to default marker with status color
+      return BitmapDescriptor.defaultMarkerWithHue(baseColor);
+    }
+  }
+
   Future<void> _fetchInterventions() async {
     try {
       print('Fetching interventions...'); // Debug log
@@ -2942,37 +2987,30 @@ class _MappingScreenState extends State<MappingScreen>
         print(
             'Number of interventions found: ${interventions.length}'); // Debug log
 
-        setState(() {
-          _interventionMarkers = interventions.map((intervention) {
-            final coords = intervention['specific_location']['coordinates'];
-            final position = LatLng(coords[1], coords[0]);
-            final status =
-                intervention['status']?.toString().toLowerCase() ?? 'scheduled';
-            final interventionType =
-                intervention['interventionType'] ?? 'Unknown';
-            final date = DateTime.parse(intervention['date']);
-            final formattedDate = '${date.day}/${date.month}/${date.year}';
+        // Create a temporary set to store markers
+        final Set<Marker> newMarkers = {};
 
-            print(
-                'Creating marker for intervention: $interventionType at ${position.latitude}, ${position.longitude}'); // Debug log
+        // Process each intervention and create markers
+        for (var intervention in interventions) {
+          final coords = intervention['specific_location']['coordinates'];
+          final position = LatLng(coords[1], coords[0]);
+          final status =
+              intervention['status']?.toString().toLowerCase() ?? 'scheduled';
+          final interventionType =
+              intervention['interventionType'] ?? 'Unknown';
+          final date = DateTime.parse(intervention['date']);
+          final formattedDate = '${date.day}/${date.month}/${date.year}';
 
-            // Choose marker color based on status
-            BitmapDescriptor markerIcon;
-            switch (status) {
-              case 'complete':
-                markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueGreen);
-                break;
-              case 'scheduled':
-                markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueBlue);
-                break;
-              default:
-                markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueYellow);
-            }
+          print(
+              'Creating marker for intervention: $interventionType at ${position.latitude}, ${position.longitude}'); // Debug log
 
-            return Marker(
+          // Get custom marker icon
+          final markerIcon =
+              await _getInterventionMarkerIcon(interventionType, status);
+
+          // Create and add the marker
+          newMarkers.add(
+            Marker(
               markerId: MarkerId(intervention['_id']),
               position: position,
               icon: markerIcon,
@@ -2984,8 +3022,13 @@ class _MappingScreenState extends State<MappingScreen>
               onTap: () {
                 _showInterventionDetails(intervention);
               },
-            );
-          }).toSet();
+            ),
+          );
+        }
+
+        // Update the state with the new markers
+        setState(() {
+          _interventionMarkers = newMarkers;
         });
 
         print(

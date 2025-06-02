@@ -46,6 +46,7 @@ dependencies:
   geolocator: ^14.0.0
   flutter_secure_storage: ^9.2.4
   flutter_dotenv: ^5.1.0
+  google_maps_custom_marker: ^1.0.3
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
