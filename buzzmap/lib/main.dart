@@ -20,6 +20,7 @@ import 'package:buzzmap/widgets/global_alert_overlay.dart';
 import 'package:buzzmap/providers/vote_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:buzzmap/config/config.dart';
+import 'package:buzzmap/providers/post_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +32,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => VoteProvider()),
+        ChangeNotifierProvider(create: (_) => PostProvider()),
         ChangeNotifierProvider(create: (_) => NotificationService()),
       ],
       child: const MyApp(),

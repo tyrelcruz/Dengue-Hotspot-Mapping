@@ -33,6 +33,10 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
   int _numUpvotes = 0;
   int _numDownvotes = 0;
 
+  // Comments state
+  List<dynamic> _comments = [];
+  bool _isLoadingComments = false;
+
   @override
   void initState() {
     super.initState();
@@ -142,6 +146,34 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
     }
   }
 
+  Future<void> _fetchComments(String announcementId) async {
+    setState(() {
+      _isLoadingComments = true;
+    });
+    try {
+      final response = await http.get(
+        Uri.parse('${Config.baseUrl}/api/v1/comments/$announcementId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (response.statusCode == 200) {
+        setState(() {
+          _comments = jsonDecode(response.body);
+          _isLoadingComments = false;
+        });
+      } else {
+        setState(() {
+          _comments = [];
+          _isLoadingComments = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _comments = [];
+        _isLoadingComments = false;
+      });
+    }
+  }
+
   Future<void> _fetchAnnouncement() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -221,6 +253,10 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
               }
               _isLoading = false;
             });
+            // Fetch comments for the latest announcement
+            if (latestAnnouncement['_id'] != null) {
+              await _fetchComments(latestAnnouncement['_id']);
+            }
           } else {
             setState(() {
               _announcement = null;
@@ -427,149 +463,26 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
 
               // Engagement Row
               const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  // Upvote button
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => _handleVote('upvote'),
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _isUpvoted
-                              ? Colors.green.withOpacity(0.2)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: _isUpvoted ? Colors.green : Colors.white30,
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _isUpvoted
-                                  ? Icons.arrow_upward_rounded
-                                  : Icons.arrow_upward_outlined,
-                              size: 20,
-                              color: _isUpvoted ? Colors.green : Colors.white70,
-                              weight: 100,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '$_numUpvotes',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color:
-                                    _isUpvoted ? Colors.green : Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
+              GestureDetector(
+                onTap: () {
+                  if (_announcement != null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            AdminPostDetailScreen(post: _announcement!),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Downvote button
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => _handleVote('downvote'),
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _isDownvoted
-                              ? Colors.red.withOpacity(0.2)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: _isDownvoted ? Colors.red : Colors.white30,
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _isDownvoted
-                                  ? Icons.arrow_downward_rounded
-                                  : Icons.arrow_downward_outlined,
-                              size: 20,
-                              color: _isDownvoted ? Colors.red : Colors.white70,
-                              weight: 100,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '$_numDownvotes',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color:
-                                    _isDownvoted ? Colors.red : Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Comment button
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () {
-                        // TODO: Implement comment functionality
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content:
-                                  Text('Comment functionality coming soon!')),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white30,
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.comment_outlined,
-                              size: 20,
-                              color: Colors.white70,
-                              weight: 100,
-                            ),
-                            const SizedBox(width: 6),
-                            const Text(
-                              '0',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                    );
+                  }
+                },
+                child: EngagementRow(
+                  numUpvotes: _numUpvotes,
+                  numDownvotes: _numDownvotes,
+                  postId: _announcement?['_id'] ?? '',
+                  themeMode: 'dark',
+                  post: _announcement ?? {},
+                  disableCommentButton: true,
+                ),
               ),
             ],
           ),

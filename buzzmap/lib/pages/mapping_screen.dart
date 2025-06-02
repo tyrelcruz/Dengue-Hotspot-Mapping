@@ -73,6 +73,9 @@ class _MappingScreenState extends State<MappingScreen>
   late Animation<double> _tooltipAnimation;
   late AnimationController _pulseAnimationController;
   late Animation<double> _pulseAnimation;
+  late AnimationController _polygonFadeController;
+  late Animation<double> _polygonFadeAnimation;
+  bool _polygonsLoaded = false;
 
   final CameraPosition _initialCameraPosition = const CameraPosition(
     target: LatLng(14.6760, 121.0437), // Center of Quezon City
@@ -290,6 +293,25 @@ class _MappingScreenState extends State<MappingScreen>
       ),
     );
 
+    _polygonFadeController = AnimationController(
+      duration: const Duration(milliseconds: 10500),
+      vsync: this,
+    );
+
+    _polygonFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _polygonFadeController,
+        curve: Curves.easeInOutCubic,
+      ),
+    );
+
+    // Add listener to update polygons when animation value changes
+    _polygonFadeAnimation.addListener(() {
+      if (mounted) {
+        _updatePolygonsWithRiskLevels();
+      }
+    });
+
     // Initialize layer options
     _layerOptions['Borders'] = true;
     _layerOptions['Markers'] = widget.reportId != null;
@@ -373,6 +395,7 @@ class _MappingScreenState extends State<MappingScreen>
     _tooltipTimer?.cancel();
     _tooltipAnimationController.dispose();
     _pulseAnimationController.dispose();
+    _polygonFadeController.dispose();
 
     super.dispose();
   }
@@ -700,8 +723,6 @@ class _MappingScreenState extends State<MappingScreen>
       // Check if we need to map this name
       final lookupName = nameMapping[barangayName] ?? barangayName;
       final pattern = _barangayPatterns[lookupName]?.toLowerCase();
-      print(
-          'Updating polygon for $barangayName (mapped to $lookupName) with pattern: $pattern'); // Debug log
 
       Color polygonColor;
       Color borderColor;
@@ -713,8 +734,6 @@ class _MappingScreenState extends State<MappingScreen>
       } else {
         // If no data is available, use gray
         if (pattern == null) {
-          print(
-              'No pattern data for polygon $barangayName (mapped to $lookupName)'); // Debug log
           polygonColor = Colors.grey.shade700;
           borderColor = Colors.grey.shade800;
         } else {
@@ -738,8 +757,6 @@ class _MappingScreenState extends State<MappingScreen>
               borderColor = Colors.lightBlue.shade800;
               break;
             default:
-              print(
-                  'Unknown pattern for polygon $barangayName (mapped to $lookupName): $pattern'); // Debug log
               polygonColor = Colors.grey.shade700;
               borderColor = Colors.grey.shade800;
           }
@@ -751,9 +768,9 @@ class _MappingScreenState extends State<MappingScreen>
         points: polygon.points,
         strokeColor: _selectedPolygonId == polygon.polygonId
             ? Colors.redAccent
-            : borderColor,
+            : borderColor.withOpacity(_polygonFadeAnimation.value),
         strokeWidth: _selectedPolygonId == polygon.polygonId ? 4 : 2,
-        fillColor: polygonColor.withOpacity(0.3),
+        fillColor: polygonColor.withOpacity(0.3 * _polygonFadeAnimation.value),
         consumeTapEvents: true,
         onTap: () {
           _onBarangayPolygonTapped(barangayName);
@@ -1007,9 +1024,9 @@ class _MappingScreenState extends State<MappingScreen>
         loadedPolygons.add(Polygon(
           polygonId: PolygonId(name),
           points: coords,
-          strokeColor: Colors.white, // Changed to white
+          strokeColor: Colors.white.withOpacity(0.0), // Start fully transparent
           strokeWidth: _selectedPolygonId == PolygonId(name) ? 4 : 2,
-          fillColor: color.withOpacity(0.3),
+          fillColor: color.withOpacity(0.0), // Start fully transparent
           consumeTapEvents: true,
           onTap: () {
             _onBarangayPolygonTapped(name);
@@ -1020,8 +1037,15 @@ class _MappingScreenState extends State<MappingScreen>
 
       setState(() {
         _barangayPolygons = loadedPolygons.toSet();
+        _polygonsLoaded = true;
         _isLoading = false;
       });
+
+      // Add a small delay before starting the animation
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        _polygonFadeController.forward();
+      }
     } catch (e) {
       print('Error loading GeoJSON: $e');
     }

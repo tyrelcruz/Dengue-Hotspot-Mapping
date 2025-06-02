@@ -215,7 +215,12 @@ class PostCard extends StatelessWidget {
               numDownvotes: numDownvotes,
               postId: postId,
               themeMode: type == 'bordered' ? 'dark' : 'light',
-              post: post,
+              post: {
+                ...post,
+                'isAdminPost': false,
+                'upvotes': post['upvotes'] ?? [],
+                'downvotes': post['downvotes'] ?? [],
+              },
             ),
           ),
         ],

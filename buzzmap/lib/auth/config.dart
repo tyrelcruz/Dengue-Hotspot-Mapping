@@ -5,15 +5,14 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 //Login
 class Config {
-  static String get baseUrl {
-    return 'https://buzzmap-server.vercel.app';
-  }
+  static const String baseUrl = 'http://localhost:4000';
+  static const String createPostUrl = '$baseUrl/api/v1/reports';
+  static const String postsUrl = '$baseUrl/api/v1/reports';
 
   // Add these URLs
   static String get verifyOtpUrl => '$baseUrl/api/v1/otp/verify';
   static String get resendOtpUrl => '$baseUrl/api/v1/otp/request';
   static String get googleLoginUrl => '$baseUrl/api/v1/auth/google-login';
-  static String get createPostUrl => '$baseUrl/api/v1/reports';
   static String get createPostwImageUrl => '$baseUrl/api/v1/posts';
   static String get userProfileUrl => '$baseUrl/api/v1/auth/me';
 

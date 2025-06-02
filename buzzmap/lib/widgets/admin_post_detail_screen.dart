@@ -217,8 +217,7 @@ class _CommentsSectionState extends State<CommentsSection> {
       print('Fetching comments for post: ${widget.postId}');
 
       final response = await http.get(
-        Uri.parse(
-            '${Config.baseUrl}/api/v1/adminPosts/${widget.postId}/comments'),
+        Uri.parse('${Config.baseUrl}/api/v1/comments/${widget.postId}'),
         headers: {
           if (token != null) 'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -609,8 +608,7 @@ class _CommentInputBarState extends State<CommentInputBar> {
       }
 
       final response = await http.post(
-        Uri.parse(
-            '${Config.baseUrl}/api/v1/adminPosts/${widget.postId}/comments'),
+        Uri.parse('${Config.baseUrl}/api/v1/comments/${widget.postId}'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
