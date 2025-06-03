@@ -21,12 +21,31 @@ import 'package:buzzmap/providers/vote_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:buzzmap/config/config.dart';
 import 'package:buzzmap/providers/post_provider.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 void main() async {
+  // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
 
   // Load environment variables
   await dotenv.load(fileName: ".env");
+
+  // Initialize connectivity_plus after Flutter is initialized
+  try {
+    // Initialize connectivity
+    final connectivity = Connectivity();
+    // Set up a listener for connectivity changes
+    connectivity.onConnectivityChanged
+        .listen((List<ConnectivityResult> results) {
+      print('Connectivity changed: $results');
+    });
+    // Check initial connectivity
+    final connectivityResult = await connectivity.checkConnectivity();
+    print('Initial connectivity status: $connectivityResult');
+  } catch (e) {
+    print('Connectivity initialization error: $e');
+    // Continue even if connectivity check fails
+  }
 
   runApp(
     MultiProvider(

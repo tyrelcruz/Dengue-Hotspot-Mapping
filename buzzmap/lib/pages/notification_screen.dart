@@ -5,6 +5,8 @@ import 'package:buzzmap/services/notification_service.dart';
 import 'package:buzzmap/widgets/utils/notification_template.dart';
 import 'package:buzzmap/pages/mapping_screen.dart';
 import '../config/config.dart';
+import 'package:buzzmap/widgets/offline_posts_list.dart';
+import 'dart:async';
 
 // Add a simple logging utility
 class Logger {
@@ -34,6 +36,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
   bool _showAllWeek = false;
   Set<String> _selectedFilters = {}; // Allow multiple selection
   int _displayCount = 10;
+  Timer? _refreshTimer;
+  List<Map<String, dynamic>>? _cachedFilteredNotifications;
+  String? _lastFilterKey;
 
   final List<String> _filters = [
     'All',
@@ -46,26 +51,55 @@ class _NotificationScreenState extends State<NotificationScreen> {
   @override
   void initState() {
     super.initState();
-    _loadNotifications();
-    _loadAdminAlertsAndAnnouncements();
+    _initializeNotifications();
   }
 
-  Future<void> _loadNotifications() async {
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initializeNotifications() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final notifications =
-          await NotificationService().fetchNotifications(context);
-      setState(() {
-        _notifications = notifications;
-        _isLoading = false;
-      });
+      _notificationService.initialize();
+      await Future.wait([
+        _loadNotifications(),
+        _loadAdminAlertsAndAnnouncements(),
+      ]);
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to initialize notifications'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadNotifications() async {
+    try {
+      final notifications =
+          await _notificationService.fetchNotifications(context);
+      if (mounted) {
+        setState(() {
+          _notifications = notifications;
+          _cachedFilteredNotifications = null; // Invalidate cache
+        });
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -107,11 +141,26 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   void _toggleFilter(String filter) {
     setState(() {
-      if (_selectedFilters.contains(filter)) {
-        _selectedFilters.remove(filter);
+      if (filter == 'All') {
+        // If "All" is selected, clear other filters
+        _selectedFilters = {'All'};
       } else {
-        _selectedFilters.add(filter);
+        // Remove "All" if it exists when selecting other filters
+        _selectedFilters.remove('All');
+
+        if (_selectedFilters.contains(filter)) {
+          _selectedFilters.remove(filter);
+          // If no filters are selected, default to "All"
+          if (_selectedFilters.isEmpty) {
+            _selectedFilters = {'All'};
+          }
+        } else {
+          _selectedFilters.add(filter);
+        }
       }
+      // Reset display count and invalidate cache when filters change
+      _displayCount = 10;
+      _cachedFilteredNotifications = null;
     });
   }
 
@@ -122,9 +171,16 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   List<Map<String, dynamic>> _getFilteredNotifications() {
+    final currentFilterKey = _selectedFilters.join(',');
+    if (_cachedFilteredNotifications != null &&
+        _lastFilterKey == currentFilterKey) {
+      return _cachedFilteredNotifications!;
+    }
+
+    List<Map<String, dynamic>> filtered;
     if (_selectedFilters.contains('Admin Alerts')) {
-      final combined = [..._adminAlerts, ..._adminAnnouncements];
-      combined.sort((a, b) {
+      filtered = [..._adminAlerts, ..._adminAnnouncements];
+      filtered.sort((a, b) {
         final dateA =
             DateTime.tryParse(a['createdAt'] ?? a['publishDate'] ?? '');
         final dateB =
@@ -132,31 +188,51 @@ class _NotificationScreenState extends State<NotificationScreen> {
         if (dateA == null || dateB == null) return 0;
         return dateB.compareTo(dateA);
       });
-      return combined;
-    }
-    List<Map<String, dynamic>> filtered = _notifications.where((notification) {
-      final report = notification['report'] as Map<String, dynamic>?;
-      final status = report?['status']?.toString().toLowerCase();
-      final createdAt = DateTime.parse(notification['createdAt']);
+    } else {
       final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
-      if (status == null || status == 'unknown') return false;
-      if (_selectedFilters.isEmpty || _selectedFilters.contains('All')) {
-        return createdAt.isAfter(sevenDaysAgo);
-      }
-      return _selectedFilters.any((filter) {
-        if (filter.toLowerCase() == 'reviewing') {
-          return status == 'pending' && createdAt.isAfter(sevenDaysAgo);
+      filtered = _notifications.where((notification) {
+        final report = notification['report'] as Map<String, dynamic>?;
+        final status = report?['status']?.toString().toLowerCase();
+        final createdAt = DateTime.parse(notification['createdAt']);
+
+        if (status == null || status == 'unknown') return false;
+
+        // If no filters selected or "All" is selected, show all notifications within 7 days
+        if (_selectedFilters.isEmpty || _selectedFilters.contains('All')) {
+          return createdAt.isAfter(sevenDaysAgo);
         }
-        return status == filter.toLowerCase() &&
-            createdAt.isAfter(sevenDaysAgo);
+
+        // Check if notification matches any of the selected filters
+        bool matchesFilter = false;
+        for (String filter in _selectedFilters) {
+          // Handle "reviewing" filter
+          if (filter.toLowerCase() == 'reviewing') {
+            if (status == 'pending') {
+              matchesFilter = true;
+              break;
+            }
+          }
+          // Handle other status filters
+          else if (status == filter.toLowerCase()) {
+            matchesFilter = true;
+            break;
+          }
+        }
+
+        return matchesFilter && createdAt.isAfter(sevenDaysAgo);
+      }).toList();
+
+      // Sort by date (newest first)
+      filtered.sort((a, b) {
+        final dateA = DateTime.parse(a['createdAt']);
+        final dateB = DateTime.parse(b['createdAt']);
+        return dateB.compareTo(dateA);
       });
-    }).toList();
-    filtered.sort((a, b) {
-      final dateA = DateTime.parse(a['createdAt']);
-      final dateB = DateTime.parse(b['createdAt']);
-      return dateB.compareTo(dateA);
-    });
-    return filtered.take(_displayCount).toList();
+    }
+
+    _cachedFilteredNotifications = filtered.take(_displayCount).toList();
+    _lastFilterKey = currentFilterKey;
+    return _cachedFilteredNotifications!;
   }
 
   void _handleNotificationTap(Map<String, dynamic> notification) async {
@@ -256,7 +332,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final primaryGreen = Theme.of(context).colorScheme.primary;
+    final filteredNotifications = _getFilteredNotifications();
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -277,260 +354,274 @@ class _NotificationScreenState extends State<NotificationScreen> {
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
-      body: Column(
-        children: [
-          // Spotify-style merged filter bar
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+      body: CustomScrollView(
+        slivers: [
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                'Pending Offline Reports',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_selectedFilters.isNotEmpty)
-                  GestureDetector(
-                    onTap: _clearFilters,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: const BoxDecoration(
-                        color: Colors.black87,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.close, color: Colors.white, size: 24),
-                      ),
-                    ),
-                  ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Render merged selected filters as one pill with curved dividers
-                        if (_selectedFilters.isNotEmpty)
-                          Stack(
-                            alignment: Alignment.centerLeft,
-                            children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children:
-                                    List.generate(_selectedFilters.length, (i) {
-                                  final filter = _selectedFilters.elementAt(i);
-                                  final isFirst = i == 0;
-                                  final isLast =
-                                      i == _selectedFilters.length - 1;
-                                  return Transform.translate(
-                                    offset: Offset(i == 0 ? 0 : -16.0,
-                                        0), // Overlap effect
-                                    child: GestureDetector(
-                                      onTap: () => _toggleFilter(filter),
-                                      child: AnimatedContainer(
-                                        duration:
-                                            const Duration(milliseconds: 200),
-                                        padding: EdgeInsets.only(
-                                          left: isFirst ? 16 : 20,
-                                          right: isLast ? 16 : 20,
-                                          top: 8,
-                                          bottom: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: primaryGreen,
-                                          borderRadius: BorderRadius.only(
-                                            topLeft: Radius.circular(
-                                                isFirst ? 20 : 0),
-                                            bottomLeft: Radius.circular(
-                                                isFirst ? 20 : 0),
-                                            topRight: Radius.circular(
-                                                isLast ? 20 : 0),
-                                            bottomRight: Radius.circular(
-                                                isLast ? 20 : 0),
-                                          ),
-                                          border: Border.all(
-                                            color: primaryGreen,
-                                            width: 1,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          filter,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 15,
-                                            fontWeight:
-                                                FontWeight.normal, // Not bold
-                                            letterSpacing: 0.2,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ),
-                              // Draw curved dividers between pills (except after last)
-                              ...List.generate(_selectedFilters.length - 1,
-                                  (i) {
-                                return Positioned(
-                                  left: 32.0 +
-                                      i * 36.0, // Adjust for pill width/overlap
-                                  child: CustomPaint(
-                                    size: const Size(24, 32),
-                                    painter: _CurvedDividerPainter(
-                                        color: Colors.black.withOpacity(0.18)),
-                                  ),
-                                );
-                              }),
-                            ],
-                          ),
-                        // Render unselected filters as individual pills
-                        ..._filters
-                            .where((f) => !_selectedFilters.contains(f))
-                            .map((filter) {
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8.0),
-                            child: GestureDetector(
-                              onTap: () => _toggleFilter(filter),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[50],
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: Colors.grey[200]!,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  filter,
-                                  style: TextStyle(
-                                    color: Colors.grey[700],
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    letterSpacing: 0.2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-          // Notification List
+          const SliverToBoxAdapter(
+            child: OfflinePostsList(),
+          ),
+          const SliverToBoxAdapter(
+            child: Divider(),
+          ),
+          SliverToBoxAdapter(
+            child: _buildFilterBar(),
+          ),
+          if (_isLoading)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_selectedFilters.contains('Admin Alerts'))
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final notification = filteredNotifications[index];
+                  final isAlert = notification.containsKey('messages');
+                  return isAlert
+                      ? _buildAdminAlertItem(notification)
+                      : _buildAdminAnnouncementItem(notification);
+                },
+                childCount: filteredNotifications.length,
+              ),
+            )
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final notification = filteredNotifications[index];
+                  return _buildNotificationItem(notification);
+                },
+                childCount: filteredNotifications.length,
+              ),
+            ),
+          if (filteredNotifications.length >= _displayCount)
+            SliverToBoxAdapter(
+              child: _buildShowMoreButton(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterBar() {
+    final primaryGreen = Theme.of(context).colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_selectedFilters.isNotEmpty)
+            GestureDetector(
+              onTap: _clearFilters,
+              child: Container(
+                width: 40,
+                height: 40,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: const BoxDecoration(
+                  color: Colors.black87,
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Icon(Icons.close, color: Colors.white, size: 24),
+                ),
+              ),
+            ),
           Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 600),
-              switchInCurve: Curves.easeInOutCubic,
-              switchOutCurve: Curves.easeInOutCubic,
-              child: _isLoading
-                  ? const Center(
-                      key: ValueKey('loading'),
-                      child: CircularProgressIndicator())
-                  : _selectedFilters.contains('Admin Alerts')
-                      ? RefreshIndicator(
-                          key: ValueKey('admin_alerts'),
-                          onRefresh: _refreshAdminAlerts,
-                          child: ListView.builder(
-                            itemCount: _getFilteredNotifications().length,
-                            itemBuilder: (context, index) {
-                              final notification =
-                                  _getFilteredNotifications()[index];
-                              final isAlert =
-                                  notification.containsKey('messages');
-                              if (isAlert) {
-                                // Admin Alert - use NotificationTemplate for consistency
-                                return NotificationTemplate(
-                                  message: _formatAdminAlertTitle(notification),
-                                  reportId: notification['_id']?.toString(),
-                                  barangay: (notification['barangays'] !=
-                                              null &&
-                                          (notification['barangays'] as List)
-                                              .isNotEmpty)
-                                      ? (notification['barangays'][0]['name'] ??
-                                          'All Areas')
-                                      : 'All Areas',
-                                  status: 'alert',
-                                  reportType: 'Admin Alert',
-                                  isRead: false,
-                                  latitude: null,
-                                  longitude: null,
-                                  streetName: null,
-                                );
-                              } else {
-                                // Admin Announcement - use NotificationTemplate for consistency
-                                return NotificationTemplate(
-                                  message:
-                                      notification['title'] ?? 'Announcement',
-                                  reportId: notification['_id']?.toString(),
-                                  barangay: 'All Areas',
-                                  status: 'announcement',
-                                  reportType: 'Admin Announcement',
-                                  isRead: false,
-                                  latitude: null,
-                                  longitude: null,
-                                  streetName: null,
-                                );
-                              }
-                            },
-                          ),
-                        )
-                      : ListView.builder(
-                          key: ValueKey(_selectedFilters.join(',')),
-                          itemCount: _getFilteredNotifications().length,
-                          itemBuilder: (context, index) {
-                            final notification =
-                                _getFilteredNotifications()[index];
-                            // Extract location data from the report
-                            double? latitude;
-                            double? longitude;
-                            final report =
-                                notification['report'] as Map<String, dynamic>?;
-                            if (report != null &&
-                                report['specific_location'] != null) {
-                              final location = report['specific_location'];
-                              if (location['coordinates'] != null) {
-                                final coordinates = location['coordinates'];
-                                if (coordinates is List &&
-                                    coordinates.length >= 2) {
-                                  longitude = coordinates[0].toDouble();
-                                  latitude = coordinates[1].toDouble();
-                                }
-                              }
-                            }
-                            return NotificationTemplate(
-                              message: _formatNotificationMessage(notification),
-                              reportId: report?['_id']?.toString(),
-                              barangay: report?['barangay'],
-                              status: report?['status'],
-                              reportType: report?['report_type'],
-                              isRead: notification['isRead'] ?? false,
-                              latitude: latitude,
-                              longitude: longitude,
-                              streetName: report?['street_name'],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Render merged selected filters as one pill with curved dividers
+                  if (_selectedFilters.isNotEmpty)
+                    Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: List.generate(_selectedFilters.length, (i) {
+                            final filter = _selectedFilters.elementAt(i);
+                            final isFirst = i == 0;
+                            final isLast = i == _selectedFilters.length - 1;
+                            return Transform.translate(
+                              offset: Offset(
+                                  i == 0 ? 0 : -16.0, 0), // Overlap effect
+                              child: GestureDetector(
+                                onTap: () => _toggleFilter(filter),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: EdgeInsets.only(
+                                    left: isFirst ? 16 : 20,
+                                    right: isLast ? 16 : 20,
+                                    top: 8,
+                                    bottom: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: primaryGreen,
+                                    borderRadius: BorderRadius.only(
+                                      topLeft:
+                                          Radius.circular(isFirst ? 20 : 0),
+                                      bottomLeft:
+                                          Radius.circular(isFirst ? 20 : 0),
+                                      topRight:
+                                          Radius.circular(isLast ? 20 : 0),
+                                      bottomRight:
+                                          Radius.circular(isLast ? 20 : 0),
+                                    ),
+                                    border: Border.all(
+                                      color: primaryGreen,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    filter,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.normal, // Not bold
+                                      letterSpacing: 0.2,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             );
-                          },
+                          }),
                         ),
+                        // Draw curved dividers between pills (except after last)
+                        ...List.generate(_selectedFilters.length - 1, (i) {
+                          return Positioned(
+                            left: 32.0 +
+                                i * 36.0, // Adjust for pill width/overlap
+                            child: CustomPaint(
+                              size: const Size(24, 32),
+                              painter: _CurvedDividerPainter(
+                                  color: Colors.black.withOpacity(0.18)),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  // Render unselected filters as individual pills
+                  ..._filters
+                      .where((f) => !_selectedFilters.contains(f))
+                      .map((filter) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: GestureDetector(
+                        onTap: () => _toggleFilter(filter),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[50],
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.grey[200]!,
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            filter,
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAdminAlertItem(Map<String, dynamic> notification) {
+    return NotificationTemplate(
+      message: _formatAdminAlertTitle(notification),
+      reportId: notification['_id']?.toString(),
+      barangay: (notification['barangays'] != null &&
+              (notification['barangays'] as List).isNotEmpty)
+          ? (notification['barangays'][0]['name'] ?? 'All Areas')
+          : 'All Areas',
+      status: 'alert',
+      reportType: 'Admin Alert',
+      isRead: false,
+      latitude: null,
+      longitude: null,
+      streetName: null,
+    );
+  }
+
+  Widget _buildAdminAnnouncementItem(Map<String, dynamic> notification) {
+    return NotificationTemplate(
+      message: notification['title'] ?? 'Announcement',
+      reportId: notification['_id']?.toString(),
+      barangay: 'All Areas',
+      status: 'announcement',
+      reportType: 'Admin Announcement',
+      isRead: false,
+      latitude: null,
+      longitude: null,
+      streetName: null,
+    );
+  }
+
+  Widget _buildNotificationItem(Map<String, dynamic> notification) {
+    final report = notification['report'] as Map<String, dynamic>?;
+    double? latitude;
+    double? longitude;
+
+    if (report != null && report['specific_location'] != null) {
+      final location = report['specific_location'];
+      if (location['coordinates'] != null) {
+        final coordinates = location['coordinates'];
+        if (coordinates is List && coordinates.length >= 2) {
+          longitude = coordinates[0].toDouble();
+          latitude = coordinates[1].toDouble();
+        }
+      }
+    }
+
+    return NotificationTemplate(
+      message: _formatNotificationMessage(notification),
+      reportId: report?['_id']?.toString(),
+      barangay: report?['barangay'],
+      status: report?['status'],
+      reportType: report?['report_type'],
+      isRead: notification['isRead'] ?? false,
+      latitude: latitude,
+      longitude: longitude,
+      streetName: report?['street_name'],
     );
   }
 

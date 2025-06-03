@@ -144,6 +144,22 @@ class AppFlushBar {
     );
   }
 
+  /// Shows an info message FlushBar.
+  static Future<void> showInfo(
+    BuildContext context, {
+    required String title,
+    required String message,
+    Duration duration = const Duration(seconds: 3),
+  }) {
+    return _showFlushBar(
+      context,
+      title: title,
+      message: message,
+      backgroundColor: Colors.blue,
+      duration: duration,
+    );
+  }
+
   /// Private method to show FlushBar with the specified parameters.
   static Future<void> _showFlushBar(
     BuildContext context, {

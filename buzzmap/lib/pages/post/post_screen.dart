@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:async';
 import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
+import 'package:flutter/services.dart' show rootBundle;
 
 import 'package:buzzmap/main.dart';
 import 'package:buzzmap/widgets/custom_text_field.dart';
@@ -9,8 +11,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
-import 'dart:convert';
-import 'package:flutter/services.dart' show rootBundle;
 
 import 'package:buzzmap/auth/config.dart'; // Adjust the path based on your file structure
 import 'package:http/http.dart' as http;
@@ -24,6 +24,8 @@ import 'package:buzzmap/errors/flushbar.dart';
 import 'package:buzzmap/pages/community_screen.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:buzzmap/services/offline_post_service.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class PostScreen extends StatefulWidget {
   const PostScreen({super.key});
@@ -214,7 +216,8 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
         selectedBarangay == null ||
         selectedReportType == null ||
         dateController.text.isEmpty ||
-        timeController.text.isEmpty) {
+        timeController.text.isEmpty ||
+        descriptionController.text.trim().isEmpty) {
       await AppFlushBar.showError(
         context,
         title: 'Missing Information',
@@ -238,119 +241,139 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
       _isLoading = true;
     });
 
-    final url = Uri.parse(Config.createPostUrl);
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('authToken');
+    final formattedDateTime =
+        _combineDateAndTime(dateController.text, timeController.text);
+
+    if (formattedDateTime == null) {
+      setState(() {
+        _isLoading = false;
+      });
+      await AppFlushBar.showError(
+        context,
+        title: 'Invalid Date/Time',
+        message: 'Please check your date and time format.',
+      );
+      return;
+    }
 
     try {
-      final formattedDateTime =
-          _combineDateAndTime(dateController.text, timeController.text);
+      // Check connectivity
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final isOnline = connectivityResult != ConnectivityResult.none;
 
-      if (formattedDateTime == null) {
-        await AppFlushBar.showError(
-          context,
-          title: 'Invalid Date/Time',
-          message: 'Please check your date and time format.',
-        );
-        setState(() {
-          _isLoading = false;
-        });
-        return;
-      }
-
-      Map<String, dynamic> specificLocation = {
-        "type": "Point",
-        "coordinates": [
-          selectedCoordinates!.longitude,
-          selectedCoordinates!.latitude,
-        ]
-      };
-
-      final request = http.MultipartRequest('POST', url);
-      request.headers['Authorization'] = 'Bearer $token';
-
-      request.fields.addAll({
+      // Prepare post data
+      final postData = {
         'barangay': selectedBarangay!,
         'report_type': selectedReportType!,
-        'description': descriptionController.text,
+        'description': descriptionController.text.trim(),
         'date_and_time': formattedDateTime,
-        'specific_location[type]': specificLocation["type"],
-        'specific_location[coordinates][0]':
-            specificLocation["coordinates"][0].toString(),
-        'specific_location[coordinates][1]':
-            specificLocation["coordinates"][1].toString(),
-      });
+        'specific_location': {
+          'type': 'Point',
+          'coordinates': [
+            selectedCoordinates!.longitude,
+            selectedCoordinates!.latitude,
+          ],
+        },
+        'images': _selectedImages.map((file) => file.path).toList(),
+      };
 
-      // Process images in parallel if there are multiple
-      if (_selectedImages.isNotEmpty) {
-        for (int i = 0; i < _selectedImages.length; i++) {
-          final image = _selectedImages[i];
-          final bytes = await image.readAsBytes();
-          final filename = image.path.split('/').last;
-          request.files.add(
-            http.MultipartFile.fromBytes(
-              'images',
-              bytes,
-              filename: filename,
-            ),
-          );
-        }
-      }
-
-      // Add a timeout to the request
-      final streamedResponse = await request
-          .send()
-          .timeout(const Duration(seconds: 15), onTimeout: () {
-        throw TimeoutException('Request timed out');
-      });
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      if (isOnline) {
         try {
-          final responseData = jsonDecode(response.body);
-          debugPrint('✅ Report submitted successfully: \\${response.body}');
-        } catch (e) {
-          debugPrint('⚠️ Could not parse response: \\${response.body}');
-        }
+          // Try to submit online
+          final url = Uri.parse(Config.createPostUrl);
+          final request = http.MultipartRequest('POST', url);
+          request.headers['Authorization'] = 'Bearer $token';
 
-        // Navigate to the community screen (replace current screen)
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
+          request.fields.addAll({
+            'barangay': postData['barangay'] as String,
+            'report_type': postData['report_type'] as String,
+            'description': postData['description'] as String,
+            'date_and_time': postData['date_and_time'] as String,
+            'specific_location[type]': (postData['specific_location']
+                as Map<String, dynamic>)['type'] as String,
+            'specific_location[coordinates][0]': (postData['specific_location']
+                    as Map<String, dynamic>)['coordinates'][0]
+                .toString(),
+            'specific_location[coordinates][1]': (postData['specific_location']
+                    as Map<String, dynamic>)['coordinates'][1]
+                .toString(),
           });
-          await NotificationService.showEmpatheticFeedback(context,
-              "Thank you for reporting! We'll review your submission and notify you once verified.");
+
+          // Add images if any
+          for (final image in _selectedImages) {
+            request.files
+                .add(await http.MultipartFile.fromPath('images', image.path));
+          }
+
+          final streamedResponse = await request.send();
+          final response = await http.Response.fromStream(streamedResponse);
+
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            if (mounted) {
+              await AppFlushBar.showSuccess(
+                context,
+                title: 'Success',
+                message: 'Your report has been submitted successfully!',
+              );
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const CommunityScreen()),
+              );
+            }
+          } else {
+            throw Exception('Failed to submit post: ${response.statusCode}');
+          }
+        } catch (e) {
+          print('Online submission failed, saving offline: $e');
+          // If online submission fails, save offline
+          // Convert image paths to strings before saving
+          final offlineData = Map<String, dynamic>.from(postData);
+          offlineData['images'] =
+              _selectedImages.map((file) => file.path.toString()).toList();
+          await OfflinePostService().addOfflinePost(offlineData);
+          if (mounted) {
+            await AppFlushBar.showSuccess(
+              context,
+              title: 'Saved Offline',
+              message:
+                  'Your report has been saved and will be submitted when you\'re back online.',
+            );
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const CommunityScreen()),
+            );
+          }
+        }
+      } else {
+        // Save offline
+        // Convert image paths to strings before saving
+        final offlineData = Map<String, dynamic>.from(postData);
+        offlineData['images'] =
+            _selectedImages.map((file) => file.path.toString()).toList();
+        await OfflinePostService().addOfflinePost(offlineData);
+        if (mounted) {
+          await AppFlushBar.showSuccess(
+            context,
+            title: 'Saved Offline',
+            message:
+                'Your report has been saved and will be submitted when you\'re back online.',
+          );
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const CommunityScreen()),
           );
         }
-      } else {
-        throw Exception(
-            'Failed with status \\${response.statusCode}: \\${response.body}');
-      }
-    } on TimeoutException catch (_) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        await AppFlushBar.showError(
-          context,
-          title: 'Network Timeout',
-          message:
-              'Submission may have succeeded. Please check your posts in the Community screen before trying again.',
-        );
       }
     } catch (e) {
-      debugPrint('❌ Error submitting post: $e');
+      print('Error submitting post: $e');
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
         await AppFlushBar.showError(
           context,
-          title: 'Submission Failed',
-          message: 'Unable to submit your report. Please try again.',
+          title: 'Error',
+          message: 'Failed to submit your report. Please try again.',
         );
       }
     } finally {
@@ -450,13 +473,107 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
   Future<void> _pickImage() async {
     if (_selectedImages.length >= 3) return;
 
-    final XFile? pickedFile =
-        await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _selectedImages.add(File(pickedFile.path));
-      });
-    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.camera_alt,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  title: const Text(
+                    'Take a photo',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final XFile? pickedFile = await _picker.pickImage(
+                      source: ImageSource.camera,
+                    );
+                    if (pickedFile != null) {
+                      setState(() {
+                        _selectedImages.add(File(pickedFile.path));
+                      });
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.photo_library,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  title: const Text(
+                    'Choose from gallery',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final XFile? pickedFile = await _picker.pickImage(
+                      source: ImageSource.gallery,
+                    );
+                    if (pickedFile != null) {
+                      setState(() {
+                        _selectedImages.add(File(pickedFile.path));
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<Map<String, LatLng>> loadBarangayCentersFromGeoJson() async {
@@ -1354,19 +1471,34 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
           Positioned(
             bottom: 2,
             left: 38,
-            child: IconButton(
-              onPressed: _selectedImages.length >= 3 ? null : _pickImage,
-              icon: SvgPicture.asset(
-                'assets/icons/image.svg',
-                width: 18,
-                height: 18,
-                colorFilter: ColorFilter.mode(
-                  theme.colorScheme.primary,
-                  BlendMode.srcIn,
-                ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              padding: EdgeInsets.all(2),
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              child: IconButton(
+                onPressed: _selectedImages.length >= 3 ? null : _pickImage,
+                icon: SvgPicture.asset(
+                  'assets/icons/image.svg',
+                  width: 18,
+                  height: 18,
+                  colorFilter: ColorFilter.mode(
+                    _selectedImages.length >= 3
+                        ? theme.colorScheme.primary.withOpacity(0.5)
+                        : theme.colorScheme.primary,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
             ),
           ),
         ],
