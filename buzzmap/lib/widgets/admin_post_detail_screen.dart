@@ -5,7 +5,7 @@ import 'package:buzzmap/widgets/user_info_row.dart';
 import 'package:buzzmap/main.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:buzzmap/config.dart';
+import 'package:buzzmap/auth/config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';

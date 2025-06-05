@@ -5,13 +5,22 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 //Login
 class Config {
-  static const String baseUrl = 'http://localhost:4000';
-  static const String createPostUrl = '$baseUrl/api/v1/reports';
-  static const String postsUrl = '$baseUrl/api/v1/reports';
+  static String get baseUrl {
+    if (Platform.isAndroid) {
+      return dotenv.env['API_BASE_URL_ANDROID_EMULATOR'] ??
+          'http://10.0.2.2:4000';
+    } else if (Platform.isIOS) {
+      return dotenv.env['API_BASE_URL_IOS'] ?? 'http://localhost:4000';
+    }
+    return 'http://localhost:4000';
+  }
+
+  static String get createPostUrl => '$baseUrl/api/v1/reports';
+  static String get postsUrl => '$baseUrl/api/v1/reports';
 
   // Add these URLs
-  static String get verifyOtpUrl => '$baseUrl/api/v1/otp/verify';
-  static String get resendOtpUrl => '$baseUrl/api/v1/otp/request';
+  static String get verifyOtpUrl => '$baseUrl/api/v1/auth/verify-otp';
+  static String get resendOtpUrl => '$baseUrl/api/v1/auth/resend-otp';
   static String get googleLoginUrl => '$baseUrl/api/v1/auth/google-login';
   static String get createPostwImageUrl => '$baseUrl/api/v1/posts';
   static String get userProfileUrl => '$baseUrl/api/v1/auth/me';

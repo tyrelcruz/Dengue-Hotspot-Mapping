@@ -20,6 +20,10 @@ import 'package:buzzmap/widgets/location_notification.dart';
 import 'package:buzzmap/services/alert_service.dart';
 import 'dart:io' show Platform;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_svg/flutter_svg.dart' as svg;
+import 'dart:ui' as ui;
+import 'package:flutter_svg/svg.dart';
+import 'dart:typed_data';
 
 class MappingScreen extends StatefulWidget {
   final double? initialLatitude;
@@ -254,10 +258,16 @@ class _MappingScreenState extends State<MappingScreen>
 
   bool _isMapReady = false; // Add this flag
 
+  late BitmapDescriptor othersIcon;
+  late BitmapDescriptor stagnantWaterIcon;
+  late BitmapDescriptor trashIcon;
+  bool _customIconsLoaded = false;
+
   @override
   void initState() {
     super.initState();
-    // Initialize bounce animation
+
+    // Initialize animations
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -269,7 +279,6 @@ class _MappingScreenState extends State<MappingScreen>
       ),
     );
 
-    // Initialize tooltip animation
     _tooltipAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -281,7 +290,6 @@ class _MappingScreenState extends State<MappingScreen>
       ),
     );
 
-    // Initialize pulse animation
     _pulseAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -317,8 +325,11 @@ class _MappingScreenState extends State<MappingScreen>
     _layerOptions['Markers'] = widget.reportId != null;
     _layerOptions['Heatmap'] = false;
 
-    // Start the new initialization sequence
-    _initializeMappingScreen();
+    // Load custom marker icons first
+    _loadCustomMarkerIcons().then((_) {
+      // Start the initialization sequence after icons are loaded
+      _initializeMappingScreen();
+    });
   }
 
   Future<void> _initializeMappingScreen() async {
@@ -756,6 +767,10 @@ class _MappingScreenState extends State<MappingScreen>
               polygonColor = Colors.lightBlue.shade600;
               borderColor = Colors.lightBlue.shade800;
               break;
+            case 'low_level_activity':
+              polygonColor = Colors.grey.shade400;
+              borderColor = Colors.grey.shade600;
+              break;
             default:
               polygonColor = Colors.grey.shade700;
               borderColor = Colors.grey.shade800;
@@ -785,6 +800,10 @@ class _MappingScreenState extends State<MappingScreen>
 
   Future<Set<Marker>> _loadVerifiedReportMarkers() async {
     if (!_layerOptions['Markers']!) return {};
+    if (!_customIconsLoaded) {
+      print('Waiting for custom icons to load...');
+      return {};
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -818,58 +837,51 @@ class _MappingScreenState extends State<MappingScreen>
         print('✅ Verified reports: ${verifiedReports.length}');
 
         // Create markers
-        final markers = verifiedReports
-            .map((report) {
-              final coords = report['specific_location']?['coordinates'];
-              if (coords == null || coords.length != 2) {
-                print('❌ Invalid coordinates for report: ${report['_id']}');
-                return null;
-              }
-
-              final position = LatLng(coords[1], coords[0]);
-              final barangay = report['barangay'] ?? 'Unknown';
-
-              return Marker(
-                markerId: MarkerId(report['_id']),
-                position: position,
-                icon: BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueRed),
-                onTap: () {
-                  _showDengueDetails(
-                    context,
-                    barangay,
-                    1,
-                    'Verified',
-                    position,
-                  );
-                },
-              );
-            })
-            .whereType<Marker>()
-            .toList();
-
-        // Apply clustering based on zoom level
-        if (_currentZoom < 12) {
-          // Changed from 14 to 12
-          return _createClusters(markers);
-        } else {
-          return markers.toSet();
-        }
-      } else {
-        print('❌ Failed to fetch reports: ${response.statusCode}');
-        if (response.statusCode == 401) {
-          print('Authentication failed. Please log in again.');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Please log in to view reports'),
-                backgroundColor: Colors.red,
-              ),
-            );
+        final List<Marker> markers = [];
+        for (var report in verifiedReports) {
+          final coords = report['specific_location']?['coordinates'];
+          if (coords == null || coords.length != 2) {
+            print('❌ Invalid coordinates for report: ${report['_id']}');
+            continue;
           }
+
+          final position = LatLng(coords[1], coords[0]);
+          final reportType = report['report_type']?.toString() ?? '';
+
+          final icon = await _getReportMarkerIcon(reportType);
+
+          markers.add(
+            _createMarker(
+              id: report['_id'],
+              position: position,
+              icon: icon,
+              report: report,
+            ),
+          );
         }
-        return {};
+
+        // Update the markers immediately
+        if (mounted) {
+          setState(() {
+            _markers = markers.toSet();
+          });
+        }
+
+        return markers.toSet();
       }
+      print('❌ Failed to fetch reports: ${response.statusCode}');
+      if (response.statusCode == 401) {
+        print('Authentication failed. Please log in again.');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please log in to view reports'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+      return {};
     } catch (e) {
       print('❌ Exception in _loadVerifiedReportMarkers: $e');
       return {};
@@ -1076,6 +1088,8 @@ class _MappingScreenState extends State<MappingScreen>
         return Colors.green.shade600;
       case 'stable':
         return Colors.lightBlue.shade600;
+      case 'low_level_activity':
+        return Colors.grey.shade400;
       default:
         print('Unknown severity: $severity, using grey');
         return Colors.grey.shade700;
@@ -1113,39 +1127,70 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   void _onBarangayPolygonTapped(String barangayName) {
-    final data = _dengueData[barangayName];
-    final riskLevel = data?['severity']?.toLowerCase() ?? 'no data';
-    final pattern = data?['pattern']?.toLowerCase() ?? '';
-    final alert = data?['alert'] ?? 'No alerts triggered.';
-    final lastAnalysisTime = data?['last_analysis_time'];
-
-    setState(() {
-      selectedBarangay = barangayName;
-      selectedSeverity = riskLevel;
-      _selectedPolygonId = PolygonId(barangayName);
-      _isCardVisible = true;
-
-      // Update hazard levels based on risk level and pattern
-      hazardRiskLevels = {
-        'Mosquito Breeding Risk': riskLevel.toUpperCase(),
-        'Dengue Infection Risk': riskLevel.toUpperCase(),
-        'Home Safety Status': riskLevel.toUpperCase(),
-        'Pattern': pattern.toUpperCase(),
-        'RiskLevel': riskLevel.toUpperCase(),
-        'Alert': alert,
-        'LastAnalysisTime': lastAnalysisTime,
-      };
-    });
-
-    final boundaryPoints = barangayBoundaries[barangayName];
-    if (boundaryPoints != null && boundaryPoints.isNotEmpty) {
-      _fitPolygonToScreen(boundaryPoints);
-    } else {
-      final centroid = _barangayCentroids[barangayName];
-      if (centroid != null) {
-        _zoomToLocation(centroid, barangay: barangayName);
-      }
+    // Only allow polygon interaction if borders are enabled and other layers are disabled
+    if (!_layerOptions['Borders']! ||
+        _layerOptions['Markers']! ||
+        _layerOptions['Interventions']!) {
+      return;
     }
+
+    // Name mapping for special cases
+    final nameMapping = {
+      'E. Rodriguez Sr.': 'E. Rodriguez',
+      // Add more mappings if needed
+    };
+
+    // Check if we need to map this name
+    final lookupName = nameMapping[barangayName] ?? barangayName;
+    final pattern = _barangayPatterns[lookupName]?.toLowerCase();
+    print(
+        'Getting color for $barangayName (mapped to $lookupName) with pattern: $pattern'); // Debug log
+
+    // If no data is available, return
+    if (pattern == null) {
+      print(
+          'No pattern data for $barangayName (mapped to $lookupName)'); // Debug log
+      return;
+    }
+
+    // Get the polygon's center coordinates
+    final polygon = _barangayPolygons.firstWhere(
+      (p) => p.polygonId.value == barangayName,
+      orElse: () => throw Exception('Polygon not found'),
+    );
+
+    // Calculate the center of the polygon
+    double centerLat = 0;
+    double centerLng = 0;
+    int pointCount = 0;
+
+    for (var point in polygon.points) {
+      centerLat += point.latitude;
+      centerLng += point.longitude;
+      pointCount++;
+    }
+
+    if (pointCount > 0) {
+      centerLat /= pointCount;
+      centerLng /= pointCount;
+    }
+
+    // Show the details card
+    _showDengueDetails(
+      context,
+      barangayName,
+      1,
+      pattern.toUpperCase(),
+      LatLng(centerLat, centerLng),
+    );
+
+    // Zoom to the polygon
+    _mapController.animateCamera(
+      CameraUpdate.newLatLngZoom(
+        LatLng(centerLat, centerLng),
+        14.0,
+      ),
+    );
   }
 
   void _fitPolygonToScreen(List<LatLng> points) {
@@ -1535,6 +1580,10 @@ class _MappingScreenState extends State<MappingScreen>
       interactionElements.add('REPORT MARKERS');
     }
 
+    if (_layerOptions['Interventions'] == true) {
+      interactionElements.add('INTERVENTION MARKERS');
+    }
+
     if (interactionElements.isEmpty) {
       return 'the MAP';
     }
@@ -1850,6 +1899,18 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   void _showMapLegend(BuildContext context) {
+    String legendText;
+    if (_layerOptions['Markers'] == true) {
+      legendText =
+          'Report markers show different types of potential dengue breeding sites. Click on any marker to see detailed information.';
+    } else if (_layerOptions['Interventions'] == true) {
+      legendText =
+          'Intervention markers show different types of dengue control measures. Click on any marker to see detailed information.';
+    } else {
+      legendText =
+          'Areas are color-coded based on dengue case patterns. Click on any area to see detailed information.';
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1870,9 +1931,9 @@ class _MappingScreenState extends State<MappingScreen>
             _buildLegendRow(
                 Colors.lightBlue.shade600, 'Stable', 'No significant change'),
             const SizedBox(height: 16),
-            const Text(
-              'Areas are color-coded based on dengue case patterns. Click on any area to see detailed information.',
-              style: TextStyle(fontSize: 12),
+            Text(
+              legendText,
+              style: const TextStyle(fontSize: 12),
             ),
           ],
         ),
@@ -1945,8 +2006,58 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   Widget _buildHeatmapLegend() {
-    // Dynamic legend: show risk levels legend only if Interventions is OFF
-    if (_layerOptions['Interventions'] == true) {
+    // Dynamic legend: show risk levels legend only if both Markers and Interventions are OFF
+    if (_layerOptions['Markers'] == true) {
+      // Show a legend for report markers using images and names
+      final reportTypes = [
+        {
+          'name': 'Stagnant\nWater',
+          'asset': 'assets/markers/stagnantwater.png'
+        },
+        {'name': 'Uncollected\nGarbage', 'asset': 'assets/markers/trash.png'},
+        {'name': 'Others', 'asset': 'assets/markers/others.png'},
+      ];
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: reportTypes.map((type) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      type['asset']!,
+                      width: 28,
+                      height: 28,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      type['name']!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      );
+    } else if (_layerOptions['Interventions'] == true) {
       // Show a legend for interventions using images and names
       final interventionTypes = [
         {'name': 'Fogging', 'asset': 'assets/icons/fogging.png'},
@@ -3022,7 +3133,7 @@ class _MappingScreenState extends State<MappingScreen>
     try {
       // Try to load the custom marker image
       return await BitmapDescriptor.fromAssetImage(
-        const ImageConfiguration(size: Size(48, 48)),
+        const ImageConfiguration(size: Size(12, 12)),
         iconPath,
       );
     } catch (e) {
@@ -3158,6 +3269,8 @@ class _MappingScreenState extends State<MappingScreen>
       case 'stable':
       case 'stability':
         return Colors.lightBlue.shade600;
+      case 'low_level_activity':
+        return Colors.grey.shade400; // Light gray for low level activity
       default:
         print(
             'Unknown pattern for $barangayName (mapped to $lookupName): $pattern'); // Debug log
@@ -3265,6 +3378,151 @@ class _MappingScreenState extends State<MappingScreen>
             child: Text(value),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _loadCustomMarkerIcons() async {
+    try {
+      othersIcon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/markers/others.png',
+      );
+      stagnantWaterIcon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/markers/stagnantwater.png',
+      );
+      trashIcon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/markers/trash.png',
+      );
+
+      if (mounted) {
+        setState(() {
+          _customIconsLoaded = true;
+        });
+      }
+    } catch (e) {
+      print('Error loading custom marker icons: $e');
+      // Fallback to default markers if loading fails
+      othersIcon =
+          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+      stagnantWaterIcon =
+          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+      trashIcon =
+          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+
+      if (mounted) {
+        setState(() {
+          _customIconsLoaded = true;
+        });
+      }
+    }
+  }
+
+  Future<BitmapDescriptor> _getReportMarkerIcon(String reportType) async {
+    String pngPath;
+    switch (reportType.toLowerCase()) {
+      case 'stagnant water':
+      case 'stagnantwater':
+        pngPath = 'assets/markers/stagnantwater.png';
+        break;
+      case 'uncollected garbage or trash':
+      case 'garbage':
+      case 'trash':
+        pngPath = 'assets/markers/trash.png';
+        break;
+      case 'others':
+        pngPath = 'assets/markers/others.png';
+        break;
+      default:
+        pngPath = 'assets/markers/others.png';
+    }
+    try {
+      return await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(
+            size: Size(48, 48)), // Increased size for better quality
+        pngPath,
+      );
+    } catch (e) {
+      print('Error loading report marker icon for $reportType: $e');
+      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+    }
+  }
+
+  // Add this function to create markers with custom size
+  Marker _createMarker({
+    required String id,
+    required LatLng position,
+    required BitmapDescriptor icon,
+    required Map<String, dynamic> report,
+  }) {
+    return Marker(
+      markerId: MarkerId(id),
+      position: position,
+      icon: icon,
+      anchor: const Offset(0.5, 0.5), // Center the marker
+      zIndex: 2, // Ensure markers are above other map elements
+      onTap: () {
+        _showReportDetails(report);
+      },
+    );
+  }
+
+  void _showReportDetails(Map<String, dynamic> report) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              report['type'] ?? 'Unknown Report',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildInfoRow('Status',
+                report['status']?.toString().toUpperCase() ?? 'Unknown'),
+            _buildInfoRow(
+                'Date', report['date']?.toString().split(' ')[0] ?? 'Unknown'),
+            _buildInfoRow('Address', report['address'] ?? 'Unknown'),
+            _buildInfoRow('Barangay', report['barangay'] ?? 'Unknown'),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _zoomToLocation(
+                    LatLng(
+                      report['location']['coordinates'][1],
+                      report['location']['coordinates'][0],
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text('View on Map'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

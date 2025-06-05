@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:buzzmap/services/offline_post_service.dart';
 import 'package:intl/intl.dart';
 import 'package:carousel_slider/carousel_slider.dart';
+import 'dart:io';
 
 class OfflinePostsList extends StatefulWidget {
   const OfflinePostsList({super.key});
@@ -57,138 +58,188 @@ class _OfflinePostsListState extends State<OfflinePostsList> {
     final timestamp = DateTime.parse(post['date_and_time']);
     final formattedDate = DateFormat('MMM d, yyyy h:mm a').format(timestamp);
 
+    // New colors for highlight
+    final Color highlightColor = const Color(0xFFFFA726); // Light orange
+    final Color badgeBgColor = const Color(0xFFFFF3E0); // Very light orange
+    final Color badgeTextColor = const Color(0xFFFB8C00); // Orange
+
+    // Add back image path logic for thumbnail
+    String? imagePath;
+    if (post['images'] != null &&
+        post['images'] is List &&
+        post['images'].isNotEmpty) {
+      final List images = post['images'];
+      if (images.isNotEmpty &&
+          images[0] != null &&
+          images[0].toString().isNotEmpty) {
+        imagePath = images[0].toString();
+      }
+    }
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      elevation: 0,
+      elevation: 3, // Slightly higher elevation
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: _offlineColor.withOpacity(0.2),
-          width: 1,
+          color: highlightColor.withOpacity(0.7), // Orange border
+          width: 2,
         ),
       ),
+      shadowColor: highlightColor.withOpacity(0.2),
       child: InkWell(
         onTap: () {
           // Handle tap if needed
         },
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white,
-                _offlineBgColor.withOpacity(0.3),
-              ],
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Stack(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: _offlineColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.cloud_off,
-                        color: _offlineColor,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
+                    // Main card content in a Padding (small padding only)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12, bottom: 12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            post['report_type'] ?? 'Offline Report',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: _offlineColor,
-                            ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: highlightColor
+                                                .withOpacity(0.15),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          child: Icon(
+                                            Icons.cloud_off,
+                                            color:
+                                                highlightColor, // Orange icon
+                                            size: 22,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                post['report_type'] ??
+                                                    'Offline Report',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
+                                                  color: highlightColor,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                post['barangay'] ??
+                                                    'Unknown Location',
+                                                style: TextStyle(
+                                                  color: Colors.grey[700],
+                                                  fontSize: 14,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: badgeBgColor,
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            border: Border.all(
+                                                color: highlightColor
+                                                    .withOpacity(0.3)),
+                                          ),
+                                          child: Text(
+                                            'Pending Sync',
+                                            style: TextStyle(
+                                              color: badgeTextColor,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.grey[500],
+                                            size: 20,
+                                          ),
+                                          onPressed: () async {
+                                            await _offlineService
+                                                .removeOfflinePost(index);
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 12),
                           Text(
-                            post['barangay'] ?? 'Unknown Location',
+                            post['description'] ?? 'No description provided',
                             style: TextStyle(
-                              color: _offlineColor.withOpacity(0.7),
+                              color: Colors.grey[800],
                               fontSize: 14,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.access_time,
+                                size: 14,
+                                color: Colors.grey[500],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                formattedDate,
+                                style: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.delete_outline,
-                        color: _offlineColor.withOpacity(0.7),
-                        size: 20,
-                      ),
-                      onPressed: () async {
-                        await _offlineService.removeOfflinePost(index);
-                      },
-                    ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  post['description'] ?? 'No description provided',
-                  style: TextStyle(
-                    color: _offlineColor.withOpacity(0.8),
-                    fontSize: 14,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.access_time,
-                      size: 14,
-                      color: _offlineColor.withOpacity(0.6),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      formattedDate,
-                      style: TextStyle(
-                        color: _offlineColor.withOpacity(0.6),
-                        fontSize: 12,
-                      ),
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _offlineColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'Offline',
-                        style: TextStyle(
-                          color: _offlineColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

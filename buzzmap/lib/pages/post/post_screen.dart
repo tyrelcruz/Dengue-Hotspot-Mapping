@@ -40,9 +40,9 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
   final TextEditingController descriptionController = TextEditingController();
 
   final List<String> reportTypes = [
-    'Breeding Site',
-    'Standing Water',
-    'Infestation'
+    'Stagnant Water',
+    'Uncollected Garbage or Trash',
+    'Others'
   ];
 
   Set<Polygon> _barangayPolygons = {};
@@ -412,7 +412,7 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
           Polygon(
             polygonId: PolygonId(name),
             points: coords,
-            strokeColor: Colors.black,
+            strokeColor: Colors.grey.shade400,
             strokeWidth: 2,
             fillColor: Colors.transparent,
           ),

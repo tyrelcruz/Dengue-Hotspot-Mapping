@@ -54,7 +54,6 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('password', _passwordController.text);
     } else {
       await prefs.setBool('remember_me', false);
-      await prefs.remove('email');
       await prefs.remove('password');
     }
   }
@@ -81,6 +80,20 @@ class _LoginScreenState extends State<LoginScreen> {
       // Check if there is an error in the response
       if (responseData['status'] == 'error') {
         String errorMessage = responseData['message'] ?? 'Login failed';
+
+        // Check if the error is about pending activation
+        if (errorMessage.contains('pending activation') ||
+            errorMessage.contains('check your email to activate')) {
+          print('⚠️ Account pending activation, redirecting to OTP screen');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OTPScreen(email: _emailController.text),
+            ),
+          );
+          return;
+        }
+
         if (errorMessage.contains('Incorrect password')) {
           _showError('Incorrect email or password');
         } else {
@@ -92,8 +105,12 @@ class _LoginScreenState extends State<LoginScreen> {
       final token = responseData['accessToken']; // ✅ FIXED KEY
       final userRole =
           responseData['user']?['role']; // Assuming role is returned
+      final isVerified = responseData['user']?['verified'] ?? false;
+      final status = responseData['user']?['status'] ?? '';
 
       print('🔑 Token received: $token');
+      print('✅ Verification status: $isVerified');
+      print('✅ Account status: $status');
 
       if (response.statusCode == 200 &&
           token != null &&
@@ -105,14 +122,34 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
 
+        // If not verified and status is not active, redirect to OTP screen
+        if (!isVerified && status != 'active') {
+          print('⚠️ User is not verified, redirecting to OTP screen');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OTPScreen(email: _emailController.text),
+            ),
+          );
+          return;
+        }
+
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('authToken', token);
         print('✅ Token saved to SharedPreferences');
 
-        // Save username to SharedPreferences
+        // Save username and name to SharedPreferences
         final username = responseData['user']?['username'] ?? '';
+        final name = responseData['user']?['name'] ?? '';
         await prefs.setString('username', username);
+        await prefs.setString('name', name);
         print('👤 Username saved to SharedPreferences: $username');
+        print('👤 Name saved to SharedPreferences: $name');
+
+        // Save email to SharedPreferences
+        final email = responseData['user']?['email'] ?? '';
+        await prefs.setString('email', email);
+        print('📧 Email saved to SharedPreferences: $email');
 
         // Save user ID to SharedPreferences
         final userId = responseData['user']?['_id'] ?? '';
@@ -121,21 +158,45 @@ class _LoginScreenState extends State<LoginScreen> {
           print('👤 User ID saved to SharedPreferences: $userId');
         }
 
+        // Save profile photo URL to SharedPreferences
+        final profilePhotoUrl = responseData['user']?['profilePhotoUrl'];
+        if (profilePhotoUrl != null && profilePhotoUrl.isNotEmpty) {
+          await prefs.setString('profilePhotoUrl', profilePhotoUrl);
+          print(
+              '📸 Profile photo URL saved to SharedPreferences: $profilePhotoUrl');
+        } else {
+          // If profile photo URL is not in login response, fetch it from the server
+          try {
+            final profileResponse = await http.get(
+              Uri.parse('${Config.baseUrl}/api/v1/auth/me'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+              },
+            );
+
+            if (profileResponse.statusCode == 200) {
+              final profileData = jsonDecode(profileResponse.body);
+              final fetchedPhotoUrl = profileData['user']?['profilePhotoUrl'];
+
+              if (fetchedPhotoUrl != null && fetchedPhotoUrl.isNotEmpty) {
+                print(
+                    '📸 Fetched profile photo URL from server: $fetchedPhotoUrl');
+                await prefs.setString('profilePhotoUrl', fetchedPhotoUrl);
+              }
+            }
+          } catch (e) {
+            print('❌ Error fetching profile photo URL: $e');
+          }
+        }
+
         await _saveCredentials();
 
-        if (responseData['user']?['verified'] == false) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => OTPScreen(email: _emailController.text),
-            ),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => HomeScreen()),
-          );
-        }
+        print('✅ User is verified, proceeding to home screen');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => HomeScreen()),
+        );
       } else {
         print('❌ Token not saved or missing in response');
         _showError('Login failed: No valid token received');

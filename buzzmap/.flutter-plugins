@@ -1,4 +1,5 @@
 # This is a generated file; do not edit or check into version control.
+connectivity_plus=/Users/tyrelcruz/.pub-cache/hosted/pub.dev/connectivity_plus-6.1.4/
 file_selector_linux=/Users/tyrelcruz/.pub-cache/hosted/pub.dev/file_selector_linux-0.9.3+2/
 file_selector_macos=/Users/tyrelcruz/.pub-cache/hosted/pub.dev/file_selector_macos-0.9.4+2/
 file_selector_windows=/Users/tyrelcruz/.pub-cache/hosted/pub.dev/file_selector_windows-0.9.3+4/
@@ -48,7 +49,6 @@ shared_preferences_foundation=/Users/tyrelcruz/.pub-cache/hosted/pub.dev/shared_
 shared_preferences_linux=/Users/tyrelcruz/.pub-cache/hosted/pub.dev/shared_preferences_linux-2.4.1/
 shared_preferences_web=/Users/tyrelcruz/.pub-cache/hosted/pub.dev/shared_preferences_web-2.4.3/
 shared_preferences_windows=/Users/tyrelcruz/.pub-cache/hosted/pub.dev/shared_preferences_windows-2.4.1/
-smart_auth=/Users/tyrelcruz/.pub-cache/hosted/pub.dev/smart_auth-1.1.1/
 sqflite=/Users/tyrelcruz/.pub-cache/hosted/pub.dev/sqflite-2.4.1/
 sqflite_android=/Users/tyrelcruz/.pub-cache/hosted/pub.dev/sqflite_android-2.4.0/
 sqflite_darwin=/Users/tyrelcruz/.pub-cache/hosted/pub.dev/sqflite_darwin-2.4.1+1/

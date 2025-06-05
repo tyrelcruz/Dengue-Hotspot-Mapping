@@ -11,29 +11,99 @@ class VoteProvider with ChangeNotifier {
   final Map<String, int> _downvoteCounts = {};
   SharedPreferences? _prefs;
   bool _isInitialized = false;
+  bool _isLoading = false;
+  bool _isLoadingAllVotes = false;
 
   VoteProvider() {
-    _initializePrefs();
+    initializePrefs();
   }
 
-  Future<void> _initializePrefs() async {
+  bool get isLoading => _isLoading;
+  bool get isLoadingAllVotes => _isLoadingAllVotes;
+
+  Future<void> initializePrefs() async {
+    if (_isInitialized) return;
+
     try {
       _prefs = await SharedPreferences.getInstance();
       _isInitialized = true;
+      await _loadPersistedVoteStates();
       notifyListeners();
     } catch (e) {
       print('Error initializing SharedPreferences: $e');
     }
   }
 
-  bool isUpvoted(String postId) => _upvotedPosts[postId] ?? false;
-  bool isDownvoted(String postId) => _downvotedPosts[postId] ?? false;
-  int getUpvoteCount(String postId) => _upvoteCounts[postId] ?? 0;
-  int getDownvoteCount(String postId) => _downvoteCounts[postId] ?? 0;
+  Future<void> _loadPersistedVoteStates() async {
+    if (_prefs == null) return;
+
+    try {
+      _isLoadingAllVotes = true;
+
+      final userId = _prefs!.getString('userId');
+      if (userId == null) return;
+
+      // Get all posts that have votes
+      final response = await http.get(
+        Uri.parse('${Config.baseUrl}/api/v1/reports'),
+        headers: {
+          'Authorization': 'Bearer ${_prefs!.getString('authToken')}',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic responseData = jsonDecode(response.body);
+        final List<dynamic> posts = responseData is Map<String, dynamic>
+            ? responseData['reports'] ?? []
+            : responseData is List
+                ? responseData
+                : [];
+
+        for (var post in posts) {
+          if (post is! Map<String, dynamic>) continue;
+
+          final postId = post['_id']?.toString();
+          if (postId == null) continue;
+
+          final upvotesList = List<String>.from(post['upvotes'] ?? []);
+          final downvotesList = List<String>.from(post['downvotes'] ?? []);
+
+          _updateVoteState(postId, upvotesList, downvotesList, userId);
+        }
+      }
+    } catch (e) {
+      print('Error loading persisted vote states: $e');
+    } finally {
+      _isLoadingAllVotes = false;
+    }
+  }
+
+  void _updateVoteState(String postId, List<String> upvotesList,
+      List<String> downvotesList, String userId) {
+    _upvotedPosts[postId] = upvotesList.contains(userId);
+    _downvotedPosts[postId] = downvotesList.contains(userId);
+    _upvoteCounts[postId] = upvotesList.length;
+    _downvoteCounts[postId] = downvotesList.length;
+
+    // Store vote state in SharedPreferences
+    _prefs?.setBool('upvoted_$postId', _upvotedPosts[postId] ?? false);
+    _prefs?.setBool('downvoted_$postId', _downvotedPosts[postId] ?? false);
+    _prefs?.setInt('upvotes_$postId', _upvoteCounts[postId] ?? 0);
+    _prefs?.setInt('downvotes_$postId', _downvoteCounts[postId] ?? 0);
+  }
+
+  Future<void> refreshAllVotes() async {
+    if (!_isInitialized) {
+      await initializePrefs();
+    }
+    await _loadPersistedVoteStates();
+    notifyListeners();
+  }
 
   Future<void> checkVoteStatus(String postId) async {
     if (!_isInitialized) {
-      await _initializePrefs();
+      await initializePrefs();
     }
 
     if (_prefs == null) {
@@ -42,6 +112,8 @@ class VoteProvider with ChangeNotifier {
     }
 
     try {
+      _isLoading = true;
+
       final response = await http.get(
         Uri.parse('${Config.baseUrl}/api/v1/reports/$postId'),
         headers: {
@@ -51,7 +123,7 @@ class VoteProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final dynamic data = jsonDecode(response.body);
         final userId = _prefs!.getString('userId');
 
         if (userId == null) {
@@ -59,23 +131,22 @@ class VoteProvider with ChangeNotifier {
           return;
         }
 
-        final upvotesList = List<String>.from(data['upvotes']);
-        final downvotesList = List<String>.from(data['downvotes']);
+        final upvotesList = List<String>.from(data['upvotes'] ?? []);
+        final downvotesList = List<String>.from(data['downvotes'] ?? []);
 
-        _upvotedPosts[postId] = upvotesList.any((vote) => vote == userId);
-        _downvotedPosts[postId] = downvotesList.any((vote) => vote == userId);
-        _upvoteCounts[postId] = upvotesList.length;
-        _downvoteCounts[postId] = downvotesList.length;
+        _updateVoteState(postId, upvotesList, downvotesList, userId);
         notifyListeners();
       }
     } catch (e) {
       print('Error checking vote status: $e');
+    } finally {
+      _isLoading = false;
     }
   }
 
   Future<void> upvotePost(String postId) async {
     if (!_isInitialized) {
-      await _initializePrefs();
+      await initializePrefs();
     }
 
     if (_prefs == null) {
@@ -84,6 +155,8 @@ class VoteProvider with ChangeNotifier {
     }
 
     try {
+      _isLoading = true;
+
       final response = await http.post(
         Uri.parse('${Config.baseUrl}/api/v1/reports/$postId/upvote'),
         headers: {
@@ -98,24 +171,23 @@ class VoteProvider with ChangeNotifier {
 
         if (userId == null) return;
 
-        final upvotesList = List<String>.from(data['upvotes']);
-        final downvotesList = List<String>.from(data['downvotes']);
+        final upvotesList = List<String>.from(data['upvotes'] ?? []);
+        final downvotesList = List<String>.from(data['downvotes'] ?? []);
 
-        _upvotedPosts[postId] = upvotesList.any((vote) => vote == userId);
-        _downvotedPosts[postId] = downvotesList.any((vote) => vote == userId);
-        _upvoteCounts[postId] = upvotesList.length;
-        _downvoteCounts[postId] = downvotesList.length;
-        notifyListeners();
+        _updateVoteState(postId, upvotesList, downvotesList, userId);
       }
     } catch (e) {
       print('Error upvoting post: $e');
       rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
   Future<void> downvotePost(String postId) async {
     if (!_isInitialized) {
-      await _initializePrefs();
+      await initializePrefs();
     }
 
     if (_prefs == null) {
@@ -124,6 +196,8 @@ class VoteProvider with ChangeNotifier {
     }
 
     try {
+      _isLoading = true;
+
       final response = await http.post(
         Uri.parse('${Config.baseUrl}/api/v1/reports/$postId/downvote'),
         headers: {
@@ -138,24 +212,23 @@ class VoteProvider with ChangeNotifier {
 
         if (userId == null) return;
 
-        final upvotesList = List<String>.from(data['upvotes']);
-        final downvotesList = List<String>.from(data['downvotes']);
+        final upvotesList = List<String>.from(data['upvotes'] ?? []);
+        final downvotesList = List<String>.from(data['downvotes'] ?? []);
 
-        _upvotedPosts[postId] = upvotesList.any((vote) => vote == userId);
-        _downvotedPosts[postId] = downvotesList.any((vote) => vote == userId);
-        _upvoteCounts[postId] = upvotesList.length;
-        _downvoteCounts[postId] = downvotesList.length;
-        notifyListeners();
+        _updateVoteState(postId, upvotesList, downvotesList, userId);
       }
     } catch (e) {
       print('Error downvoting post: $e');
       rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
   Future<void> removeUpvote(String postId) async {
     if (!_isInitialized) {
-      await _initializePrefs();
+      await initializePrefs();
     }
 
     if (_prefs == null) {
@@ -164,6 +237,8 @@ class VoteProvider with ChangeNotifier {
     }
 
     try {
+      _isLoading = true;
+
       final response = await http.delete(
         Uri.parse('${Config.baseUrl}/api/v1/reports/$postId/upvote'),
         headers: {
@@ -178,24 +253,23 @@ class VoteProvider with ChangeNotifier {
 
         if (userId == null) return;
 
-        final upvotesList = List<String>.from(data['upvotes']);
-        final downvotesList = List<String>.from(data['downvotes']);
+        final upvotesList = List<String>.from(data['upvotes'] ?? []);
+        final downvotesList = List<String>.from(data['downvotes'] ?? []);
 
-        _upvotedPosts[postId] = upvotesList.any((vote) => vote == userId);
-        _downvotedPosts[postId] = downvotesList.any((vote) => vote == userId);
-        _upvoteCounts[postId] = upvotesList.length;
-        _downvoteCounts[postId] = downvotesList.length;
-        notifyListeners();
+        _updateVoteState(postId, upvotesList, downvotesList, userId);
       }
     } catch (e) {
       print('Error removing upvote: $e');
       rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
   Future<void> removeDownvote(String postId) async {
     if (!_isInitialized) {
-      await _initializePrefs();
+      await initializePrefs();
     }
 
     if (_prefs == null) {
@@ -204,6 +278,8 @@ class VoteProvider with ChangeNotifier {
     }
 
     try {
+      _isLoading = true;
+
       final response = await http.delete(
         Uri.parse('${Config.baseUrl}/api/v1/reports/$postId/downvote'),
         headers: {
@@ -218,18 +294,53 @@ class VoteProvider with ChangeNotifier {
 
         if (userId == null) return;
 
-        final upvotesList = List<String>.from(data['upvotes']);
-        final downvotesList = List<String>.from(data['downvotes']);
+        final upvotesList = List<String>.from(data['upvotes'] ?? []);
+        final downvotesList = List<String>.from(data['downvotes'] ?? []);
 
-        _upvotedPosts[postId] = upvotesList.any((vote) => vote == userId);
-        _downvotedPosts[postId] = downvotesList.any((vote) => vote == userId);
-        _upvoteCounts[postId] = upvotesList.length;
-        _downvoteCounts[postId] = downvotesList.length;
-        notifyListeners();
+        _updateVoteState(postId, upvotesList, downvotesList, userId);
       }
     } catch (e) {
       print('Error removing downvote: $e');
       rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
+  }
+
+  bool isUpvoted(String postId) {
+    // First check memory state
+    if (_upvotedPosts.containsKey(postId)) {
+      return _upvotedPosts[postId] ?? false;
+    }
+    // Then check SharedPreferences
+    return _prefs?.getBool('upvoted_$postId') ?? false;
+  }
+
+  bool isDownvoted(String postId) {
+    // First check memory state
+    if (_downvotedPosts.containsKey(postId)) {
+      return _downvotedPosts[postId] ?? false;
+    }
+    // Then check SharedPreferences
+    return _prefs?.getBool('downvoted_$postId') ?? false;
+  }
+
+  int getUpvoteCount(String postId) {
+    // First check memory state
+    if (_upvoteCounts.containsKey(postId)) {
+      return _upvoteCounts[postId] ?? 0;
+    }
+    // Then check SharedPreferences
+    return _prefs?.getInt('upvotes_$postId') ?? 0;
+  }
+
+  int getDownvoteCount(String postId) {
+    // First check memory state
+    if (_downvoteCounts.containsKey(postId)) {
+      return _downvoteCounts[postId] ?? 0;
+    }
+    // Then check SharedPreferences
+    return _prefs?.getInt('downvotes_$postId') ?? 0;
   }
 }

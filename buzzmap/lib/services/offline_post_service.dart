@@ -148,8 +148,16 @@ class OfflinePostService {
 
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('authToken');
+    print('Debug: Starting sync with ${posts.length} posts');
+    print('Debug: Auth token available: ${token != null}');
+    print('Debug: Platform: ${Platform.isIOS ? 'iOS' : 'Android'}');
+    print('Debug: Using base URL: ${Config.baseUrl}');
+
     int successCount = 0;
     int failCount = 0;
+    List<int> successfulIndices = [];
+    Set<String> processedPosts =
+        {}; // Track processed posts to prevent duplicates
 
     // Show initial sync message
     if (context.mounted) {
@@ -164,10 +172,29 @@ class OfflinePostService {
 
     for (int i = 0; i < posts.length; i++) {
       final post = posts[i];
+
+      // Create a unique identifier for this post
+      final postIdentifier =
+          '${post['barangay']}_${post['report_type']}_${post['date_and_time']}_${post['specific_location']['coordinates'][0]}_${post['specific_location']['coordinates'][1]}';
+
+      // Skip if we've already processed this post
+      if (processedPosts.contains(postIdentifier)) {
+        print('Debug: Skipping duplicate post: $postIdentifier');
+        successfulIndices.add(i); // Mark for removal since it's a duplicate
+        continue;
+      }
+
+      processedPosts.add(postIdentifier);
+
       try {
+        print('Debug: Attempting to sync post ${i + 1}/${posts.length}');
+        print('Debug: Post identifier: $postIdentifier');
         final url = Uri.parse(Config.createPostUrl);
+        print('Debug: Using URL: ${url.toString()}');
+
         final request = http.MultipartRequest('POST', url);
         request.headers['Authorization'] = 'Bearer $token';
+        print('Debug: Request headers: ${request.headers}');
 
         request.fields.addAll({
           'barangay': post['barangay'] as String,
@@ -194,20 +221,22 @@ class OfflinePostService {
                     'images', imagePath.toString());
                 request.files.add(image);
               } catch (e) {
-                // Silently handle image errors
+                print('Debug: Error adding image: $e');
               }
             }
           }
         }
 
+        print('Debug: Sending request for post $postIdentifier');
         final streamedResponse = await request.send();
         final response = await http.Response.fromStream(streamedResponse);
+        print('Debug: Response status code: ${response.statusCode}');
+        print('Debug: Response body: ${response.body}');
 
         if (response.statusCode == 200 || response.statusCode == 201) {
-          // Remove the successfully synced post
-          await removeOfflinePost(i);
-          i--; // Adjust index since we removed an item
+          successfulIndices.add(i);
           successCount++;
+          print('Debug: Successfully synced post $postIdentifier');
 
           // Show progress message for this post
           if (context.mounted) {
@@ -223,10 +252,13 @@ class OfflinePostService {
           }
         } else {
           failCount++;
+          print(
+              'Debug: Failed to sync post $postIdentifier. Status code: ${response.statusCode}');
           throw Exception('Failed to sync post: ${response.statusCode}');
         }
       } catch (e) {
         failCount++;
+        print('Debug: Error syncing post $postIdentifier: $e');
         // Show error for this specific post
         if (context.mounted) {
           final reportType = post['report_type'] as String? ?? 'Report';
@@ -242,9 +274,23 @@ class OfflinePostService {
       }
     }
 
+    print('Debug: Sync complete. Success: $successCount, Failed: $failCount');
+    print('Debug: Removing ${successfulIndices.length} successful posts');
+
+    // Remove all successfully synced posts at once
+    if (successfulIndices.isNotEmpty) {
+      // Sort indices in descending order to avoid index shifting issues
+      successfulIndices.sort((a, b) => b.compareTo(a));
+      for (final index in successfulIndices) {
+        await removeOfflinePost(index);
+      }
+    }
+
     // Show final status with a more user-friendly message
     if (context.mounted) {
       final remainingPosts = await getOfflinePosts();
+      print('Debug: Remaining posts after sync: ${remainingPosts.length}');
+
       if (remainingPosts.isEmpty) {
         await AppFlushBar.showSuccess(
           context,
