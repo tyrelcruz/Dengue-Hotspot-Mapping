@@ -18,22 +18,50 @@ import 'package:buzzmap/services/notification_service.dart';
 import 'package:buzzmap/services/alert_service.dart';
 import 'package:buzzmap/widgets/global_alert_overlay.dart';
 import 'package:buzzmap/providers/vote_provider.dart';
+import 'package:buzzmap/providers/comment_provider.dart';
+import 'package:buzzmap/providers/user_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:buzzmap/config/config.dart';
 import 'package:buzzmap/providers/post_provider.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 void main() async {
+  // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
 
   // Load environment variables
   await dotenv.load(fileName: ".env");
 
+  // Initialize connectivity_plus after Flutter is initialized
+  try {
+    // Initialize connectivity
+    final connectivity = Connectivity();
+    // Set up a listener for connectivity changes
+    connectivity.onConnectivityChanged
+        .listen((List<ConnectivityResult> results) {
+      print('Connectivity changed: $results');
+    });
+    // Check initial connectivity
+    final connectivityResult = await connectivity.checkConnectivity();
+    print('Initial connectivity status: $connectivityResult');
+  } catch (e) {
+    print('Connectivity initialization error: $e');
+    // Continue even if connectivity check fails
+  }
+
+  // Initialize providers
+  final voteProvider = VoteProvider();
+  await voteProvider
+      .initializePrefs(); // Initialize vote provider before app starts
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => VoteProvider()),
+        ChangeNotifierProvider.value(value: voteProvider),
+        ChangeNotifierProvider(create: (_) => CommentProvider()),
         ChangeNotifierProvider(create: (_) => PostProvider()),
         ChangeNotifierProvider(create: (_) => NotificationService()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
       ],
       child: const MyApp(),
     ),

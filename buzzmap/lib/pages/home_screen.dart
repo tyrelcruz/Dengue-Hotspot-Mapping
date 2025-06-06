@@ -13,6 +13,7 @@ import 'package:buzzmap/widgets/global_alert_overlay.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'dart:convert';
+import 'package:buzzmap/services/offline_post_service.dart';
 
 // Map of districts to their barangays
 final Map<String, List<String>> districtData = {
@@ -170,13 +171,26 @@ class _HomeScreenState extends State<HomeScreen> {
   String? selectedBarangay;
   List<String> allBarangays = [];
   bool isLoading = true;
+  late OfflinePostService _offlinePostService;
 
   @override
   void initState() {
     super.initState();
+    _initializeServices();
     // Start polling for alerts when the app starts
     AlertService().startPolling();
     _loadBarangays();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _offlinePostService.updateContext(context);
+  }
+
+  Future<void> _initializeServices() async {
+    _offlinePostService = OfflinePostService();
+    await _offlinePostService.initialize(context);
   }
 
   Future<void> _loadBarangays() async {

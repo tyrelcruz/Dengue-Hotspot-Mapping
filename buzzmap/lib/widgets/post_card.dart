@@ -221,6 +221,8 @@ class PostCard extends StatelessWidget {
                 'upvotes': post['upvotes'] ?? [],
                 'downvotes': post['downvotes'] ?? [],
               },
+              key: ValueKey(
+                  '${post['id']}_${(post['upvotes'] ?? []).join(',')}_${(post['downvotes'] ?? []).join(',')}'),
             ),
           ),
         ],

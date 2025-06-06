@@ -17,6 +17,7 @@ import 'package:geolocator/geolocator.dart';
 import 'dart:math';
 import 'package:buzzmap/providers/post_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/widgets.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -25,7 +26,7 @@ class CommunityScreen extends StatefulWidget {
   State<CommunityScreen> createState() => _CommunityScreenState();
 }
 
-class _CommunityScreenState extends State<CommunityScreen> {
+class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
   int selectedIndex = 0;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -51,6 +52,19 @@ class _CommunityScreenState extends State<CommunityScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<PostProvider>(context, listen: false).fetchPosts();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe to route changes
+    final routeObserver = ModalRoute.of(context)
+        ?.navigator
+        ?.widget
+        .observers
+        .whereType<RouteObserver<PageRoute>>()
+        .firstOrNull;
+    routeObserver?.subscribe(this, ModalRoute.of(context)! as PageRoute);
   }
 
   Future<void> _initializePrefs() async {
@@ -729,6 +743,23 @@ class _CommunityScreenState extends State<CommunityScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    // Unsubscribe from route changes
+    final routeObserver = ModalRoute.of(context)
+        ?.navigator
+        ?.widget
+        .observers
+        .whereType<RouteObserver<PageRoute>>()
+        .firstOrNull;
+    routeObserver?.unsubscribe(this);
     super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    // Called when returning to this screen
+    Provider.of<PostProvider>(context, listen: false)
+        .fetchPosts(forceRefresh: true);
+    _getCurrentLocation();
+    setState(() {});
   }
 }

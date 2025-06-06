@@ -31,7 +31,7 @@ dependencies:
   http: ^1.1.0
   flutter:
     sdk: flutter
-  flutter_svg: ^2.0.17
+  flutter_svg: ^2.1.0
   intl: ^0.18.0
   shared_preferences: ^2.2.2
   cached_network_image: ^3.4.1
@@ -61,6 +61,8 @@ dependencies:
   url_launcher: ^6.2.1
   auto_size_text: ^3.0.0
   google_maps_cluster_manager: ^3.1.0
+  connectivity_plus: ^6.1.4
+  carousel_slider: ^5.0.0
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1
@@ -94,6 +96,7 @@ flutter:
   assets:
     - .env
     - assets/icons/
+    - assets/markers/
     - assets/images/
     - assets/team/
     - assets/bgarts/

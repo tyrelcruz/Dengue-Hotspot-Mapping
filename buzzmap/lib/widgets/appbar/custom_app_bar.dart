@@ -32,6 +32,7 @@ class CustomAppBar extends StatefulWidget implements PreferredSizeWidget {
 }
 
 class _CustomAppBarState extends State<CustomAppBar> {
+  final NotificationService _notificationService = NotificationService();
   int _unreadCount = 0;
   bool _isLoading = true;
   Timer? _refreshTimer;
@@ -40,11 +41,7 @@ class _CustomAppBarState extends State<CustomAppBar> {
   @override
   void initState() {
     super.initState();
-    _loadUnreadCount();
-    // Set up periodic refresh every 30 seconds
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      _loadUnreadCount();
-    });
+    _initializeUnreadCount();
   }
 
   @override
@@ -53,13 +50,25 @@ class _CustomAppBarState extends State<CustomAppBar> {
     super.dispose();
   }
 
+  Future<void> _initializeUnreadCount() async {
+    // Initialize notification service
+    _notificationService.initialize();
+
+    // Load initial unread count
+    await _loadUnreadCount();
+
+    // Set up periodic refresh (every 30 seconds)
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _loadUnreadCount();
+    });
+  }
+
   Future<void> _updateLastViewedTime() async {
     final prefs = await SharedPreferences.getInstance();
-    final now = DateTime.now().toUtc();
-    await prefs.setString(_lastViewedKey, now.toIso8601String());
-    print('📅 Updated last viewed time: $now');
-    // Immediately update the count after setting the last viewed time
-    _loadUnreadCount();
+    await prefs.setString(
+        _lastViewedKey, DateTime.now().toUtc().toIso8601String());
+    await _loadUnreadCount(); // Reload count after updating last viewed time
   }
 
   Future<void> _loadUnreadCount() async {
@@ -74,14 +83,13 @@ class _CustomAppBarState extends State<CustomAppBar> {
               const Duration(days: 365)); // Default to old date if never viewed
 
       final notifications =
-          await NotificationService().fetchNotifications(context);
+          await _notificationService.fetchNotifications(context);
       if (!mounted) return;
 
       setState(() {
         // Count notifications that are newer than the last viewed time
         _unreadCount = notifications.where((n) {
           try {
-            // Try to get the timestamp from the notification
             final timestamp =
                 n['timestamp'] ?? n['createdAt'] ?? n['created_at'];
             if (timestamp == null) return false;
@@ -91,22 +99,14 @@ class _CustomAppBarState extends State<CustomAppBar> {
             final status = n['status']?.toString().toLowerCase();
 
             // Count notifications that are newer than last viewed and not archived
-            final isNewer = notificationDate.isAfter(lastViewed);
-            print(
-                '📅 Notification date: $notificationDate, Last viewed: $lastViewed, Is newer: $isNewer');
-            return isNewer && status != 'archived';
+            return notificationDate.isAfter(lastViewed) && status != 'archived';
           } catch (e) {
-            print('❌ Error parsing notification date: $e');
             return false;
           }
         }).length;
         _isLoading = false;
       });
-
-      print('📊 Unread notifications count: $_unreadCount');
-      print('⏰ Last viewed: $lastViewed');
     } catch (e) {
-      print('❌ Error loading notification count: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;

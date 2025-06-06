@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:buzzmap/config.dart';
+import 'package:buzzmap/auth/config.dart';
 
 class AnnouncementCard extends StatefulWidget {
   final VoidCallback? onRefresh;

@@ -18,6 +18,117 @@ class NotificationService with ChangeNotifier {
   NotificationService._internal();
 
   final _httpClient = HttpClient();
+  List<Map<String, dynamic>> _cachedNotifications = [];
+  DateTime? _lastFetchTime;
+  Timer? _refreshTimer;
+  bool _isRefreshing = false;
+
+  // Cache duration - only refresh notifications every 30 seconds
+  static const Duration _cacheDuration = Duration(seconds: 30);
+
+  // Initialize the service
+  void initialize() {
+    _startPeriodicRefresh();
+  }
+
+  // Start periodic refresh
+  void _startPeriodicRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(_cacheDuration, (_) {
+      _refreshNotifications();
+    });
+  }
+
+  // Stop periodic refresh
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  // Refresh notifications if needed
+  Future<void> _refreshNotifications() async {
+    if (_isRefreshing) return;
+    _isRefreshing = true;
+
+    try {
+      final notifications = await _fetchNotificationsFromServer();
+      if (notifications != null) {
+        _cachedNotifications = _deduplicateNotifications(notifications);
+        _lastFetchTime = DateTime.now();
+        notifyListeners();
+      }
+    } finally {
+      _isRefreshing = false;
+    }
+  }
+
+  // Deduplicate notifications based on report ID and timestamp
+  List<Map<String, dynamic>> _deduplicateNotifications(
+      List<Map<String, dynamic>> notifications) {
+    final Map<String, Map<String, dynamic>> uniqueNotifications = {};
+
+    for (var notification in notifications) {
+      final report = notification['report'] as Map<String, dynamic>?;
+      if (report == null) continue;
+
+      final reportId = report['_id']?.toString();
+      if (reportId == null) continue;
+
+      final timestamp = notification['createdAt'] ?? notification['timestamp'];
+      if (timestamp == null) continue;
+
+      final key = '$reportId-$timestamp';
+
+      // Only keep the latest notification for each report
+      if (!uniqueNotifications.containsKey(key) ||
+          DateTime.parse(timestamp).isAfter(
+              DateTime.parse(uniqueNotifications[key]!['createdAt']))) {
+        uniqueNotifications[key] = notification;
+      }
+    }
+
+    return uniqueNotifications.values.toList();
+  }
+
+  // Fetch notifications from server
+  Future<List<Map<String, dynamic>>?> _fetchNotificationsFromServer() async {
+    try {
+      final token = await _getAuthToken();
+      if (token == null) return null;
+
+      final response = await _httpClient.get(
+        '${Config.baseUrl}/api/v1/notifications',
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> rawNotifications = jsonDecode(response.body);
+        return rawNotifications.cast<Map<String, dynamic>>();
+      }
+      return null;
+    } catch (e) {
+      print('❌ Error fetching notifications: $e');
+      return null;
+    }
+  }
+
+  // Public method to get notifications
+  Future<List<Map<String, dynamic>>> fetchNotifications(
+      BuildContext context) async {
+    // If cache is valid, return cached notifications
+    if (_lastFetchTime != null &&
+        DateTime.now().difference(_lastFetchTime!) < _cacheDuration &&
+        _cachedNotifications.isNotEmpty) {
+      return _cachedNotifications;
+    }
+
+    // Otherwise fetch fresh notifications
+    await _refreshNotifications();
+    return _cachedNotifications;
+  }
 
   static Future<void> showLocationToast(
     BuildContext context,
@@ -128,61 +239,6 @@ class NotificationService with ChangeNotifier {
         print('⏰ Request timed out');
       }
       return null;
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> fetchNotifications(
-      BuildContext context) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('authToken');
-
-      if (token == null) {
-        throw Exception('No auth token found');
-      }
-
-      // First, clean up notifications for deleted reports
-      await cleanupDeletedReports(token);
-
-      // Then fetch the updated notifications
-      final response = await _httpClient.get(
-        '${Config.baseUrl}/api/v1/notifications',
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final List<dynamic> rawNotifications = jsonDecode(response.body);
-        print('📱 Fetched notifications: ${rawNotifications.length}');
-
-        // Debug log the raw notification data
-        for (var notification in rawNotifications) {
-          print('📄 Raw notification data:');
-          print(json.encode(notification));
-
-          if (notification['report'] != null) {
-            print('📍 Report data:');
-            print(json.encode(notification['report']));
-
-            if (notification['report']['specific_location'] != null) {
-              print('🗺️ Location data:');
-              print(json.encode(notification['report']['specific_location']));
-            }
-          }
-        }
-
-        return rawNotifications.cast<Map<String, dynamic>>();
-      } else {
-        print(
-            '❌ Failed to fetch notifications. Status: ${response.statusCode}');
-        print('❌ Response body: ${response.body}');
-        return [];
-      }
-    } catch (e) {
-      print('❌ Error fetching notifications: $e');
-      return [];
     }
   }
 
