@@ -5,13 +5,25 @@ const Notification = require("../models/Notifications");
 const asyncErrorHandler = require("../middleware/asyncErrorHandler");
 
 const createIntervention = asyncErrorHandler(async (req, res) => {
-  const { barangay, address, date, interventionType, personnel, status } =
+  const { barangay, address, date, interventionType, personnel, status, specific_location } =
     req.body;
 
-  if (!barangay || !date || !interventionType || !personnel) {
+  if (!barangay || !date || !interventionType || !personnel || !specific_location) {
     return res
       .status(400)
-      .json({ error: "Please provide all required fields." });
+      .json({ error: "Please provide all required fields, including specific_location." });
+  }
+
+  // Validate specific_location coordinates
+  if (specific_location.coordinates.length !== 2 || 
+      specific_location.coordinates[0] < -180 || 
+      specific_location.coordinates[0] > 180 ||
+      specific_location.coordinates[1] < -90 || 
+      specific_location.coordinates[1] > 90) {
+    return res.status(400).json({ 
+      error: "Invalid coordinates", 
+      message: "Coordinates must be in [longitude, latitude] format with valid ranges."
+    });
   }
 
   if (req.user.role !== "admin") {
@@ -27,6 +39,7 @@ const createIntervention = asyncErrorHandler(async (req, res) => {
     interventionType,
     personnel,
     status,
+    specific_location,
     adminId,
   });
 
@@ -63,17 +76,29 @@ const getIntervention = asyncErrorHandler(async (req, res) => {
 
 const updateIntervention = asyncErrorHandler(async (req, res) => {
   const { id } = req.params;
-  const { status, personnel, date, interventionType, barangay, address } =
+  const { status, personnel, date, interventionType, barangay, address, specific_location } =
     req.body;
 
   const allowedStatuses = ["Scheduled", "Ongoing", "Complete"];
   if (status && !allowedStatuses.includes(status)) {
     return res.status(400).json({ message: "Invalid status." });
   }
+  
+  // Validate specific_location coordinates if provided
+  if (specific_location && (specific_location.coordinates.length !== 2 || 
+      specific_location.coordinates[0] < -180 || 
+      specific_location.coordinates[0] > 180 ||
+      specific_location.coordinates[1] < -90 || 
+      specific_location.coordinates[1] > 90)) {
+    return res.status(400).json({ 
+      error: "Invalid coordinates", 
+      message: "Coordinates must be in [longitude, latitude] format with valid ranges."
+    });
+  }
 
   const updatedIntervention = await Intervention.findByIdAndUpdate(
     id,
-    { barangay, address, status, personnel, date, interventionType },
+    { barangay, address, status, personnel, date, interventionType, specific_location },
     { new: true }
   );
 
@@ -136,6 +161,20 @@ const getBarangayInterventionsInProgress = asyncErrorHandler(async (req, res) =>
   res.status(200).json(interventions);
 });
 
+const deleteAllInterventions = asyncErrorHandler(async (req, res) => {
+  // Check if user is admin
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Only administrators can delete all interventions." });
+  }
+
+  const result = await Intervention.deleteMany({});
+  
+  res.status(200).json({ 
+    message: `Successfully deleted ${result.deletedCount} interventions.`,
+    deletedCount: result.deletedCount
+  });
+});
+
 module.exports = {
   createIntervention,
   getAllInterventions,
@@ -143,4 +182,5 @@ module.exports = {
   updateIntervention,
   deleteIntervention,
   getBarangayInterventionsInProgress,
+  deleteAllInterventions,
 };

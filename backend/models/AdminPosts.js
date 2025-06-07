@@ -32,6 +32,19 @@ const adminPostSchema = new mongoose.Schema(
       ref: "Account", // Reference to the 'Account' model where admin details are stored
       required: true,
     },
+    upvotes: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Account"
+    }],
+    downvotes: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Account"
+    }],
+    status: {
+      type: String,
+      enum: ["active", "archived", "deleted"],
+      default: "active"
+    }
   },
   { timestamps: true }
 );

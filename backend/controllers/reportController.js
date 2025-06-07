@@ -161,45 +161,71 @@ const getAllReports = asyncErrorHandler(async (req, res) => {
     .populate("upvotes", "_id")
     .populate("downvotes", "_id");
 
-  // Transform the response to show anonymousId instead of username for anonymous reports
-  const transformedReports = reports.map((report) => {
-    const reportObj = report.toObject();
-    if (report.isAnonymous) {
-      // For anonymous reports, create a user object with anonymousId
-      reportObj.user = {
-        _id: report._id, // Use report's _id instead of user._id
-        username: report.anonymousId,
-      };
-    }
-    return reportObj;
-  });
+  // Get comment counts and latest comments for each report
+  const reportsWithComments = await Promise.all(
+    reports.map(async (report) => {
+      const reportObj = report.toObject();
+      
+      // Get comment count and latest comment
+      const [commentCount, latestComment] = await Promise.all([
+        Comment.countDocuments({ report: report._id }),
+        Comment.findOne({ report: report._id })
+          .sort({ createdAt: -1 })
+          .populate("user", "username")
+      ]);
 
-  res.status(200).json(transformedReports);
+      // Add comment info as additional properties
+      reportObj._commentCount = commentCount;
+      reportObj._latestComment = latestComment ? {
+        content: latestComment.content,
+        createdAt: latestComment.createdAt,
+        user: latestComment.user
+      } : null;
+
+      // Handle anonymous reports
+      if (report.isAnonymous) {
+        reportObj.user = {
+          _id: report._id,
+          username: report.anonymousId,
+        };
+      }
+
+      return reportObj;
+    })
+  );
+
+  res.status(200).json(reportsWithComments);
 });
 
-// GET a specific report (unchanged)
+// GET a specific report (updated)
 const getReport = asyncErrorHandler(async (req, res) => {
   const { id } = req.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(404).json({ success: false, error: "No such post!" });
   }
+
   const report = await Report.findById(id)
     .populate("user", "username")
     .populate("upvotes", "_id")
     .populate("downvotes", "_id");
 
   if (!report) {
-    return res
-      .status(404)
-      .json({ success: false, error: "Post does not exist!" });
+    return res.status(404).json({ success: false, error: "Post does not exist!" });
   }
 
-  // Transform the response to show anonymousId for anonymous reports
+  // Get all comments for this report
+  const comments = await Comment.find({ report: id })
+    .populate("user", "username")
+    .sort({ createdAt: -1 });
+
+  // Transform the response
   const reportObj = report.toObject();
   if (report.isAnonymous) {
-    // Keep the original username but add anonymousId
     reportObj.anonymousId = report.anonymousId;
   }
+
+  // Add comments as an additional property
+  reportObj._comments = comments;
 
   // Ensure upvotes and downvotes are properly populated
   reportObj.upvotes = reportObj.upvotes.map((vote) => vote._id.toString());
@@ -212,7 +238,7 @@ const getReport = asyncErrorHandler(async (req, res) => {
 });
 
 // * UPDATED createReport with fixed ImgBB integration for express-fileupload
-const ALLOWED_REPORT_TYPES = ["Breeding Site", "Standing Water", "Infestation"];
+const ALLOWED_REPORT_TYPES = ["Stagnant Water", "Uncollected Garbage or Trash", "Others"];
 const createReport = asyncErrorHandler(async (req, res) => {
   console.log("[DEBUG] REQ BODY:", req.body);
   console.log("[DEBUG] REQ FILES:", req.files);
@@ -635,6 +661,15 @@ const removeDownvote = asyncErrorHandler(async (req, res) => {
   });
 });
 
+// Delete all reports
+const deleteAllReports = asyncErrorHandler(async (req, res) => {
+  const result = await Report.deleteMany({});
+  res.status(200).json({
+    message: "All reports deleted successfully",
+    deletedCount: result.deletedCount,
+  });
+});
+
 module.exports = {
   getAllReports,
   getReport,
@@ -648,4 +683,5 @@ module.exports = {
   downvoteReport,
   removeUpvote,
   removeDownvote,
+  deleteAllReports,
 };

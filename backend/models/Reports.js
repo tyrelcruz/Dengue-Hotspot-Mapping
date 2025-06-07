@@ -65,7 +65,7 @@ const reportSchema = new Schema(
     report_type: {
       type: String,
       required: true,
-      enum: ["Breeding Site", "Standing Water", "Infestation"],
+      enum: ["Stagnant Water", "Uncollected Garbage or Trash", "Others"],
     },
     description: { type: String },
     images: [{ type: String }],

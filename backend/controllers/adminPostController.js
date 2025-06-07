@@ -4,6 +4,7 @@ const axios = require("axios");
 const FormData = require("form-data");
 const Notification = require("../models/Notifications");
 const path = require("path");
+const AdminPostComment = require("../models/AdminPostComments");
 
 // ImgBB Configuration
 const IMGBB_API_KEY = "f9a3cbc450ac4599f046c41d84ad5799"; // Get from imgbb.com
@@ -120,6 +121,12 @@ const createAdminPost = asyncErrorHandler(async (req, res) => {
 // Get all AdminPosts
 const getAllAdminPosts = asyncErrorHandler(async (req, res) => {
   const adminPosts = await AdminPost.find({}).sort({ createdAt: -1 });
+  console.log('Found admin posts:', adminPosts.length);
+  console.log('Posts:', adminPosts.map(post => ({
+    id: post._id,
+    title: post.title,
+    status: post.status
+  })));
   res.status(200).json(adminPosts);
 });
 
@@ -133,7 +140,20 @@ const getAdminPost = asyncErrorHandler(async (req, res) => {
     return res.status(404).json({ error: "AdminPost not found." });
   }
 
-  res.status(200).json(adminPost);
+  // Get comments for this post
+  const comments = await AdminPostComment.find({ adminPost: id })
+    .populate("user", "username")
+    .populate("upvotes", "_id")
+    .populate("downvotes", "_id")
+    .sort({ createdAt: -1 });
+
+  // Add comments to the response
+  const response = {
+    ...adminPost.toObject(),
+    comments
+  };
+
+  res.status(200).json(response);
 });
 
 // Update an AdminPost
@@ -175,28 +195,126 @@ const updateAdminPost = asyncErrorHandler(async (req, res) => {
   });
 });
 
-// Delete an AdminPost
+// Delete an AdminPost (Soft Delete)
 const deleteAdminPost = asyncErrorHandler(async (req, res) => {
   const { id } = req.params;
 
-  const adminPost = await AdminPost.findByIdAndDelete(id);
+  const adminPost = await AdminPost.findById(id);
 
   if (!adminPost) {
     return res.status(404).json({ message: "AdminPost not found." });
   }
 
-  res.status(200).json({ message: "AdminPost deleted successfully." });
+  // Update status to archived instead of deleting
+  adminPost.status = "archived";
+  await adminPost.save();
+
+  res.status(200).json({ 
+    message: "AdminPost has been archived successfully.",
+    post: adminPost
+  });
 });
 
+// Delete all AdminPosts (Soft Delete)
 const deleteAllAdminPosts = async (req, res) => {
   try {
-    await AdminPost.deleteMany({});
-    res.json({ message: "All admin posts have been deleted successfully" });
+    // Update all posts to archived status
+    await AdminPost.updateMany(
+      { status: "active" },
+      { status: "archived" }
+    );
+    res.json({ message: "All active admin posts have been archived successfully" });
   } catch (error) {
-    console.error("Error deleting admin posts:", error);
-    res.status(500).json({ error: "Failed to delete admin posts" });
+    console.error("Error archiving admin posts:", error);
+    res.status(500).json({ error: "Failed to archive admin posts" });
   }
 };
+
+// Upvote an admin post
+const upvoteAdminPost = asyncErrorHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.userId;
+
+  const adminPost = await AdminPost.findById(id);
+  if (!adminPost) {
+    return res.status(404).json({ error: "Admin post not found" });
+  }
+
+  // Remove user from downvotes if they had downvoted
+  adminPost.downvotes = adminPost.downvotes.filter(
+    (vote) => vote.toString() !== userId
+  );
+
+  // Add user to upvotes if they haven't upvoted
+  if (!adminPost.upvotes.includes(userId)) {
+    adminPost.upvotes.push(userId);
+  }
+
+  await adminPost.save();
+  res.status(200).json(adminPost);
+});
+
+// Downvote an admin post
+const downvoteAdminPost = asyncErrorHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.userId;
+
+  const adminPost = await AdminPost.findById(id);
+  if (!adminPost) {
+    return res.status(404).json({ error: "Admin post not found" });
+  }
+
+  // Remove user from upvotes if they had upvoted
+  adminPost.upvotes = adminPost.upvotes.filter(
+    (vote) => vote.toString() !== userId
+  );
+
+  // Add user to downvotes if they haven't downvoted
+  if (!adminPost.downvotes.includes(userId)) {
+    adminPost.downvotes.push(userId);
+  }
+
+  await adminPost.save();
+  res.status(200).json(adminPost);
+});
+
+// Remove upvote from an admin post
+const removeUpvote = asyncErrorHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.userId;
+
+  const adminPost = await AdminPost.findById(id);
+  if (!adminPost) {
+    return res.status(404).json({ error: "Admin post not found" });
+  }
+
+  // Remove user from upvotes
+  adminPost.upvotes = adminPost.upvotes.filter(
+    (vote) => vote.toString() !== userId
+  );
+  await adminPost.save();
+
+  res.status(200).json(adminPost);
+});
+
+// Remove downvote from an admin post
+const removeDownvote = asyncErrorHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.userId;
+
+  const adminPost = await AdminPost.findById(id);
+  if (!adminPost) {
+    return res.status(404).json({ error: "Admin post not found" });
+  }
+
+  // Remove user from downvotes
+  adminPost.downvotes = adminPost.downvotes.filter(
+    (vote) => vote.toString() !== userId
+  );
+  await adminPost.save();
+
+  res.status(200).json(adminPost);
+});
 
 module.exports = {
   createAdminPost,
@@ -204,5 +322,9 @@ module.exports = {
   getAdminPost,
   updateAdminPost,
   deleteAdminPost,
-  deleteAllAdminPosts
+  deleteAllAdminPosts,
+  upvoteAdminPost,
+  downvoteAdminPost,
+  removeUpvote,
+  removeDownvote
 };

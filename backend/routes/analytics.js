@@ -1,6 +1,5 @@
 const express = require("express");
 const {
-  patternRecognitionAnalysis,
   submitCsvFile,
   retrievePatternRecognitionResults,
   getLocationRiskLevelByWeather,
@@ -10,23 +9,15 @@ const {
   retrieveTrendsAndPatterns,
   analyzeInterventionEffectivity,
   getPriorityByCaseDeath,
+  analyzeDengueHotspots,
+  handleCrowdsourcedReportsAnalysis,
+  triggerDengueCaseReportAnalysis,
 } = require("../controllers/analyticsController");
-const { detectClustersToday } = require("../services/clusterService");
+const { findNeighboringBarangays } = require("../utils/geoUtils");
 
 const router = express.Router();
 
-router.get("/pattern-recognition", patternRecognitionAnalysis);
-
-router.get("/cluster-check", async (req, res) => {
-  try {
-    const clusters = await detectClustersToday();
-    res.json({ clusters_detected: clusters });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to detect clusters." });
-  }
-});
-
+// ? UPDATED
 router.post("/submit-csv-file", submitCsvFile);
 
 router.get(
@@ -34,7 +25,11 @@ router.get(
   retrievePatternRecognitionResults
 );
 
-router.post("/get-location-weather-risk", getLocationRiskLevelByWeather);
+// Endpoint to analyze crowdsourced reports and update barangay statuses, should be called when the admin logs in.
+router.get("/analyze-crowdsourced-reports", handleCrowdsourcedReportsAnalysis);
+
+// Endpoint to trigger dengue case report analysis from CSV data
+router.get("/trigger-dengue-analysis", triggerDengueCaseReportAnalysis);
 
 router.post("/get-barangay-weekly-trends", retrieveTrendsAndPatterns);
 
@@ -43,6 +38,11 @@ router.post(
   analyzeInterventionEffectivity
 );
 
+// ! NEED TO BE UPDATED
+// router.get("/get-location-weather-risk", getLocationRiskLevelByWeather);
+
 router.get("/case-death-priority", getPriorityByCaseDeath);
+
+router.get("/hotspots", analyzeDengueHotspots);
 
 module.exports = router;

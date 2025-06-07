@@ -2,10 +2,12 @@ const mongoose = require("mongoose");
 const barangaysData = require("../data/barangays.json");
 const asyncErrorHandler = require("../middleware/asyncErrorHandler");
 const Barangay = require("../models/Barangays");
+const RecommendationTemplate = require("../models/RecommendationTemplates");
 const axios = require("axios");
 
 const getAllBarangays = asyncErrorHandler(async (req, res) => {
   const barangays = await Barangay.find({});
+
   res.status(200).json(barangays);
 });
 
@@ -17,11 +19,10 @@ const getRecentReportsForBarangay = asyncErrorHandler(async (req, res) => {
   }
 
   try {
-    const response = await axios.post(
-      "http://localhost:8000/api/v1/recent-reports",
-      {
-        barangay_name: barangay_name,
-      }
+    const response = await axios.get(
+      `${process.env.PYTHON_URL}/api/v1/recent-reports?barangay=${encodeURIComponent(
+        barangay_name
+      )}`
     );
 
     return res.status(200).json({
@@ -45,10 +46,18 @@ const retrieveSpecificBarangayInfo = asyncErrorHandler(async (req, res) => {
 
   try {
     const response = await axios.get(
-      `http://localhost:8000/api/v1/specific-barangay-info?barangay_name=${encodeURIComponent(barangay_name)}`
+      `${process.env.PYTHON_URL}/api/v1/specific-barangay-info?barangay_name=${encodeURIComponent(
+        barangay_name
+      )}`
     );
 
-    return res.status(200).json(response.data);
+    // Get barangay data with enhanced recommendation
+    const barangay = await Barangay.findOne({ name: barangay_name });
+
+    return res.status(200).json({
+      ...response.data,
+      barangay_details: barangay,
+    });
   } catch (error) {
     console.error("Error calling FastAPI service:", error.message);
     return res

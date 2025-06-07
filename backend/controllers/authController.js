@@ -44,15 +44,12 @@ const register = asyncErrorHandler(async (req, res) => {
 });
 
 const login = asyncErrorHandler(async (req, res) => {
-  const { email, password, role } = req.body;
+  const { email, password } = req.body;
 
   if (!email || !password) {
     throw new BadRequestError(
       "Please provide both credentials for email and password."
     );
-  }
-  if (!role) {
-    throw new BadRequestError("Please provide an account type.");
   }
   const account = await Account.findOne({ email });
 
@@ -62,18 +59,26 @@ const login = asyncErrorHandler(async (req, res) => {
     );
   }
 
-  if (!account.verified) {
+  // Check account status
+  if (account.status === "pending") {
     throw new UnauthenticatedError(
-      "Account has not been verified yet. Please check your email to resolve the registration process."
+      "Account is pending activation. Please check your email to activate your account."
     );
   }
-
-  // Check for disabled or banned status
   if (account.status === "disabled") {
-    throw new UnauthenticatedError("This account has been disabled. Please contact the administrator.");
+    throw new UnauthenticatedError(
+      "This account has been disabled. Please contact the administrator."
+    );
   }
   if (account.status === "banned") {
-    throw new UnauthenticatedError("This account has been banned. Please contact the administrator.");
+    throw new UnauthenticatedError(
+      "This account has been banned. Please contact the administrator."
+    );
+  }
+  if (account.status === "deleted") {
+    throw new UnauthenticatedError(
+      "This account has been deleted. Please contact the administrator if you believe this is an error."
+    );
   }
 
   const isPasswordCorrect = await account.comparePassword(password);
@@ -82,17 +87,10 @@ const login = asyncErrorHandler(async (req, res) => {
     throw new UnauthenticatedError("Incorrect password inputted.");
   }
 
-  // Verify that the requested role matches the account's role
-  if (role && account.role !== role) {
-    throw new UnauthenticatedError(
-      `You are not authorized as a ${role}. Your account role is ${account.role}.`
-    );
-  }
-
   const payload = {
     userId: account._id,
     email: account.email,
-    role: account.role, // Always use the role from the database
+    role: account.role,
   };
 
   const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
@@ -105,11 +103,22 @@ const login = asyncErrorHandler(async (req, res) => {
       _id: account._id,
       name: account.username,
       email: account.email,
-      role: account.role, // Always use the role from the database
-      status: account.status // Include status in the response
+      role: account.role,
+      status: account.status,
+      profilePhotoUrl: account.profilePhotoUrl,
     },
     accessToken,
   });
+  // Console log for debugging
+  console.log("User information sent in response:", {
+    _id: account._id,
+    name: account.username,
+    email: account.email,
+    role: account.role,
+    status: account.status,
+    profilePhotoUrl: account.profilePhotoUrl,
+  });
+  console.log("Access token:", accessToken);
 });
 
 const googleLogin = asyncErrorHandler(async (req, res) => {
@@ -126,7 +135,7 @@ const googleLogin = asyncErrorHandler(async (req, res) => {
       username: name || "Google User",
       email,
       authProvider: "google",
-      verified: true,
+      status: "active", // Google accounts are automatically active
     });
   }
 
@@ -136,10 +145,27 @@ const googleLogin = asyncErrorHandler(async (req, res) => {
     );
   }
 
+  // Check account status
+  if (account.status === "disabled") {
+    throw new UnauthenticatedError(
+      "This account has been disabled. Please contact the administrator."
+    );
+  }
+  if (account.status === "banned") {
+    throw new UnauthenticatedError(
+      "This account has been banned. Please contact the administrator."
+    );
+  }
+  if (account.status === "deleted") {
+    throw new UnauthenticatedError(
+      "This account has been deleted. Please contact the administrator if you believe this is an error."
+    );
+  }
+
   const payload = {
     userId: account._id,
     email: account.email,
-    role: account.role || "user",
+    role: account.role,
   };
 
   const accessToken = jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET, {
@@ -152,6 +178,8 @@ const googleLogin = asyncErrorHandler(async (req, res) => {
       _id: account.id,
       name: account.username,
       email: account.email,
+      role: account.role,
+      status: account.status,
     },
     accessToken,
   });

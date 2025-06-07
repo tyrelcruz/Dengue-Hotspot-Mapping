@@ -10,10 +10,11 @@ const {
 } = require("../controllers/adminPostCommentController");
 const auth = require("../middleware/authentication");
 
+// Base routes for comments
 router.post("/:postId", auth, addComment);
 router.get("/:postId", getComments);
 
-// Voting routes
+// Voting routes for comments
 router.post("/:commentId/upvote", auth, upvoteComment);
 router.post("/:commentId/downvote", auth, downvoteComment);
 router.delete("/:commentId/upvote", auth, removeUpvote);

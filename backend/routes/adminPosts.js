@@ -6,6 +6,10 @@ const {
   updateAdminPost,
   deleteAdminPost,
   deleteAllAdminPosts,
+  upvoteAdminPost,
+  downvoteAdminPost,
+  removeUpvote,
+  removeDownvote
 } = require("../controllers/adminPostController");
 
 const auth = require("../middleware/authentication"); // Import auth middleware
@@ -29,5 +33,11 @@ router.patch("/:id", auth, updateAdminPost);
 
 // Delete an AdminPost (requires authentication)
 router.delete("/:id", auth, deleteAdminPost);
+
+// Voting routes
+router.post("/:id/upvote", auth, upvoteAdminPost);
+router.post("/:id/downvote", auth, downvoteAdminPost);
+router.delete("/:id/upvote", auth, removeUpvote);
+router.delete("/:id/downvote", auth, removeDownvote);
 
 module.exports = router;

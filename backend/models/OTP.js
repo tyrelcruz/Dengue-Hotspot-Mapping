@@ -20,6 +20,19 @@ const OTPSchema = new Schema({
     type: Number,
     default: 0,
   },
+  resendAttempts: {
+    type: Number,
+    default: 0,
+  },
+  lastResendTime: {
+    type: Date,
+    default: null
+  },
+  purpose: {
+    type: String,
+    enum: ["account-verification", "password-reset"],
+    required: true
+  }
 });
 
 OTPSchema.index({ userId: 1 });

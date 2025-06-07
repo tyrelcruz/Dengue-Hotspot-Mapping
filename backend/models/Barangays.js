@@ -8,20 +8,56 @@ const barangaySchema = new Schema({
     required: true,
     unique: true,
   },
-  risk_level: {
-    type: String,
-    enum: ["Low", "Medium", "High"],
-    default: "Low",
+  status_and_recommendation: {
+    pattern_based: {
+      status: {
+        type: String,
+        enum: ["spike", "gradual_rise", "decline", "stability"],
+        default: "stability"
+      },
+      alert: {
+        type: String,
+        default: "None"
+      },
+      recommendation: {
+        type: String,
+        default: ""
+      }
+    },
+    report_based: {
+      count: {
+        type: Number,
+        default: 0
+      },
+      status: {
+        type: String
+      },
+      alert: {
+        type: String,
+        default: "None"
+      },
+      recommendation: {
+        type: String,
+        default: ""
+      },
+    },
+    death_priority: {
+      status: {
+        type: String
+      },
+      alert: {
+        type: String,
+        default: "None"
+      },
+      recommendation: {
+        type: String,
+        default: ""
+      }
+    }
   },
-  triggered_pattern: {
-    type: String,
-    enum: ["stability", "spike", "decline", null],
-    default: null,
-  },
-  alert: {
-    type: String,
-    default: null,
+  last_analysis_time: {
+    type: Date
   }
 });
 
-module.exports = mongoose.model("Barangay", barangaySchema);
+module.exports = mongoose.model("Barangay", barangaySchema, "barangays");

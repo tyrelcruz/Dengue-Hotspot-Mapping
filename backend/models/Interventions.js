@@ -17,8 +17,31 @@ const interventionSchema = new mongoose.Schema(
     },
     interventionType: {
       type: String,
-      enum: ["Fogging", "Larviciding", "Clean-up Drive", "Education Campaign"],
+      enum: ["All","Fogging", "Ovicidal-Larvicidal Trapping", "Clean-up Drive", "Education Campaign"],
       required: true,
+    },
+    specific_location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        required: true,
+      },
+      coordinates: {
+        type: [Number],
+        required: true,
+        validate: {
+          validator: function (coords) {
+            return (
+              coords.length === 2 &&
+              coords[0] >= -180 &&
+              coords[0] <= 180 &&
+              coords[1] >= -90 &&
+              coords[1] <= 90
+            );
+          },
+          message: () => "Coordinates must be in [longitude, latitude] format.",
+        },
+      },
     },
     personnel: {
       type: String,
@@ -37,5 +60,8 @@ const interventionSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Create a 2dsphere index for geospatial queries
+interventionSchema.index({ specific_location: "2dsphere" });
 
 module.exports = mongoose.model("Intervention", interventionSchema);

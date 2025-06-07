@@ -262,8 +262,8 @@ const deleteAlert = asyncErrorHandler(async (req, res) => {
   const { alertId } = req.params;
 
   try {
-    // Find and delete the alert
-    const alert = await Alert.findByIdAndDelete(alertId);
+    // Find the alert and update its status to ARCHIVED
+    const alert = await Alert.findById(alertId);
     
     if (!alert) {
       return res.status(404).json({
@@ -272,16 +272,19 @@ const deleteAlert = asyncErrorHandler(async (req, res) => {
       });
     }
 
+    alert.status = 'ARCHIVED';
+    await alert.save();
+
     res.status(200).json({
       success: true,
-      message: "Alert deleted successfully",
+      message: "Alert has been archived successfully",
       data: alert
     });
   } catch (error) {
-    console.error("Error deleting alert:", error);
+    console.error("Error archiving alert:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to delete alert",
+      message: "Failed to archive alert",
       error: error.message
     });
   }
@@ -289,11 +292,19 @@ const deleteAlert = asyncErrorHandler(async (req, res) => {
 
 const deleteAllAlerts = async (req, res) => {
   try {
-    await Alert.deleteMany({});
-    res.json({ message: "All alerts have been deleted successfully" });
+    // Update all active alerts to archived status
+    const result = await Alert.updateMany(
+      { status: 'ACTIVE' },
+      { status: 'ARCHIVED' }
+    );
+    
+    res.json({ 
+      message: "All active alerts have been archived successfully",
+      modifiedCount: result.modifiedCount
+    });
   } catch (error) {
-    console.error("Error deleting alerts:", error);
-    res.status(500).json({ error: "Failed to delete alerts" });
+    console.error("Error archiving alerts:", error);
+    res.status(500).json({ error: "Failed to archive alerts" });
   }
 };
 
