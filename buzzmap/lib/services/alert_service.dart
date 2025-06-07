@@ -93,4 +93,13 @@ class AlertService {
     stopPolling();
     _alertController.close();
   }
+
+  void showAlert(Map<String, dynamic> alert) {
+    final formattedAlert = {
+      'messages': alert['messages'] ?? [],
+      'severity': alert['severity'],
+      'barangays': alert['barangays'] ?? [],
+    };
+    _alertController.add(formattedAlert);
+  }
 }

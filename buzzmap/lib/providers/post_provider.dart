@@ -81,6 +81,10 @@ class PostProvider with ChangeNotifier {
           final email = post['user']?['email'] ?? '';
           final userId = post['user']?['_id'] ?? '';
 
+          // Get vote counts from the backend response
+          final upvotes = post['upvotes'] ?? [];
+          final downvotes = post['downvotes'] ?? [];
+
           return {
             'id': post['_id'],
             'username': username,
@@ -99,8 +103,10 @@ class PostProvider with ChangeNotifier {
                 : <String>[],
             'iconUrl': 'assets/icons/person_1.svg',
             'status': post['status'],
-            'numUpvotes': post['upvotes']?.length ?? 0,
-            'numDownvotes': post['downvotes']?.length ?? 0,
+            'numUpvotes': upvotes.length,
+            'numDownvotes': downvotes.length,
+            'upvotes': upvotes,
+            'downvotes': downvotes,
             'date_and_time': post['date_and_time'],
             'specific_location': post['specific_location'],
             'isAnonymous': post['isAnonymous'] ?? false,

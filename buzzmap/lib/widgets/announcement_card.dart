@@ -476,12 +476,10 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                   }
                 },
                 child: EngagementRow(
-                  numUpvotes: _numUpvotes,
-                  numDownvotes: _numDownvotes,
                   postId: _announcement?['_id'] ?? '',
-                  themeMode: 'dark',
-                  post: _announcement ?? {},
-                  disableCommentButton: true,
+                  initialUpvotes: _numUpvotes,
+                  initialDownvotes: _numDownvotes,
+                  isAdminPost: true,
                 ),
               ),
             ],

@@ -1,216 +1,166 @@
-import 'package:buzzmap/main.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:buzzmap/auth/config.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
-import 'package:buzzmap/providers/vote_provider.dart';
-import 'package:buzzmap/providers/comment_provider.dart';
 import 'package:buzzmap/providers/user_provider.dart';
-import 'package:buzzmap/widgets/post_detail_screen.dart';
+import 'package:buzzmap/providers/vote_provider.dart';
 
 class EngagementRow extends StatefulWidget {
+  final String postId;
+  final int initialUpvotes;
+  final int initialDownvotes;
+  final bool isAdminPost;
+
   const EngagementRow({
     super.key,
-    required this.numUpvotes,
-    required this.numDownvotes,
     required this.postId,
-    this.themeMode = 'dark',
-    required this.post,
-    this.disableCommentButton = false,
+    this.initialUpvotes = 0,
+    this.initialDownvotes = 0,
+    this.isAdminPost = false,
   });
 
-  final int numUpvotes;
-  final int numDownvotes;
-  final String postId;
-  final String themeMode;
-  final Map<String, dynamic> post;
-  final bool disableCommentButton;
-
   @override
-  _EngagementRowState createState() => _EngagementRowState();
+  State<EngagementRow> createState() => _EngagementRowState();
 }
 
 class _EngagementRowState extends State<EngagementRow> {
+  bool _isUpvoted = false;
+  bool _isDownvoted = false;
+  int _upvotes = 0;
+  int _downvotes = 0;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    // Schedule both opeRrations for the next frame to avoid setState during build
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (mounted) {
-        final voteProvider = Provider.of<VoteProvider>(context, listen: false);
-        await voteProvider.checkVoteStatus(widget.postId);
-        await voteProvider.refreshAllVotes();
-      }
-    });
+    _upvotes = widget.initialUpvotes;
+    _downvotes = widget.initialDownvotes;
+    _loadVoteState();
   }
 
   @override
   void didUpdateWidget(EngagementRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.postId != widget.postId) {
-      // Schedule the load for the next frame
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (mounted) {
-          final voteProvider =
-              Provider.of<VoteProvider>(context, listen: false);
-          await voteProvider.checkVoteStatus(widget.postId);
-        }
-      });
+      _loadVoteState();
     }
+  }
+
+  Future<void> _loadVoteState() async {
+    if (!mounted) return;
+
+    final voteProvider = Provider.of<VoteProvider>(context, listen: false);
+    await voteProvider.refreshAllVotes();
+
+    setState(() {
+      _isUpvoted = voteProvider.isUpvoted(widget.postId);
+      _isDownvoted = voteProvider.isDownvoted(widget.postId);
+      _upvotes = voteProvider.getUpvoteCount(widget.postId);
+      _downvotes = voteProvider.getDownvoteCount(widget.postId);
+    });
   }
 
   Future<void> _handleVote(bool isUpvote) async {
-    if (_isLoading) return;
+    if (!mounted) return;
 
-    final voteProvider = Provider.of<VoteProvider>(context, listen: false);
     final userProvider = Provider.of<UserProvider>(context, listen: false);
-
-    // Refresh login state before checking
-    await userProvider.refreshLoginState();
-
     if (!userProvider.isLoggedIn) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please log in to vote')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to vote'),
+          duration: Duration(seconds: 2),
+        ),
+      );
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
+      final voteProvider = Provider.of<VoteProvider>(context, listen: false);
+
       if (isUpvote) {
-        if (voteProvider.isUpvoted(widget.postId)) {
-          await voteProvider.removeUpvote(widget.postId);
+        if (_isUpvoted) {
+          await voteProvider.removeUpvote(widget.postId,
+              isAdminPost: widget.isAdminPost);
         } else {
-          await voteProvider.upvotePost(widget.postId);
+          if (_isDownvoted) {
+            await voteProvider.removeDownvote(widget.postId,
+                isAdminPost: widget.isAdminPost);
+          }
+          await voteProvider.upvotePost(widget.postId,
+              isAdminPost: widget.isAdminPost);
         }
       } else {
-        if (voteProvider.isDownvoted(widget.postId)) {
-          await voteProvider.removeDownvote(widget.postId);
+        if (_isDownvoted) {
+          await voteProvider.removeDownvote(widget.postId,
+              isAdminPost: widget.isAdminPost);
         } else {
-          await voteProvider.downvotePost(widget.postId);
+          if (_isUpvoted) {
+            await voteProvider.removeUpvote(widget.postId,
+                isAdminPost: widget.isAdminPost);
+          }
+          await voteProvider.downvotePost(widget.postId,
+              isAdminPost: widget.isAdminPost);
         }
       }
-      // Refresh vote status after voting
-      await voteProvider.checkVoteStatus(widget.postId);
+
+      await _loadVoteState();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error voting: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
-  }
-
-  String formatCount(int count) {
-    return count >= 1000 ? '${(count / 1000).toStringAsFixed(1)}k' : '$count';
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final customColors = Theme.of(context).extension<CustomColors>();
-    final isDark = widget.themeMode == 'dark';
-    final iconColor = isDark ? Colors.white : Colors.black;
-    final voteProvider = Provider.of<VoteProvider>(context);
-    final commentProvider = Provider.of<CommentProvider>(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final iconColor = isDark ? Colors.white : theme.colorScheme.primary;
 
-    // Get vote states
-    final isUpvoted = voteProvider.isUpvoted(widget.postId);
-    final isDownvoted = voteProvider.isDownvoted(widget.postId);
-    final upvoteCount = voteProvider.getUpvoteCount(widget.postId);
-    final downvoteCount = voteProvider.getDownvoteCount(widget.postId);
-    final commentCount = commentProvider.getCommentCount(widget.postId);
-
-    print('Building EngagementRow for post ${widget.postId}:');
-    print('Upvoted: $isUpvoted');
-    print('Downvoted: $isDownvoted');
-    print('Upvote count: $upvoteCount');
-    print('Downvote count: $downvoteCount');
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              IconButton(
-                icon: Icon(
-                  Icons.arrow_upward,
-                  color: isUpvoted ? Colors.blue : Colors.grey,
-                ),
-                onPressed: _isLoading ? null : () => _handleVote(true),
-              ),
-              Text(
-                formatCount(upvoteCount),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isUpvoted ? Colors.blue : iconColor,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 12),
-              IconButton(
-                icon: Icon(
-                  Icons.arrow_downward,
-                  color: isDownvoted ? Colors.red : Colors.grey,
-                ),
-                onPressed: _isLoading ? null : () => _handleVote(false),
-              ),
-              Text(
-                formatCount(downvoteCount),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isDownvoted ? Colors.red : iconColor,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 15),
-              if (!widget.disableCommentButton)
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => PostDetailScreen(
-                          post: widget.post,
-                        ),
-                      ),
-                    );
-                  },
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.comment_outlined,
-                        color: iconColor,
-                        size: 22,
-                        weight: 100,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        formatCount(commentCount),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: iconColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
+    return Row(
+      children: [
+        IconButton(
+          icon: Icon(
+            _isUpvoted ? Icons.arrow_upward : Icons.arrow_upward_outlined,
+            color: _isUpvoted ? iconColor : Colors.grey,
           ),
-        ],
-      ),
+          onPressed: _isLoading ? null : () => _handleVote(true),
+        ),
+        Text(
+          _upvotes.toString(),
+          style: TextStyle(
+            color: _isUpvoted ? iconColor : Colors.grey,
+            fontWeight: _isUpvoted ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          icon: Icon(
+            _isDownvoted ? Icons.arrow_downward : Icons.arrow_downward_outlined,
+            color: _isDownvoted ? iconColor : Colors.grey,
+          ),
+          onPressed: _isLoading ? null : () => _handleVote(false),
+        ),
+        Text(
+          _downvotes.toString(),
+          style: TextStyle(
+            color: _isDownvoted ? iconColor : Colors.grey,
+            fontWeight: _isDownvoted ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -26,7 +26,8 @@ class _GlobalAlertOverlayState extends State<GlobalAlertOverlay> {
 
   void _setupAlertListener() {
     AlertService().alertStream.listen((alert) {
-      if (alert != null && alert.isNotEmpty) {  // Only show if alert is not null and not empty
+      if (alert != null && alert.isNotEmpty) {
+        // Only show if alert is not null and not empty
         setState(() {
           _currentAlert = alert;
           _isVisible = true;
@@ -47,11 +48,13 @@ class _GlobalAlertOverlayState extends State<GlobalAlertOverlay> {
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
-    
+
     return Stack(
       children: [
         widget.child,
-        if (_isVisible && _currentAlert != null && _currentAlert!.isNotEmpty)  // Additional check here
+        if (_isVisible &&
+            _currentAlert != null &&
+            _currentAlert!.isNotEmpty) // Additional check here
           Center(
             child: Material(
               color: Colors.black54,
@@ -69,7 +72,8 @@ class _GlobalAlertOverlayState extends State<GlobalAlertOverlay> {
                       children: [
                         // Header Row
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
+                          padding:
+                              const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
                           child: Column(
                             children: [
                               SvgPicture.asset(
@@ -92,7 +96,7 @@ class _GlobalAlertOverlayState extends State<GlobalAlertOverlay> {
                           ),
                         ),
                         // Admin Subheading
-                   
+
                         Divider(
                           height: 1,
                           thickness: 2,
@@ -115,7 +119,8 @@ class _GlobalAlertOverlayState extends State<GlobalAlertOverlay> {
                                 child: Padding(
                                   padding: const EdgeInsets.all(12.0),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
@@ -137,24 +142,29 @@ class _GlobalAlertOverlayState extends State<GlobalAlertOverlay> {
                                         ],
                                       ),
                                       const SizedBox(height: 8),
-                                      ...(_currentAlert!['messages'] as List).map((message) => Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 4),
-                                        child: Text(
-                                          message.toString(),
-                                          style: TextStyle(
-                                            color: Colors.black87,
-                                            fontSize: 16,
-                                            fontFamily: 'Inter',
-                                          ),
-                                        ),
-                                      )),
+                                      ...(_currentAlert!['messages'] as List)
+                                          .map((message) => Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        vertical: 4),
+                                                child: Text(
+                                                  message.toString(),
+                                                  style: TextStyle(
+                                                    color: Colors.black87,
+                                                    fontSize: 16,
+                                                    fontFamily: 'Inter',
+                                                  ),
+                                                ),
+                                              )),
                                     ],
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 12),
                               // Affected Areas Card
-                              if (_currentAlert!['barangays'] != null && (_currentAlert!['barangays'] as List).isNotEmpty)
+                              if (_currentAlert!['barangays'] != null &&
+                                  (_currentAlert!['barangays'] as List)
+                                      .isNotEmpty)
                                 Card(
                                   color: Colors.grey.shade100,
                                   shape: RoundedRectangleBorder(
@@ -163,7 +173,8 @@ class _GlobalAlertOverlayState extends State<GlobalAlertOverlay> {
                                   child: Padding(
                                     padding: const EdgeInsets.all(12.0),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Row(
                                           children: [
@@ -186,7 +197,9 @@ class _GlobalAlertOverlayState extends State<GlobalAlertOverlay> {
                                         ),
                                         const SizedBox(height: 8),
                                         Text(
-                                          (_currentAlert!['barangays'] as List).map((b) => b['name']).join(', '),
+                                          (_currentAlert!['barangays'] as List)
+                                              .map((b) => b['name'])
+                                              .join(', '),
                                           style: TextStyle(
                                             color: Colors.black87,
                                             fontStyle: FontStyle.italic,
@@ -240,4 +253,4 @@ class _GlobalAlertOverlayState extends State<GlobalAlertOverlay> {
       ],
     );
   }
-} 
+}

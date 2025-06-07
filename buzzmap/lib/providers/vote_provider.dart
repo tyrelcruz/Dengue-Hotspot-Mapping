@@ -71,11 +71,42 @@ class VoteProvider with ChangeNotifier {
 
           _updateVoteState(postId, upvotesList, downvotesList, userId);
         }
+
+        // Also load admin posts votes
+        final adminResponse = await http.get(
+          Uri.parse('${Config.baseUrl}/api/v1/adminPosts'),
+          headers: {
+            'Authorization': 'Bearer ${_prefs!.getString('authToken')}',
+            'Content-Type': 'application/json',
+          },
+        );
+
+        if (adminResponse.statusCode == 200) {
+          final dynamic adminData = jsonDecode(adminResponse.body);
+          final List<dynamic> adminPosts = adminData is Map<String, dynamic>
+              ? adminData['adminPosts'] ?? []
+              : adminData is List
+                  ? adminData
+                  : [];
+
+          for (var post in adminPosts) {
+            if (post is! Map<String, dynamic>) continue;
+
+            final postId = post['_id']?.toString();
+            if (postId == null) continue;
+
+            final upvotesList = List<String>.from(post['upvotes'] ?? []);
+            final downvotesList = List<String>.from(post['downvotes'] ?? []);
+
+            _updateVoteState(postId, upvotesList, downvotesList, userId);
+          }
+        }
       }
     } catch (e) {
-      print('Error loading persisted vote states: $e');
+      // Silent error handling
     } finally {
       _isLoadingAllVotes = false;
+      notifyListeners();
     }
   }
 
@@ -107,7 +138,12 @@ class VoteProvider with ChangeNotifier {
     }
 
     if (_prefs == null) {
-      print('Error: SharedPreferences not initialized');
+      return;
+    }
+
+    // If we already have the vote state in memory, don't fetch it again
+    if (_upvotedPosts.containsKey(postId) &&
+        _downvotedPosts.containsKey(postId)) {
       return;
     }
 
@@ -127,7 +163,6 @@ class VoteProvider with ChangeNotifier {
         final userId = _prefs!.getString('userId');
 
         if (userId == null) {
-          print('Error: No user ID found in SharedPreferences');
           return;
         }
 
@@ -138,27 +173,27 @@ class VoteProvider with ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print('Error checking vote status: $e');
+      // Silent error handling
     } finally {
       _isLoading = false;
     }
   }
 
-  Future<void> upvotePost(String postId) async {
+  Future<void> upvotePost(String postId, {bool isAdminPost = false}) async {
     if (!_isInitialized) {
       await initializePrefs();
     }
 
     if (_prefs == null) {
-      print('Error: SharedPreferences not initialized');
       return;
     }
 
     try {
       _isLoading = true;
 
+      final endpoint = isAdminPost ? 'adminPosts' : 'reports';
       final response = await http.post(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/$postId/upvote'),
+        Uri.parse('${Config.baseUrl}/api/v1/$endpoint/$postId/upvote'),
         headers: {
           'Authorization': 'Bearer ${_prefs!.getString('authToken')}',
           'Content-Type': 'application/json',
@@ -171,35 +206,46 @@ class VoteProvider with ChangeNotifier {
 
         if (userId == null) return;
 
-        final upvotesList = List<String>.from(data['upvotes'] ?? []);
-        final downvotesList = List<String>.from(data['downvotes'] ?? []);
+        // Update vote counts from response
+        _upvoteCounts[postId] = data['upvotes'] ?? 0;
+        _downvoteCounts[postId] = data['downvotes'] ?? 0;
 
-        _updateVoteState(postId, upvotesList, downvotesList, userId);
+        // Update vote state
+        _upvotedPosts[postId] = true;
+        _downvotedPosts[postId] = false;
+
+        // Store in SharedPreferences
+        _prefs?.setInt('upvotes_$postId', _upvoteCounts[postId] ?? 0);
+        _prefs?.setInt('downvotes_$postId', _downvoteCounts[postId] ?? 0);
+        _prefs?.setBool('upvoted_$postId', true);
+        _prefs?.setBool('downvoted_$postId', false);
+
+        notifyListeners();
+      } else {
+        throw Exception('Failed to upvote post: ${response.body}');
       }
     } catch (e) {
-      print('Error upvoting post: $e');
       rethrow;
     } finally {
       _isLoading = false;
-      notifyListeners();
     }
   }
 
-  Future<void> downvotePost(String postId) async {
+  Future<void> downvotePost(String postId, {bool isAdminPost = false}) async {
     if (!_isInitialized) {
       await initializePrefs();
     }
 
     if (_prefs == null) {
-      print('Error: SharedPreferences not initialized');
       return;
     }
 
     try {
       _isLoading = true;
 
+      final endpoint = isAdminPost ? 'adminPosts' : 'reports';
       final response = await http.post(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/$postId/downvote'),
+        Uri.parse('${Config.baseUrl}/api/v1/$endpoint/$postId/downvote'),
         headers: {
           'Authorization': 'Bearer ${_prefs!.getString('authToken')}',
           'Content-Type': 'application/json',
@@ -212,21 +258,32 @@ class VoteProvider with ChangeNotifier {
 
         if (userId == null) return;
 
-        final upvotesList = List<String>.from(data['upvotes'] ?? []);
-        final downvotesList = List<String>.from(data['downvotes'] ?? []);
+        // Update vote counts from response
+        _upvoteCounts[postId] = data['upvotes'] ?? 0;
+        _downvoteCounts[postId] = data['downvotes'] ?? 0;
 
-        _updateVoteState(postId, upvotesList, downvotesList, userId);
+        // Update vote state
+        _upvotedPosts[postId] = false;
+        _downvotedPosts[postId] = true;
+
+        // Store in SharedPreferences
+        _prefs?.setInt('upvotes_$postId', _upvoteCounts[postId] ?? 0);
+        _prefs?.setInt('downvotes_$postId', _downvoteCounts[postId] ?? 0);
+        _prefs?.setBool('upvoted_$postId', false);
+        _prefs?.setBool('downvoted_$postId', true);
+
+        notifyListeners();
+      } else {
+        throw Exception('Failed to downvote post: ${response.body}');
       }
     } catch (e) {
-      print('Error downvoting post: $e');
       rethrow;
     } finally {
       _isLoading = false;
-      notifyListeners();
     }
   }
 
-  Future<void> removeUpvote(String postId) async {
+  Future<void> removeUpvote(String postId, {bool isAdminPost = false}) async {
     if (!_isInitialized) {
       await initializePrefs();
     }
@@ -238,9 +295,12 @@ class VoteProvider with ChangeNotifier {
 
     try {
       _isLoading = true;
+
+      final endpoint = isAdminPost ? 'adminPosts' : 'reports';
+      print('Removing upvote from post $postId on endpoint: $endpoint');
 
       final response = await http.delete(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/$postId/upvote'),
+        Uri.parse('${Config.baseUrl}/api/v1/$endpoint/$postId/upvote'),
         headers: {
           'Authorization': 'Bearer ${_prefs!.getString('authToken')}',
           'Content-Type': 'application/json',
@@ -253,21 +313,29 @@ class VoteProvider with ChangeNotifier {
 
         if (userId == null) return;
 
-        final upvotesList = List<String>.from(data['upvotes'] ?? []);
-        final downvotesList = List<String>.from(data['downvotes'] ?? []);
+        final upvotesList = data is Map<String, dynamic>
+            ? List<String>.from(data['upvotes'] ?? [])
+            : List<String>.from(data['upvotes'] ?? []);
+        final downvotesList = data is Map<String, dynamic>
+            ? List<String>.from(data['downvotes'] ?? [])
+            : List<String>.from(data['downvotes'] ?? []);
 
         _updateVoteState(postId, upvotesList, downvotesList, userId);
+        notifyListeners();
+      } else {
+        print(
+            'Error removing upvote: ${response.statusCode} - ${response.body}');
+        throw Exception('Failed to remove upvote');
       }
     } catch (e) {
       print('Error removing upvote: $e');
       rethrow;
     } finally {
       _isLoading = false;
-      notifyListeners();
     }
   }
 
-  Future<void> removeDownvote(String postId) async {
+  Future<void> removeDownvote(String postId, {bool isAdminPost = false}) async {
     if (!_isInitialized) {
       await initializePrefs();
     }
@@ -280,8 +348,11 @@ class VoteProvider with ChangeNotifier {
     try {
       _isLoading = true;
 
+      final endpoint = isAdminPost ? 'adminPosts' : 'reports';
+      print('Removing downvote from post $postId on endpoint: $endpoint');
+
       final response = await http.delete(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/$postId/downvote'),
+        Uri.parse('${Config.baseUrl}/api/v1/$endpoint/$postId/downvote'),
         headers: {
           'Authorization': 'Bearer ${_prefs!.getString('authToken')}',
           'Content-Type': 'application/json',
@@ -294,17 +365,25 @@ class VoteProvider with ChangeNotifier {
 
         if (userId == null) return;
 
-        final upvotesList = List<String>.from(data['upvotes'] ?? []);
-        final downvotesList = List<String>.from(data['downvotes'] ?? []);
+        final upvotesList = data is Map<String, dynamic>
+            ? List<String>.from(data['upvotes'] ?? [])
+            : List<String>.from(data['upvotes'] ?? []);
+        final downvotesList = data is Map<String, dynamic>
+            ? List<String>.from(data['downvotes'] ?? [])
+            : List<String>.from(data['downvotes'] ?? []);
 
         _updateVoteState(postId, upvotesList, downvotesList, userId);
+        notifyListeners();
+      } else {
+        print(
+            'Error removing downvote: ${response.statusCode} - ${response.body}');
+        throw Exception('Failed to remove downvote');
       }
     } catch (e) {
       print('Error removing downvote: $e');
       rethrow;
     } finally {
       _isLoading = false;
-      notifyListeners();
     }
   }
 

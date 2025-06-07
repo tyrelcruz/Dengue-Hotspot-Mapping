@@ -56,174 +56,124 @@ class PostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final customColors = Theme.of(context).extension<CustomColors>();
     final theme = Theme.of(context);
-    final borderedType = type == 'bordered';
+    final customColors = Theme.of(context).extension<CustomColors>();
+    final isDark = theme.brightness == Brightness.dark;
+    final iconColor = isDark ? Colors.white : Colors.black;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: isDark ? Colors.grey[900] : Colors.white,
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 8,
-            offset: const Offset(0, 2),
+            offset: const Offset(0, 3),
           ),
         ],
-        border: Border.all(
-          color: customColors?.surfaceLight ?? Colors.grey.shade200,
-          width: 1,
-        ),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: UserInfoRow(
-                        title: post['isAnonymous'] ? 'Anonymous' : username,
-                        subtitle: whenPosted,
-                        iconUrl: iconUrl,
-                        type: 'post',
-                        onReport: onReport,
-                        onDelete: onDelete,
-                        isOwner: isOwner,
-                      ),
-                    ),
-                    if (showDistance && post['distance'] != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.location_on_outlined,
-                              size: 14,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _formatDistance(post['distance']),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
+                UserInfoRow(
+                  title: post['isAnonymous'] ? 'Anonymous' : username,
+                  subtitle: whenPosted,
+                  iconUrl: iconUrl,
+                  type: 'post',
+                  onReport: onReport,
+                  onDelete: onDelete,
+                  isOwner: isOwner,
                 ),
                 const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            '📍 Address: ',
-                            style: theme.textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            location,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
+                if (showDistance && post['distance'] != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      _formatDistance(post['distance']),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w500,
                       ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            '🏘️ Barangay: ',
-                            style: theme.textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            post['barangay'] ?? 'Unknown',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            '⚠️ Report Type: ',
-                            style: theme.textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            reportType,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            '📝 Description: ',
-                            style: theme.textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            description,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                      if (images.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        _buildImageGrid(images, context),
-                      ],
-                    ],
+                    ),
                   ),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      '📍 Location: ',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      location,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 4),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      '🕒 Date & Time: ',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      '$date, $time',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      '⚠️ Report Type: ',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      reportType,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      '📝 Description: ',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      description,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+                if (images.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _buildImageGrid(images, context),
+                ],
               ],
             ),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary,
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(12),
-                bottomRight: Radius.circular(12),
-              ),
-            ),
-            child: EngagementRow(
-              numUpvotes: numUpvotes,
-              numDownvotes: numDownvotes,
-              postId: postId,
-              themeMode: type == 'bordered' ? 'dark' : 'light',
-              post: {
-                ...post,
-                'isAdminPost': false,
-                'upvotes': post['upvotes'] ?? [],
-                'downvotes': post['downvotes'] ?? [],
-              },
-              key: ValueKey(
-                  '${post['id']}_${(post['upvotes'] ?? []).join(',')}_${(post['downvotes'] ?? []).join(',')}'),
-            ),
+          EngagementRow(
+            postId: post['_id'] ?? postId,
+            initialUpvotes: numUpvotes,
+            initialDownvotes: numDownvotes,
+            isAdminPost: false,
           ),
         ],
       ),

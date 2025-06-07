@@ -47,7 +47,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Future<void> _loadComments() async {
     final commentProvider =
         Provider.of<CommentProvider>(context, listen: false);
-    await commentProvider.fetchComments(widget.post['id']);
+    await commentProvider.fetchComments(widget.post['_id']);
   }
 
   Future<void> _handleVote(String commentId, String voteType) async {
@@ -157,7 +157,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         (widget.post['iconUrl'] ?? 'assets/icons/person_1.svg').toString();
     final numUpvotes = widget.post['numUpvotes'] ?? 0;
     final numDownvotes = widget.post['numDownvotes'] ?? 0;
-    final postId = widget.post['id'] ?? '';
+    final postId = widget.post['_id'] ?? '';
 
     final commentProvider = Provider.of<CommentProvider>(context);
     final comments = commentProvider.getComments(postId);
@@ -306,17 +306,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
             child: EngagementRow(
-              numUpvotes: numUpvotes,
-              numDownvotes: numDownvotes,
               postId: postId,
-              themeMode: 'light',
-              post: {
-                ...widget.post,
-                'isAdminPost': widget.post['category'] != null,
-                'upvotes': widget.post['upvotes'] ?? [],
-                'downvotes': widget.post['downvotes'] ?? [],
-              },
-              disableCommentButton: true,
+              initialUpvotes: numUpvotes,
+              initialDownvotes: numDownvotes,
+              isAdminPost: false,
             ),
           ),
           // Comments section

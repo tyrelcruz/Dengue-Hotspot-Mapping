@@ -36,6 +36,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
   String? _currentUsername;
   Position? _currentPosition;
   bool _isLocationLoading = false;
+  RouteObserver<PageRoute>? _routeObserver;
 
   void _onTabSelected(int index) {
     setState(() {
@@ -58,13 +59,13 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Subscribe to route changes
-    final routeObserver = ModalRoute.of(context)
+    _routeObserver = ModalRoute.of(context)
         ?.navigator
         ?.widget
         .observers
         .whereType<RouteObserver<PageRoute>>()
         .firstOrNull;
-    routeObserver?.subscribe(this, ModalRoute.of(context)! as PageRoute);
+    _routeObserver?.subscribe(this, ModalRoute.of(context)! as PageRoute);
   }
 
   Future<void> _initializePrefs() async {
@@ -744,13 +745,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
   void dispose() {
     _searchController.dispose();
     // Unsubscribe from route changes
-    final routeObserver = ModalRoute.of(context)
-        ?.navigator
-        ?.widget
-        .observers
-        .whereType<RouteObserver<PageRoute>>()
-        .firstOrNull;
-    routeObserver?.unsubscribe(this);
+    _routeObserver?.unsubscribe(this);
     super.dispose();
   }
 
