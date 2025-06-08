@@ -18,6 +18,7 @@ import 'dart:math';
 import 'package:buzzmap/providers/post_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/widgets.dart';
+import 'package:buzzmap/providers/vote_provider.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -50,8 +51,10 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
     _initializePrefs();
     _getCurrentLocation();
     // Fetch posts when the screen initializes
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<PostProvider>(context, listen: false).fetchPosts();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _ensureProfilePhotoLoaded();
+      await Provider.of<PostProvider>(context, listen: false).fetchPosts();
+      await Provider.of<VoteProvider>(context, listen: false).refreshAllVotes();
     });
   }
 
@@ -389,6 +392,32 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
     }
   }
 
+  Future<void> _ensureProfilePhotoLoaded() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? profilePhotoUrl = prefs.getString('profilePhotoUrl');
+    final token = prefs.getString('authToken');
+    if ((profilePhotoUrl == null || profilePhotoUrl.isEmpty) && token != null) {
+      try {
+        final response = await http.get(
+          Uri.parse('${Config.baseUrl}/api/v1/auth/me'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        );
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final photoUrl = data['user']?['profilePhotoUrl'];
+          if (photoUrl != null && photoUrl.isNotEmpty) {
+            await prefs.setString('profilePhotoUrl', photoUrl);
+          }
+        }
+      } catch (e) {
+        print('Error fetching profile photo URL: $e');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final customColors = Theme.of(context).extension<CustomColors>();
@@ -406,7 +435,10 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
           RefreshIndicator(
             onRefresh: () async {
               await _initializePrefs();
+              await _ensureProfilePhotoLoaded();
               await postProvider.fetchPosts(forceRefresh: true);
+              await Provider.of<VoteProvider>(context, listen: false)
+                  .refreshAllVotes();
               await _getCurrentLocation();
             },
             edgeOffset: 80,
@@ -511,46 +543,54 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                     )
                   else
                     ..._currentPosts.map((post) {
-                      final isOwner = post['userId']?.toString() ==
-                          _prefs.getString('userId');
+                      // Ensure both 'id' and '_id' are present
+                      final postWithId = Map<String, dynamic>.from(post);
+                      if (postWithId['_id'] == null &&
+                          postWithId['id'] != null) {
+                        postWithId['_id'] = postWithId['id'];
+                      }
                       return GestureDetector(
                         onTap: () async {
                           await Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) =>
-                                  PostDetailScreen(post: post),
+                                  PostDetailScreen(post: postWithId),
                             ),
                           );
                           setState(
                               () {}); // Refresh EngagementRow/comment count
                         },
                         child: PostCard(
-                          key: ValueKey(post['id']?.toString() ?? ''),
-                          post: post,
-                          username: post['username']?.toString() ?? 'Anonymous',
-                          whenPosted:
-                              post['whenPosted']?.toString() ?? 'Just now',
-                          location: post['location']?.toString() ??
+                          key: ValueKey(postWithId['_id']?.toString() ?? ''),
+                          post: postWithId,
+                          username:
+                              postWithId['username']?.toString() ?? 'Anonymous',
+                          whenPosted: postWithId['whenPosted']?.toString() ??
+                              'Just now',
+                          location: postWithId['location']?.toString() ??
                               'Unknown location',
-                          date: post['date']?.toString() ?? '',
-                          time: post['time']?.toString() ?? '',
+                          date: postWithId['date']?.toString() ?? '',
+                          time: postWithId['time']?.toString() ?? '',
                           reportType:
-                              post['reportType']?.toString() ?? 'Unknown',
-                          description: post['description']?.toString() ?? '',
-                          numUpvotes: (post['numUpvotes'] as int?) ?? 0,
-                          numDownvotes: (post['numDownvotes'] as int?) ?? 0,
-                          images: (post['images'] as List<dynamic>?)
+                              postWithId['reportType']?.toString() ?? 'Unknown',
+                          description:
+                              postWithId['description']?.toString() ?? '',
+                          numUpvotes: (postWithId['numUpvotes'] as int?) ?? 0,
+                          numDownvotes:
+                              (postWithId['numDownvotes'] as int?) ?? 0,
+                          images: (postWithId['images'] as List<dynamic>?)
                                   ?.map((e) => e.toString())
                                   .toList() ??
                               [],
-                          iconUrl: post['iconUrl']?.toString() ??
+                          iconUrl: postWithId['iconUrl']?.toString() ??
                               'assets/icons/person_1.svg',
                           type: 'bordered',
-                          onReport: () => _reportPost(post),
-                          onDelete: () => _deletePost(post),
-                          isOwner: isOwner,
-                          postId: post['id']?.toString() ?? '',
+                          onReport: () => _reportPost(postWithId),
+                          onDelete: () => _deletePost(postWithId),
+                          isOwner: postWithId['userId']?.toString() ==
+                              _prefs.getString('userId'),
+                          postId: postWithId['_id']?.toString() ?? '',
                           showDistance: selectedIndex == 3,
                         ),
                       );

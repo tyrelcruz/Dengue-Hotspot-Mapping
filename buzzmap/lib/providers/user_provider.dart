@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import 'package:buzzmap/providers/vote_provider.dart';
+import 'package:buzzmap/services/notification_service.dart';
 
 class UserProvider with ChangeNotifier {
   bool _isLoggedIn = false;
@@ -46,12 +49,24 @@ class UserProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> logout() async {
+  Future<void> logout(context) async {
     _userId = null;
     _authToken = null;
     _isLoggedIn = false;
     await _prefs?.remove('userId');
     await _prefs?.remove('authToken');
+    // Clear votes and notifications
+    try {
+      await Provider.of<VoteProvider>(context, listen: false).clearUserVotes();
+    } catch (e) {
+      print('Error clearing votes on logout: $e');
+    }
+    try {
+      await Provider.of<NotificationService>(context, listen: false)
+          .clearUserNotifications();
+    } catch (e) {
+      print('Error clearing notifications on logout: $e');
+    }
     print('🔐 User logged out');
     notifyListeners();
   }

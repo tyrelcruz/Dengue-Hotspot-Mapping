@@ -69,6 +69,11 @@ class VoteProvider with ChangeNotifier {
           final upvotesList = List<String>.from(post['upvotes'] ?? []);
           final downvotesList = List<String>.from(post['downvotes'] ?? []);
 
+          // Update vote counts from response, fallback to array length if needed
+          _upvoteCounts[postId] = post['upvoteCount'] ?? upvotesList.length;
+          _downvoteCounts[postId] =
+              post['downvoteCount'] ?? downvotesList.length;
+
           _updateVoteState(postId, upvotesList, downvotesList, userId);
         }
 
@@ -141,12 +146,7 @@ class VoteProvider with ChangeNotifier {
       return;
     }
 
-    // If we already have the vote state in memory, don't fetch it again
-    if (_upvotedPosts.containsKey(postId) &&
-        _downvotedPosts.containsKey(postId)) {
-      return;
-    }
-
+    // Always fetch the latest state from the backend for this postId
     try {
       _isLoading = true;
 
@@ -162,18 +162,40 @@ class VoteProvider with ChangeNotifier {
         final dynamic data = jsonDecode(response.body);
         final userId = _prefs!.getString('userId');
 
+        // If the backend wraps the data in a 'data' field, use that
+        final postData = data['data'] ?? data;
+
+        print('VoteProvider: backend response for $postId: $data');
+
         if (userId == null) {
           return;
         }
 
-        final upvotesList = List<String>.from(data['upvotes'] ?? []);
-        final downvotesList = List<String>.from(data['downvotes'] ?? []);
+        // Update vote counts from response, fallback to array length if needed
+        _upvoteCounts[postId] =
+            postData['upvoteCount'] ?? (postData['upvotes']?.length ?? 0);
+        _downvoteCounts[postId] =
+            postData['downvoteCount'] ?? (postData['downvotes']?.length ?? 0);
 
-        _updateVoteState(postId, upvotesList, downvotesList, userId);
+        print(
+            'VoteProvider: updated counts for $postId: upvotes=${_upvoteCounts[postId]}, downvotes=${_downvoteCounts[postId]}');
+
+        // Update vote state
+        _upvotedPosts[postId] = postData['upvotes']?.contains(userId) ?? false;
+        _downvotedPosts[postId] =
+            postData['downvotes']?.contains(userId) ?? false;
+
+        // Store in SharedPreferences
+        _prefs?.setInt('upvotes_$postId', _upvoteCounts[postId] ?? 0);
+        _prefs?.setInt('downvotes_$postId', _downvoteCounts[postId] ?? 0);
+        _prefs?.setBool('upvoted_$postId', _upvotedPosts[postId] ?? false);
+        _prefs?.setBool('downvoted_$postId', _downvotedPosts[postId] ?? false);
+
         notifyListeners();
       }
     } catch (e) {
       // Silent error handling
+      print('VoteProvider: error fetching vote status for $postId: $e');
     } finally {
       _isLoading = false;
     }
@@ -206,9 +228,19 @@ class VoteProvider with ChangeNotifier {
 
         if (userId == null) return;
 
+        // Debug prints
+        print('VoteProvider upvotePost response: $data');
+        print(
+            'VoteProvider upvotePost before update: upvotes=${_upvoteCounts[postId]}, downvotes=${_downvoteCounts[postId]}');
+
         // Update vote counts from response
-        _upvoteCounts[postId] = data['upvotes'] ?? 0;
-        _downvoteCounts[postId] = data['downvotes'] ?? 0;
+        _upvoteCounts[postId] =
+            data['upvoteCount'] ?? (data['upvotes']?.length ?? 0);
+        _downvoteCounts[postId] =
+            data['downvoteCount'] ?? (data['downvotes']?.length ?? 0);
+
+        print(
+            'VoteProvider upvotePost after update: upvotes=${_upvoteCounts[postId]}, downvotes=${_downvoteCounts[postId]}');
 
         // Update vote state
         _upvotedPosts[postId] = true;
@@ -225,6 +257,7 @@ class VoteProvider with ChangeNotifier {
         throw Exception('Failed to upvote post: ${response.body}');
       }
     } catch (e) {
+      print('Error upvoting post: $e');
       rethrow;
     } finally {
       _isLoading = false;
@@ -259,8 +292,8 @@ class VoteProvider with ChangeNotifier {
         if (userId == null) return;
 
         // Update vote counts from response
-        _upvoteCounts[postId] = data['upvotes'] ?? 0;
-        _downvoteCounts[postId] = data['downvotes'] ?? 0;
+        _upvoteCounts[postId] = data['upvoteCount'] ?? 0;
+        _downvoteCounts[postId] = data['downvoteCount'] ?? 0;
 
         // Update vote state
         _upvotedPosts[postId] = false;
@@ -277,6 +310,7 @@ class VoteProvider with ChangeNotifier {
         throw Exception('Failed to downvote post: ${response.body}');
       }
     } catch (e) {
+      print('Error downvoting post: $e');
       rethrow;
     } finally {
       _isLoading = false;
@@ -289,7 +323,6 @@ class VoteProvider with ChangeNotifier {
     }
 
     if (_prefs == null) {
-      print('Error: SharedPreferences not initialized');
       return;
     }
 
@@ -297,8 +330,6 @@ class VoteProvider with ChangeNotifier {
       _isLoading = true;
 
       final endpoint = isAdminPost ? 'adminPosts' : 'reports';
-      print('Removing upvote from post $postId on endpoint: $endpoint');
-
       final response = await http.delete(
         Uri.parse('${Config.baseUrl}/api/v1/$endpoint/$postId/upvote'),
         headers: {
@@ -313,19 +344,21 @@ class VoteProvider with ChangeNotifier {
 
         if (userId == null) return;
 
-        final upvotesList = data is Map<String, dynamic>
-            ? List<String>.from(data['upvotes'] ?? [])
-            : List<String>.from(data['upvotes'] ?? []);
-        final downvotesList = data is Map<String, dynamic>
-            ? List<String>.from(data['downvotes'] ?? [])
-            : List<String>.from(data['downvotes'] ?? []);
+        // Update vote counts from response
+        _upvoteCounts[postId] = data['upvoteCount'] ?? 0;
+        _downvoteCounts[postId] = data['downvoteCount'] ?? 0;
 
-        _updateVoteState(postId, upvotesList, downvotesList, userId);
+        // Update vote state
+        _upvotedPosts[postId] = false;
+
+        // Store in SharedPreferences
+        _prefs?.setInt('upvotes_$postId', _upvoteCounts[postId] ?? 0);
+        _prefs?.setInt('downvotes_$postId', _downvoteCounts[postId] ?? 0);
+        _prefs?.setBool('upvoted_$postId', false);
+
         notifyListeners();
       } else {
-        print(
-            'Error removing upvote: ${response.statusCode} - ${response.body}');
-        throw Exception('Failed to remove upvote');
+        throw Exception('Failed to remove upvote: ${response.body}');
       }
     } catch (e) {
       print('Error removing upvote: $e');
@@ -341,7 +374,6 @@ class VoteProvider with ChangeNotifier {
     }
 
     if (_prefs == null) {
-      print('Error: SharedPreferences not initialized');
       return;
     }
 
@@ -349,8 +381,6 @@ class VoteProvider with ChangeNotifier {
       _isLoading = true;
 
       final endpoint = isAdminPost ? 'adminPosts' : 'reports';
-      print('Removing downvote from post $postId on endpoint: $endpoint');
-
       final response = await http.delete(
         Uri.parse('${Config.baseUrl}/api/v1/$endpoint/$postId/downvote'),
         headers: {
@@ -365,19 +395,21 @@ class VoteProvider with ChangeNotifier {
 
         if (userId == null) return;
 
-        final upvotesList = data is Map<String, dynamic>
-            ? List<String>.from(data['upvotes'] ?? [])
-            : List<String>.from(data['upvotes'] ?? []);
-        final downvotesList = data is Map<String, dynamic>
-            ? List<String>.from(data['downvotes'] ?? [])
-            : List<String>.from(data['downvotes'] ?? []);
+        // Update vote counts from response
+        _upvoteCounts[postId] = data['upvoteCount'] ?? 0;
+        _downvoteCounts[postId] = data['downvoteCount'] ?? 0;
 
-        _updateVoteState(postId, upvotesList, downvotesList, userId);
+        // Update vote state
+        _downvotedPosts[postId] = false;
+
+        // Store in SharedPreferences
+        _prefs?.setInt('upvotes_$postId', _upvoteCounts[postId] ?? 0);
+        _prefs?.setInt('downvotes_$postId', _downvoteCounts[postId] ?? 0);
+        _prefs?.setBool('downvoted_$postId', false);
+
         notifyListeners();
       } else {
-        print(
-            'Error removing downvote: ${response.statusCode} - ${response.body}');
-        throw Exception('Failed to remove downvote');
+        throw Exception('Failed to remove downvote: ${response.body}');
       }
     } catch (e) {
       print('Error removing downvote: $e');
@@ -421,5 +453,30 @@ class VoteProvider with ChangeNotifier {
     }
     // Then check SharedPreferences
     return _prefs?.getInt('downvotes_$postId') ?? 0;
+  }
+
+  Future<void> clearUserVotes() async {
+    // Clear in-memory state
+    _upvoteCounts.clear();
+    _downvoteCounts.clear();
+    _upvotedPosts.clear();
+    _downvotedPosts.clear();
+
+    // Clear SharedPreferences for votes
+    if (_prefs != null) {
+      final keys = _prefs!
+          .getKeys()
+          .where((key) =>
+              key.startsWith('upvotes_') ||
+              key.startsWith('downvotes_') ||
+              key.startsWith('upvoted_') ||
+              key.startsWith('downvoted_'))
+          .toList();
+      for (final key in keys) {
+        await _prefs!.remove(key);
+      }
+    }
+    // Ensure listeners are notified and UI is rebuilt with cleared state
+    notifyListeners();
   }
 }

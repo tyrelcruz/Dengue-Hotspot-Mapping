@@ -299,6 +299,23 @@ class NotificationService with ChangeNotifier {
       duration: Duration(seconds: 3),
     );
   }
+
+  Future<void> clearUserNotifications() async {
+    // Clear in-memory cache
+    _cachedNotifications.clear();
+    _lastFetchTime = null;
+    // Clear SharedPreferences for notification keys
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs
+        .getKeys()
+        .where((key) =>
+            key.startsWith('notification_') || key == 'last_notification_view')
+        .toList();
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
+    notifyListeners();
+  }
 }
 
 // Retrieve the token from secure storage

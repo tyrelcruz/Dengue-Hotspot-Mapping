@@ -46,6 +46,8 @@ class PostProvider with ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('authToken');
+      final currentUserId = prefs.getString('userId');
+      final currentUserProfilePhotoUrl = prefs.getString('profilePhotoUrl');
 
       if (token == null) {
         throw Exception('No authentication token found');
@@ -101,7 +103,11 @@ class PostProvider with ChangeNotifier {
             'images': post['images'] != null
                 ? List<String>.from(post['images'])
                 : <String>[],
-            'iconUrl': 'assets/icons/person_1.svg',
+            'iconUrl': (userId == currentUserId &&
+                    currentUserProfilePhotoUrl != null &&
+                    currentUserProfilePhotoUrl.isNotEmpty)
+                ? currentUserProfilePhotoUrl
+                : 'assets/icons/person_1.svg',
             'status': post['status'],
             'numUpvotes': upvotes.length,
             'numDownvotes': downvotes.length,

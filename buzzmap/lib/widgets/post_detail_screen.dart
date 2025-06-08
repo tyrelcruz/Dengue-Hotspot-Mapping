@@ -307,9 +307,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
             child: EngagementRow(
               postId: postId,
+              post: widget.post,
               initialUpvotes: numUpvotes,
               initialDownvotes: numDownvotes,
               isAdminPost: false,
+              themeMode: theme.brightness == Brightness.dark ? 'dark' : 'light',
             ),
           ),
           // Comments section

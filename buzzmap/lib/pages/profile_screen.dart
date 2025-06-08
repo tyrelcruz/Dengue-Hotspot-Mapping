@@ -9,6 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
+import 'package:buzzmap/providers/vote_provider.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String username;
@@ -39,8 +41,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _initPrefs();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<PostProvider>(context, listen: false).fetchPosts();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Provider.of<PostProvider>(context, listen: false).fetchPosts();
+      await Provider.of<VoteProvider>(context, listen: false).refreshAllVotes();
     });
     _bioController.text = _bio;
     _barangayController.text = _barangay;
@@ -349,7 +352,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       },
                                       child: PostCard(
                                         key: ValueKey(
-                                            post['id']?.toString() ?? ''),
+                                            (post['_id'] ?? post['id'])
+                                                    ?.toString() ??
+                                                ''),
                                         post: post,
                                         username:
                                             post['username']?.toString() ??
@@ -383,7 +388,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         onReport: () {},
                                         onDelete: () {},
                                         isOwner: true,
-                                        postId: post['id']?.toString() ?? '',
+                                        postId: (post['_id'] ?? post['id'])
+                                                ?.toString() ??
+                                            '',
                                         showDistance: false,
                                       ),
                                     );
@@ -587,57 +594,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       child: _profilePhotoUrl != null &&
                               _profilePhotoUrl!.isNotEmpty
-                          ? ClipOval(
-                              child: Image.network(
-                                _profilePhotoUrl!,
-                                fit: BoxFit.cover,
-                                width: 150,
-                                height: 150,
-                                errorBuilder: (context, error, stackTrace) {
-                                  print('Debug: Image loading error: $error');
-                                  print('Debug: Image URL: $_profilePhotoUrl');
-                                  return Container(
-                                    width: 150,
-                                    height: 150,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[300],
-                                      shape: BoxShape.circle,
+                          ? Image.network(
+                              _profilePhotoUrl!,
+                              fit: BoxFit.cover,
+                              width: 150,
+                              height: 150,
+                              errorBuilder: (context, error, stackTrace) {
+                                print('Debug: Image loading error: $error');
+                                print('Debug: Image URL: $_profilePhotoUrl');
+                                return Container(
+                                  width: 150,
+                                  height: 150,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.person,
+                                      size: 50, color: Colors.grey),
+                                );
+                              },
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                print('Debug: Image loading progress: '
+                                    '${loadingProgress.expectedTotalBytes != null ? (loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes! * 100).toStringAsFixed(1) : 'unknown'}%');
+                                return Container(
+                                  width: 150,
+                                  height: 150,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      value:
+                                          loadingProgress.expectedTotalBytes !=
+                                                  null
+                                              ? loadingProgress
+                                                      .cumulativeBytesLoaded /
+                                                  loadingProgress
+                                                      .expectedTotalBytes!
+                                              : null,
                                     ),
-                                    child: const Icon(Icons.person,
-                                        size: 50, color: Colors.grey),
-                                  );
-                                },
-                                loadingBuilder:
-                                    (context, child, loadingProgress) {
-                                  if (loadingProgress == null) return child;
-                                  print(
-                                      'Debug: Image loading progress: ${loadingProgress.expectedTotalBytes != null ? (loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes! * 100).toStringAsFixed(1) : 'unknown'}%');
-                                  return Container(
-                                    width: 150,
-                                    height: 150,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[300],
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Center(
-                                      child: CircularProgressIndicator(
-                                        value: loadingProgress
-                                                    .expectedTotalBytes !=
-                                                null
-                                            ? loadingProgress
-                                                    .cumulativeBytesLoaded /
-                                                loadingProgress
-                                                    .expectedTotalBytes!
-                                            : null,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                headers: {
-                                  'Accept': '*/*',
-                                  'Access-Control-Allow-Origin': '*',
-                                },
-                              ),
+                                  ),
+                                );
+                              },
+                              headers: {
+                                'Accept': '*/*',
+                                'Access-Control-Allow-Origin': '*',
+                              },
                             )
                           : Container(
                               width: 150,

@@ -153,9 +153,11 @@ class AdminPostDetailScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
               child: EngagementRow(
                 postId: postId,
+                post: post,
                 initialUpvotes: numUpvotes,
                 initialDownvotes: numDownvotes,
                 isAdminPost: true,
+                themeMode: 'dark',
               ),
             ),
             // Comments section

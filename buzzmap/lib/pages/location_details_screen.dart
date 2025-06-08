@@ -11,6 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:buzzmap/auth/config.dart';
+import 'package:provider/provider.dart';
+import 'package:buzzmap/providers/vote_provider.dart';
 
 class LocationDetailsScreen extends StatefulWidget {
   final String location;
@@ -53,6 +55,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     _loadDengueData();
     _loadReports();
     _loadCurrentUsername();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Provider.of<VoteProvider>(context, listen: false).refreshAllVotes();
+    });
   }
 
   Future<void> _loadCurrentUsername() async {
@@ -153,7 +158,12 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
               : <String>[],
           'iconUrl': 'assets/icons/person_1.svg',
           'status': report['status'],
-          'id': report['id'],
+          'id': report['_id'],
+          '_id': report['_id'],
+          'upvotes': report['upvotes'] ?? [],
+          'downvotes': report['downvotes'] ?? [],
+          'upvoteCount': report['upvotes']?.length ?? 0,
+          'downvoteCount': report['downvotes']?.length ?? 0,
         };
       }).toList();
     }
@@ -441,15 +451,15 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                                             report['reportType'] ?? 'General',
                                         description: report['description'] ??
                                             'No description provided',
-                                        numUpvotes: report['numUpvotes'] ?? 0,
+                                        numUpvotes: report['upvoteCount'] ?? 0,
                                         numDownvotes:
-                                            report['numDownvotes'] ?? 0,
+                                            report['downvoteCount'] ?? 0,
                                         images: List<String>.from(
                                             report['images'] ?? []),
                                         iconUrl: report['iconUrl'] ??
                                             'assets/icons/person_1.svg',
                                         type: 'bordered',
-                                        postId: report['id'] ?? '',
+                                        postId: report['_id'] ?? '',
                                         isOwner:
                                             report['email'] == _currentUsername,
                                         post: report,
