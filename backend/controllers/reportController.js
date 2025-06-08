@@ -165,22 +165,24 @@ const getAllReports = asyncErrorHandler(async (req, res) => {
   const reportsWithComments = await Promise.all(
     reports.map(async (report) => {
       const reportObj = report.toObject();
-      
+
       // Get comment count and latest comment
       const [commentCount, latestComment] = await Promise.all([
         Comment.countDocuments({ report: report._id }),
         Comment.findOne({ report: report._id })
           .sort({ createdAt: -1 })
-          .populate("user", "username")
+          .populate("user", "username"),
       ]);
 
       // Add comment info as additional properties
       reportObj._commentCount = commentCount;
-      reportObj._latestComment = latestComment ? {
-        content: latestComment.content,
-        createdAt: latestComment.createdAt,
-        user: latestComment.user
-      } : null;
+      reportObj._latestComment = latestComment
+        ? {
+            content: latestComment.content,
+            createdAt: latestComment.createdAt,
+            user: latestComment.user,
+          }
+        : null;
 
       // Handle anonymous reports
       if (report.isAnonymous) {
@@ -210,7 +212,9 @@ const getReport = asyncErrorHandler(async (req, res) => {
     .populate("downvotes", "_id");
 
   if (!report) {
-    return res.status(404).json({ success: false, error: "Post does not exist!" });
+    return res
+      .status(404)
+      .json({ success: false, error: "Post does not exist!" });
   }
 
   // Get all comments for this report
@@ -238,7 +242,11 @@ const getReport = asyncErrorHandler(async (req, res) => {
 });
 
 // * UPDATED createReport with fixed ImgBB integration for express-fileupload
-const ALLOWED_REPORT_TYPES = ["Stagnant Water", "Uncollected Garbage or Trash", "Others"];
+const ALLOWED_REPORT_TYPES = [
+  "Stagnant Water",
+  "Uncollected Garbage or Trash",
+  "Others",
+];
 const createReport = asyncErrorHandler(async (req, res) => {
   console.log("[DEBUG] REQ BODY:", req.body);
   console.log("[DEBUG] REQ FILES:", req.files);
@@ -604,6 +612,11 @@ const downvoteReport = asyncErrorHandler(async (req, res) => {
   }
 
   await report.save();
+
+  // Debug log
+  console.log(`[DOWNVOTE] Report ID: ${id}`);
+  console.log(`[DOWNVOTE] Upvotes:`, report.upvotes);
+  console.log(`[DOWNVOTE] Downvotes:`, report.downvotes);
 
   res.status(200).json({
     upvotes: report.upvotes,

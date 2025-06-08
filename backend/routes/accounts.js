@@ -19,14 +19,10 @@ const {
   permanentlyDeleteAccount,
   updateProfilePhoto,
   getUserProfile,
-  getBasicProfile,
 } = require("../controllers/accountsController");
 
 // Profile photo upload (auth required, not superadmin)
 router.post("/profile-photo", auth, updateProfilePhoto);
-
-// Get basic profile info (no auth required)
-router.get("/basic/:id", getBasicProfile);
 
 // Get user profile (auth required)
 router.get("/profile/:id", auth, getUserProfile);

@@ -18,6 +18,12 @@ const {
 
 const router = express.Router();
 
+// Add a catch-all debug log for every request to this router
+router.use((req, res, next) => {
+  console.log(`[DEBUG] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Public routes (no auth)
 router.post("/nearby", getNearbyReports);
 router.get("/:postId/comments", getComments);
@@ -35,10 +41,10 @@ router.delete("/:id", deleteReport);
 router.patch("/:id", updateReportStatus);
 
 // Vote routes
-router.post("/:id/upvote", upvoteReport);
-router.post("/:id/downvote", downvoteReport);
-router.delete("/:id/upvote", removeUpvote);
-router.delete("/:id/downvote", removeDownvote);
+router.post("/:id/upvote", auth, upvoteReport);
+router.post("/:id/downvote", auth, downvoteReport);
+router.delete("/:id/upvote", auth, removeUpvote);
+router.delete("/:id/downvote", auth, removeDownvote);
 
 // Comment routes
 router.post("/:postId/comments", createComment);

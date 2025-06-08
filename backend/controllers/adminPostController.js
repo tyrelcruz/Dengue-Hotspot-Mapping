@@ -121,12 +121,15 @@ const createAdminPost = asyncErrorHandler(async (req, res) => {
 // Get all AdminPosts
 const getAllAdminPosts = asyncErrorHandler(async (req, res) => {
   const adminPosts = await AdminPost.find({}).sort({ createdAt: -1 });
-  console.log('Found admin posts:', adminPosts.length);
-  console.log('Posts:', adminPosts.map(post => ({
-    id: post._id,
-    title: post.title,
-    status: post.status
-  })));
+  console.log("Found admin posts:", adminPosts.length);
+  console.log(
+    "Posts:",
+    adminPosts.map((post) => ({
+      id: post._id,
+      title: post.title,
+      status: post.status,
+    }))
+  );
   res.status(200).json(adminPosts);
 });
 
@@ -150,7 +153,7 @@ const getAdminPost = asyncErrorHandler(async (req, res) => {
   // Add comments to the response
   const response = {
     ...adminPost.toObject(),
-    comments
+    comments,
   };
 
   res.status(200).json(response);
@@ -209,9 +212,9 @@ const deleteAdminPost = asyncErrorHandler(async (req, res) => {
   adminPost.status = "archived";
   await adminPost.save();
 
-  res.status(200).json({ 
+  res.status(200).json({
     message: "AdminPost has been archived successfully.",
-    post: adminPost
+    post: adminPost,
   });
 });
 
@@ -219,11 +222,10 @@ const deleteAdminPost = asyncErrorHandler(async (req, res) => {
 const deleteAllAdminPosts = async (req, res) => {
   try {
     // Update all posts to archived status
-    await AdminPost.updateMany(
-      { status: "active" },
-      { status: "archived" }
-    );
-    res.json({ message: "All active admin posts have been archived successfully" });
+    await AdminPost.updateMany({ status: "active" }, { status: "archived" });
+    res.json({
+      message: "All active admin posts have been archived successfully",
+    });
   } catch (error) {
     console.error("Error archiving admin posts:", error);
     res.status(500).json({ error: "Failed to archive admin posts" });
@@ -235,8 +237,13 @@ const upvoteAdminPost = asyncErrorHandler(async (req, res) => {
   const { id } = req.params;
   const userId = req.user.userId;
 
+  console.log(
+    `[ADMIN UPVOTE] Attempting to upvote admin post ${id} by user ${userId}`
+  );
+
   const adminPost = await AdminPost.findById(id);
   if (!adminPost) {
+    console.log(`[ADMIN UPVOTE] Admin post not found: ${id}`);
     return res.status(404).json({ error: "Admin post not found" });
   }
 
@@ -251,7 +258,15 @@ const upvoteAdminPost = asyncErrorHandler(async (req, res) => {
   }
 
   await adminPost.save();
-  res.status(200).json(adminPost);
+
+  // Return consistent data structure
+  res.status(200).json({
+    _id: adminPost._id,
+    upvotes: adminPost.upvotes,
+    downvotes: adminPost.downvotes,
+    upvoteCount: adminPost.upvotes.length,
+    downvoteCount: adminPost.downvotes.length,
+  });
 });
 
 // Downvote an admin post
@@ -259,8 +274,13 @@ const downvoteAdminPost = asyncErrorHandler(async (req, res) => {
   const { id } = req.params;
   const userId = req.user.userId;
 
+  console.log(
+    `[ADMIN DOWNVOTE] Attempting to downvote admin post ${id} by user ${userId}`
+  );
+
   const adminPost = await AdminPost.findById(id);
   if (!adminPost) {
+    console.log(`[ADMIN DOWNVOTE] Admin post not found: ${id}`);
     return res.status(404).json({ error: "Admin post not found" });
   }
 
@@ -275,7 +295,15 @@ const downvoteAdminPost = asyncErrorHandler(async (req, res) => {
   }
 
   await adminPost.save();
-  res.status(200).json(adminPost);
+
+  // Return consistent data structure
+  res.status(200).json({
+    _id: adminPost._id,
+    upvotes: adminPost.upvotes,
+    downvotes: adminPost.downvotes,
+    upvoteCount: adminPost.upvotes.length,
+    downvoteCount: adminPost.downvotes.length,
+  });
 });
 
 // Remove upvote from an admin post
@@ -294,7 +322,14 @@ const removeUpvote = asyncErrorHandler(async (req, res) => {
   );
   await adminPost.save();
 
-  res.status(200).json(adminPost);
+  // Return consistent data structure
+  res.status(200).json({
+    _id: adminPost._id,
+    upvotes: adminPost.upvotes,
+    downvotes: adminPost.downvotes,
+    upvoteCount: adminPost.upvotes.length,
+    downvoteCount: adminPost.downvotes.length,
+  });
 });
 
 // Remove downvote from an admin post
@@ -313,7 +348,14 @@ const removeDownvote = asyncErrorHandler(async (req, res) => {
   );
   await adminPost.save();
 
-  res.status(200).json(adminPost);
+  // Return consistent data structure
+  res.status(200).json({
+    _id: adminPost._id,
+    upvotes: adminPost.upvotes,
+    downvotes: adminPost.downvotes,
+    upvoteCount: adminPost.upvotes.length,
+    downvoteCount: adminPost.downvotes.length,
+  });
 });
 
 module.exports = {
@@ -326,5 +368,5 @@ module.exports = {
   upvoteAdminPost,
   downvoteAdminPost,
   removeUpvote,
-  removeDownvote
+  removeDownvote,
 };

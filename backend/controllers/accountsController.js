@@ -594,7 +594,7 @@ const getUserProfile = async (req, res) => {
 
     // Get user's reports with images
     const reports = await Report.find({ user: id })
-      .select("_id description date_and_time status report_type images upvotes downvotes barangay")
+      .select("_id description date_and_time status report_type images upvotes downvotes")
       .sort({ createdAt: -1 });
 
     // Get user's comments
@@ -606,9 +606,13 @@ const getUserProfile = async (req, res) => {
     const totalReports = reports.length;
     const totalComments = comments.length;
     
-    // Calculate total upvotes and downvotes from reports only
+    // Calculate total upvotes and downvotes from reports
     const reportUpvotes = reports.reduce((sum, report) => sum + report.upvotes.length, 0);
     const reportDownvotes = reports.reduce((sum, report) => sum + report.downvotes.length, 0);
+    
+    // Calculate total upvotes and downvotes from comments
+    const commentUpvotes = comments.reduce((sum, comment) => sum + comment.upvotes.length, 0);
+    const commentDownvotes = comments.reduce((sum, comment) => sum + comment.downvotes.length, 0);
 
     // Organize reports by status
     const reportsByStatus = {
@@ -627,8 +631,7 @@ const getUserProfile = async (req, res) => {
             status: report.status,
             reportId: report._id,
             reportType: report.report_type,
-            dateReported: report.date_and_time,
-            barangay: report.barangay
+            dateReported: report.date_and_time
           });
         });
       }
@@ -655,8 +658,8 @@ const getUserProfile = async (req, res) => {
       statistics: {
         totalReports,
         totalComments,
-        totalUpvotes: reportUpvotes,  // Only report upvotes
-        totalDownvotes: reportDownvotes,  // Only report downvotes
+        totalUpvotes: reportUpvotes + commentUpvotes,
+        totalDownvotes: reportDownvotes + commentDownvotes,
         totalPhotos: allImages.length,
         reportsByStatus: {
           Pending: reportsByStatus.Pending.length,
@@ -680,30 +683,6 @@ const getUserProfile = async (req, res) => {
   }
 };
 
-// Get basic profile info (username and profile picture)
-const getBasicProfile = async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid account ID format." });
-    }
-
-    const account = await Account.findById(id).select("username profilePhotoUrl");
-
-    if (!account) {
-      return res.status(404).json({ error: "Account not found." });
-    }
-
-    res.status(200).json({
-      username: account.username,
-      profilePhotoUrl: account.profilePhotoUrl
-    });
-  } catch (error) {
-    console.error("Error fetching basic profile:", error);
-    res.status(500).json({ error: "Failed to fetch basic profile information." });
-  }
-};
-
 module.exports = {
   getAllAccounts,
   getAccountsByType,
@@ -721,5 +700,4 @@ module.exports = {
   permanentlyDeleteAccount,
   updateProfilePhoto,
   getUserProfile,
-  getBasicProfile,
 };
