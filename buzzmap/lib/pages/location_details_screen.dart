@@ -15,6 +15,7 @@ import 'package:buzzmap/providers/vote_provider.dart';
 import 'package:buzzmap/providers/post_provider.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'package:buzzmap/widgets/post_detail_screen.dart';
 
 class LocationDetailsScreen extends StatefulWidget {
   final String location;
@@ -67,11 +68,20 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     super.initState();
     print('DEBUG: initState called');
     _loadCurrentUsername();
-    _initializeScreen();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _initializeScreen();
+    });
   }
 
   Future<void> _initializeScreen() async {
     print('DEBUG: Starting screen initialization');
+    // Load posts first
+    await Provider.of<PostProvider>(context, listen: false).fetchPosts();
+    // Initialize VoteProvider and refresh votes
+    final voteProvider = Provider.of<VoteProvider>(context, listen: false);
+    print('DEBUG: VoteProvider initialized');
+    await voteProvider.refreshAllVotes();
+    print('DEBUG: All votes refreshed');
     await _loadCustomMarkerIcons();
     print('DEBUG: Custom icons loaded, proceeding with data load');
     await _loadDengueData();
@@ -334,10 +344,53 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   }
 
   List<Map<String, dynamic>> get _barangayPosts {
-    return Provider.of<PostProvider>(context)
-        .posts
-        .where((post) => post['barangay'] == widget.location)
+    final posts = Provider.of<PostProvider>(context).posts;
+    print('DEBUG: Total posts available: ${posts.length}');
+    final filteredPosts = posts
+        .where((post) {
+          final postLocation = post['barangay']?.toString().toLowerCase() ?? '';
+          final targetLocation = widget.location.toLowerCase();
+          final status = post['status']?.toString().toLowerCase() ?? '';
+          final isVerified = status == 'validated';
+          final matches = postLocation == targetLocation && isVerified;
+          print(
+              'DEBUG: Comparing post location: $postLocation with target: $targetLocation - Match: $matches');
+          print('DEBUG: Post status: $status, isVerified: $isVerified');
+          if (matches) {
+            print('DEBUG: Post data for matched post: $post');
+            print('DEBUG: Post ID: ${post['id'] ?? post['_id']}');
+            print('DEBUG: Upvotes: ${post['numUpvotes']}');
+            print('DEBUG: Downvotes: ${post['numDownvotes']}');
+          }
+          return matches;
+        })
+        .map((post) {
+          // Ensure all required fields are present and valid
+          final Map<String, dynamic> enhancedPost =
+              Map<String, dynamic>.from(post);
+
+          // Ensure post ID is present and valid - check both 'id' and '_id' fields
+          final postId = post['id']?.toString() ?? post['_id']?.toString();
+          if (postId == null || postId.isEmpty) {
+            print('WARNING: Post has no ID: $post');
+            return null;
+          }
+
+          enhancedPost['_id'] = postId; // Use _id consistently
+          enhancedPost['numUpvotes'] = post['numUpvotes'] ?? 0;
+          enhancedPost['numDownvotes'] = post['numDownvotes'] ?? 0;
+          enhancedPost['upvotes'] = post['upvotes'] ?? [];
+          enhancedPost['downvotes'] = post['downvotes'] ?? [];
+          enhancedPost['_commentCount'] = post['commentCount'] ?? 0;
+          return enhancedPost;
+        })
+        .where((post) => post != null)
+        .cast<Map<String, dynamic>>()
         .toList();
+
+    print(
+        'DEBUG: Filtered verified posts for ${widget.location}: ${filteredPosts.length}');
+    return filteredPosts;
   }
 
   @override
@@ -551,54 +604,116 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                             if (postProvider.isLoading)
                               const Center(child: CircularProgressIndicator())
                             else if (_barangayPosts.isEmpty)
-                              const Center(
-                                  child:
-                                      Text('No reports for this barangay yet.'))
+                              Center(
+                                child: Text(
+                                  'No reports yet for this location',
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                ),
+                              )
                             else
-                              ..._barangayPosts.map((report) => Container(
-                                    margin: const EdgeInsets.only(bottom: 16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(20),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.05),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 3),
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _barangayPosts.length,
+                                itemBuilder: (context, index) {
+                                  final report = _barangayPosts[index];
+                                  // Ensure the post data includes the comment count
+                                  final postData =
+                                      Map<String, dynamic>.from(report);
+                                  postData['_commentCount'] =
+                                      report['commentCount'] ?? 0;
+
+                                  // Debug logging
+                                  print(
+                                      'DEBUG: Post ID in location details: ${postData['_id']}');
+                                  print('DEBUG: Full post data: $postData');
+                                  print(
+                                      'DEBUG: Post ID type: ${postData['_id']?.runtimeType}');
+                                  print(
+                                      'DEBUG: Post ID string value: ${postData['_id']?.toString()}');
+
+                                  // Validate post ID
+                                  final postId = postData['_id']?.toString();
+                                  if (postId == null || postId.isEmpty) {
+                                    print('ERROR: Invalid post ID in PostCard');
+                                    return const SizedBox
+                                        .shrink(); // Don't show posts without IDs
+                                  }
+
+                                  return GestureDetector(
+                                    onTap: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              PostDetailScreen(post: postData),
                                         ),
-                                      ],
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 16, horizontal: 16),
+                                      );
+                                      setState(
+                                          () {}); // Refresh EngagementRow/comment count
+                                    },
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.08),
+                                            blurRadius: 12,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
                                       child: PostCard(
+                                        key: ValueKey(postId),
+                                        post: postData,
                                         username:
-                                            report['username'] ?? 'Anonymous',
-                                        whenPosted:
-                                            report['whenPosted'] ?? 'Just now',
-                                        location: report['location'] ??
-                                            'Unknown Location',
-                                        date: report['date'] ?? 'N/A',
-                                        time: report['time'] ?? 'N/A',
-                                        reportType:
-                                            report['reportType'] ?? 'General',
-                                        description: report['description'] ??
+                                            postData['username']?.toString() ??
+                                                'Anonymous',
+                                        whenPosted: postData['whenPosted']
+                                                ?.toString() ??
+                                            'Just now',
+                                        location:
+                                            postData['location']?.toString() ??
+                                                'Unknown Location',
+                                        date: postData['date']?.toString() ??
+                                            'N/A',
+                                        time: postData['time']?.toString() ??
+                                            'N/A',
+                                        reportType: postData['reportType']
+                                                ?.toString() ??
+                                            'General',
+                                        description: postData['description']
+                                                ?.toString() ??
                                             'No description provided',
-                                        numUpvotes: report['numUpvotes'] ?? 0,
-                                        numDownvotes:
-                                            report['numDownvotes'] ?? 0,
-                                        images: List<String>.from(
-                                            report['images'] ?? []),
-                                        iconUrl: report['iconUrl'] ??
+                                        numUpvotes:
+                                            (postData['numUpvotes'] as int?) ??
+                                                0,
+                                        numDownvotes: (postData['numDownvotes']
+                                                as int?) ??
+                                            0,
+                                        images: (postData['images']
+                                                    as List<dynamic>?)
+                                                ?.map((e) => e.toString())
+                                                .toList() ??
+                                            [],
+                                        iconUrl: postData['iconUrl'] ??
                                             'assets/icons/person_1.svg',
                                         type: 'bordered',
-                                        postId: report['id'] ?? '',
+                                        postId: postId,
                                         isOwner:
-                                            report['email'] == _currentUsername,
-                                        post: report,
+                                            postData['userId']?.toString() ==
+                                                _currentUsername,
+                                        showDistance: false,
+                                        onReport: () => _reportPost(postData),
+                                        onDelete: () => _deletePost(postData),
                                       ),
                                     ),
-                                  )),
+                                  );
+                                },
+                              ),
                           ],
                         ),
                       ),
@@ -1115,5 +1230,15 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       default:
         return Colors.grey;
     }
+  }
+
+  void _reportPost(Map<String, dynamic> post) {
+    // Implement report functionality
+    print('Report post: ${post['_id']}');
+  }
+
+  void _deletePost(Map<String, dynamic> post) {
+    // Implement delete functionality
+    print('Delete post: ${post['_id']}');
   }
 }

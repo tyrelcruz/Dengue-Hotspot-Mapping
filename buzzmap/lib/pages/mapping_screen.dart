@@ -1905,16 +1905,17 @@ class _MappingScreenState extends State<MappingScreen>
         onChanged: (value) {
           setState(() {
             if (value) {
-              // If turning on Report Markers, ensure Borders stay enabled
-              if (optionKey == 'Markers') {
-                _layerOptions['Borders'] = true;
-              }
-              // Turn off other options except Borders
+              // If turning on a layer, turn off other layers except Borders
               _layerOptions.forEach((key, _) {
                 if (key != 'Borders') {
                   _layerOptions[key] = false;
                 }
               });
+
+              // If turning on Markers or Interventions, ensure Borders stay enabled
+              if (optionKey == 'Markers' || optionKey == 'Interventions') {
+                _layerOptions['Borders'] = true;
+              }
             }
             // Set the selected option
             _layerOptions[optionKey] = value;

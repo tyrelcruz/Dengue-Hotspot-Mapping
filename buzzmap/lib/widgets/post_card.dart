@@ -66,7 +66,7 @@ class PostCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final iconColor = isDark ? Colors.white : Colors.black;
 
-    final postIdStr = (post['_id'] ?? post['id'])?.toString() ?? '';
+    final postIdStr = postId;
     print('PostCard debug: postId=$postIdStr full post=$post');
 
     return Column(
@@ -164,25 +164,16 @@ class PostCard extends StatelessWidget {
             ],
           ),
         ),
-        if (postIdStr.isEmpty)
-          Builder(
-            builder: (context) {
-              print('Warning: PostCard has empty postId for post: $post');
-              return const SizedBox.shrink();
-            },
-          )
-        else
-          Builder(
-            builder: (context) => EngagementRow(
-              key: ValueKey('engagement_$postIdStr'),
-              postId: postIdStr,
-              post: post,
-              initialUpvotes: numUpvotes,
-              initialDownvotes: numDownvotes,
-              isAdminPost: false,
-              themeMode: 'light',
-            ),
-          ),
+        // Engagement Row
+        EngagementRow(
+          key: ValueKey('engagement_$postIdStr'),
+          postId: postIdStr,
+          post: post,
+          initialUpvotes: numUpvotes,
+          initialDownvotes: numDownvotes,
+          isAdminPost: false,
+          themeMode: 'light',
+        ),
       ],
     );
   }

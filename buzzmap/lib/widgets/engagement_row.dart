@@ -90,6 +90,14 @@ class _EngagementRowState extends State<EngagementRow> {
     setState(() => _isLoading = true);
 
     try {
+      // Check if the auth token is still valid
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken');
+
+      if (token == null) {
+        throw Exception('Authentication token not found');
+      }
+
       if (voteType == 'upvote') {
         if (voteProvider.isUpvoted(widget.postId)) {
           await voteProvider.removeUpvote(widget.postId,
@@ -112,7 +120,10 @@ class _EngagementRowState extends State<EngagementRow> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error voting: $e')),
+          SnackBar(
+            content: Text('Error voting: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -212,6 +223,7 @@ class _EngagementRowState extends State<EngagementRow> {
               // Comment Button
               TextButton.icon(
                 onPressed: () {
+                  print('DEBUG: Opening post details for post: ${widget.post}');
                   Navigator.push(
                     context,
                     MaterialPageRoute(

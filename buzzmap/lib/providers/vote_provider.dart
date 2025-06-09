@@ -224,26 +224,40 @@ class VoteProvider with ChangeNotifier {
     }
 
     if (_prefs == null) {
+      print('VoteProvider: SharedPreferences not initialized');
       return;
     }
 
     try {
       _isLoading = true;
+      final token = _prefs!.getString('authToken');
+      final userId = _prefs!.getString('userId');
+
+      print('VoteProvider: Attempting to upvote post $postId');
+      print('VoteProvider: Auth token present: ${token != null}');
+      print('VoteProvider: User ID: $userId');
 
       final endpoint = isAdminPost ? 'adminPosts' : 'reports';
+      final url = '${Config.baseUrl}/api/v1/$endpoint/$postId/upvote';
+      print('VoteProvider: Calling endpoint: $url');
+
       final response = await http.post(
-        Uri.parse('${Config.baseUrl}/api/v1/$endpoint/$postId/upvote'),
+        Uri.parse(url),
         headers: {
-          'Authorization': 'Bearer ${_prefs!.getString('authToken')}',
+          'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
         },
       );
 
+      print('VoteProvider: Response status code: ${response.statusCode}');
+      print('VoteProvider: Response body: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final userId = _prefs!.getString('userId');
-
-        if (userId == null) return;
+        if (userId == null) {
+          print('VoteProvider: No user ID found');
+          return;
+        }
 
         // Debug prints
         print('VoteProvider upvotePost response: $data');
@@ -271,6 +285,9 @@ class VoteProvider with ChangeNotifier {
 
         notifyListeners();
       } else {
+        print(
+            'VoteProvider: Failed to upvote. Status code: ${response.statusCode}');
+        print('VoteProvider: Response body: ${response.body}');
         throw Exception('Failed to upvote post: ${response.body}');
       }
     } catch (e) {

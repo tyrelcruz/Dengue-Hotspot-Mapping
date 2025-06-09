@@ -57,124 +57,138 @@ class AdminPostDetailScreen extends StatelessWidget {
         elevation: 0,
       ),
       backgroundColor: Colors.white,
-      body: ListView(
-        padding: EdgeInsets.zero,
+      body: Stack(
         children: [
-          // User info
-          Padding(
-            padding: const EdgeInsets.only(top: 16, bottom: 8),
-            child: Card(
-              color: theme.colorScheme.primary,
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    UserInfoRow(
-                      type: 'announcement',
-                      title:
-                          'Quezon City Surveillance and Epidemiology Division',
-                      subtitle: _formatDate(publishDate),
-                      iconUrl: 'assets/icons/surveillance_logo.svg',
-                    ),
-                    const SizedBox(height: 12),
-                    // Title
-                    Text.rich(
-                      TextSpan(
-                        children: [
-                          const TextSpan(
-                            text: '🚨 ',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
+          ListView(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 80,
+            ),
+            children: [
+              // User info
+              Padding(
+                padding: const EdgeInsets.only(top: 16, bottom: 8),
+                child: Card(
+                  color: theme.colorScheme.primary,
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        UserInfoRow(
+                          type: 'announcement',
+                          title:
+                              'Quezon City Surveillance and Epidemiology Division',
+                          subtitle: _formatDate(publishDate),
+                          iconUrl: 'assets/icons/surveillance_logo.svg',
+                        ),
+                        const SizedBox(height: 12),
+                        // Title
+                        Text.rich(
                           TextSpan(
-                            text: title,
-                            style: const TextStyle(
-                              fontSize: 19,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const TextSpan(
-                            text: ' 🚨',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    // Content
-                    Text(
-                      content,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: Colors.white,
-                      ),
-                    ),
-                    if (references.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          'Source: $references',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontStyle: FontStyle.italic,
-                            color: Colors.black54,
+                            children: [
+                              const TextSpan(
+                                text: '🚨 ',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              TextSpan(
+                                text: title,
+                                style: const TextStyle(
+                                  fontSize: 19,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const TextSpan(
+                                text: ' 🚨',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    // Edge-to-edge image(s)
-                    if (validImages.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: SizedBox(
-                          height: 240,
-                          width: double.infinity,
-                          child: PageView.builder(
-                            itemCount: validImages.length,
-                            itemBuilder: (context, index) {
-                              return CachedNetworkImage(
-                                imageUrl: validImages[index],
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              );
-                            },
+                        const SizedBox(height: 8),
+                        // Content
+                        Text(
+                          content,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: Colors.white,
                           ),
                         ),
-                      ),
-                  ],
+                        if (references.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Source: $references',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontStyle: FontStyle.italic,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ),
+                        // Edge-to-edge image(s)
+                        if (validImages.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: SizedBox(
+                              height: 240,
+                              width: double.infinity,
+                              child: PageView.builder(
+                                itemCount: validImages.length,
+                                itemBuilder: (context, index) {
+                                  return CachedNetworkImage(
+                                    imageUrl: validImages[index],
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
+              // Engagement row
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+                child: EngagementRow(
+                  postId: postId,
+                  post: post,
+                  initialUpvotes: numUpvotes,
+                  initialDownvotes: numDownvotes,
+                  isAdminPost: true,
+                  themeMode: 'light',
+                  forceWhiteIcons: false,
+                ),
+              ),
+              // Comments section
+              CommentsSection(postId: postId),
+              const SizedBox(height: 8),
+            ],
           ),
-          // Engagement row
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-            child: EngagementRow(
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: CommentInputBar(
               postId: postId,
-              post: post,
-              initialUpvotes: numUpvotes,
-              initialDownvotes: numDownvotes,
-              isAdminPost: true,
-              themeMode: 'light',
-              forceWhiteIcons: false,
+              userName: 'You',
             ),
           ),
-          // Comments section
-          CommentsSection(postId: postId),
-          const SizedBox(height: 8),
         ],
       ),
-      bottomNavigationBar: CommentInputBar(postId: postId, userName: 'You'),
     );
   }
 
@@ -525,10 +539,12 @@ class CommentInputBar extends StatefulWidget {
 class _CommentInputBarState extends State<CommentInputBar> {
   final TextEditingController _controller = TextEditingController();
   bool isPosting = false;
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -564,6 +580,7 @@ class _CommentInputBarState extends State<CommentInputBar> {
 
       if (response.statusCode == 201) {
         _controller.clear();
+        _focusNode.unfocus();
         // Refresh comments
         if (context.mounted) {
           final commentsSection =
@@ -606,7 +623,12 @@ class _CommentInputBarState extends State<CommentInputBar> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: EdgeInsets.only(
+        left: 8,
+        right: 8,
+        top: 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 8,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -622,11 +644,15 @@ class _CommentInputBarState extends State<CommentInputBar> {
           Expanded(
             child: TextField(
               controller: _controller,
+              focusNode: _focusNode,
               decoration: const InputDecoration(
                 hintText: 'Add a comment...',
                 border: InputBorder.none,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
               maxLines: null,
+              textInputAction: TextInputAction.newline,
             ),
           ),
           IconButton(

@@ -818,541 +818,785 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final customColors = Theme.of(context).extension<CustomColors>();
+    final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    final availableHeight = screenHeight - keyboardHeight;
+    final cardHeight = 0.0; // Height of the description card
+    final cardTop = (availableHeight - cardHeight) /
+        2; // Center the card in available space
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        title: Text(
-          'Create Post',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.black,
-          ),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          color: Colors.black,
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        iconTheme: const IconThemeData(color: Colors.black),
-        elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      body: Stack(
+        children: [
+          // Main content
+          Column(
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 45,
-                    height: 45,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.grey.shade200,
-                    ),
-                    child: ClipOval(
-                      child: _profilePhotoUrl != null &&
-                              _profilePhotoUrl!.isNotEmpty
-                          ? Image.network(
-                              _profilePhotoUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  SvgPicture.asset('assets/icons/person_1.svg',
-                                      fit: BoxFit.cover),
-                            )
-                          : SvgPicture.asset('assets/icons/person_1.svg',
-                              fit: BoxFit.cover),
-                    ),
+              // Custom AppBar
+              AppBar(
+                backgroundColor: Colors.white,
+                title: Text(
+                  'Create Post',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
+                ),
+                leading: IconButton(
+                  icon: const Icon(Icons.close),
+                  color: Colors.black,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                iconTheme: const IconThemeData(color: Colors.black),
+                elevation: 0,
+              ),
+              // Rest of the content
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('📍 Location:',
-                            style: theme.textTheme.titleSmall
-                                ?.copyWith(color: theme.colorScheme.primary)),
-                        const SizedBox(height: 10),
-                        _buildBarangayDropdown(context),
-                        const SizedBox(height: 8),
-                        Stack(
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            ClipRect(
-                              child: SizedBox(
-                                height: 200,
-                                child: Stack(
-                                  children: [
-                                    Listener(
-                                      onPointerDown: (_) =>
-                                          _disableMapScrolling(),
-                                      onPointerUp: (_) => _enableMapScrolling(),
-                                      child: AbsorbPointer(
-                                        absorbing: false,
-                                        child: GoogleMap(
-                                          polygons: _barangayPolygons,
-                                          onMapCreated: (controller) {
-                                            mapController = controller;
-                                          },
-                                          initialCameraPosition: CameraPosition(
-                                            target: selectedCoordinates ??
-                                                const LatLng(14.6700, 121.0437),
-                                            zoom: 11.8,
-                                          ),
-                                          onTap: (LatLng pos) async {
-                                            if (!_isPointInsideBarangay(pos)) {
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
-                                                const SnackBar(
-                                                  content: Text(
-                                                      'Outside Quezon City'),
-                                                  backgroundColor:
-                                                      Colors.redAccent,
-                                                  duration:
-                                                      Duration(seconds: 2),
+                            Container(
+                              width: 45,
+                              height: 45,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.grey.shade200,
+                              ),
+                              child: ClipOval(
+                                child: _profilePhotoUrl != null &&
+                                        _profilePhotoUrl!.isNotEmpty
+                                    ? Image.network(
+                                        _profilePhotoUrl!,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                SvgPicture.asset(
+                                                    'assets/icons/person_1.svg',
+                                                    fit: BoxFit.cover),
+                                      )
+                                    : SvgPicture.asset(
+                                        'assets/icons/person_1.svg',
+                                        fit: BoxFit.cover),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('📍 Location:',
+                                      style: theme.textTheme.titleSmall
+                                          ?.copyWith(
+                                              color:
+                                                  theme.colorScheme.primary)),
+                                  const SizedBox(height: 10),
+                                  _buildBarangayDropdown(context),
+                                  const SizedBox(height: 8),
+                                  Stack(
+                                    children: [
+                                      ClipRect(
+                                        child: SizedBox(
+                                          height: 200,
+                                          child: Stack(
+                                            children: [
+                                              Listener(
+                                                onPointerDown: (_) =>
+                                                    _disableMapScrolling(),
+                                                onPointerUp: (_) =>
+                                                    _enableMapScrolling(),
+                                                child: AbsorbPointer(
+                                                  absorbing: false,
+                                                  child: GoogleMap(
+                                                    polygons: _barangayPolygons,
+                                                    onMapCreated: (controller) {
+                                                      mapController =
+                                                          controller;
+                                                    },
+                                                    initialCameraPosition:
+                                                        CameraPosition(
+                                                      target:
+                                                          selectedCoordinates ??
+                                                              const LatLng(
+                                                                  14.6700,
+                                                                  121.0437),
+                                                      zoom: 11.8,
+                                                    ),
+                                                    onTap: (LatLng pos) async {
+                                                      if (!_isPointInsideBarangay(
+                                                          pos)) {
+                                                        ScaffoldMessenger.of(
+                                                                context)
+                                                            .showSnackBar(
+                                                          const SnackBar(
+                                                            content: Text(
+                                                                'Outside Quezon City'),
+                                                            backgroundColor:
+                                                                Colors
+                                                                    .redAccent,
+                                                            duration: Duration(
+                                                                seconds: 2),
+                                                          ),
+                                                        );
+                                                        return;
+                                                      }
+
+                                                      if (_showMapTutorial) {
+                                                        print(
+                                                            'Starting fade animation'); // Debug print
+                                                        await _fadeController
+                                                            .forward();
+                                                        print(
+                                                            'Fade animation completed'); // Debug print
+                                                        if (mounted) {
+                                                          setState(() {
+                                                            _showMapTutorial =
+                                                                false;
+                                                          });
+                                                        }
+                                                      }
+
+                                                      setState(() {
+                                                        selectedCoordinates =
+                                                            pos;
+                                                      });
+
+                                                      try {
+                                                        List<Placemark>
+                                                            placemarks =
+                                                            await placemarkFromCoordinates(
+                                                                pos.latitude,
+                                                                pos.longitude);
+
+                                                        if (placemarks
+                                                            .isNotEmpty) {
+                                                          final place =
+                                                              placemarks.first;
+                                                          setState(() {
+                                                            selectedAddress =
+                                                                '${place.name}, ${place.subLocality}, ${place.locality}';
+                                                            selectedBarangay =
+                                                                place
+                                                                    .subLocality;
+                                                            selectedDistrict =
+                                                                guessDistrictFromBarangay(
+                                                                    place
+                                                                        .subLocality);
+                                                          });
+                                                        } else {
+                                                          // If no placemarks found, try to find the nearest barangay
+                                                          String?
+                                                              nearestBarangay =
+                                                              _findNearestBarangay(
+                                                                  pos);
+                                                          if (nearestBarangay !=
+                                                              null) {
+                                                            setState(() {
+                                                              selectedBarangay =
+                                                                  nearestBarangay;
+                                                              selectedDistrict =
+                                                                  guessDistrictFromBarangay(
+                                                                      nearestBarangay);
+                                                              selectedAddress =
+                                                                  'Near $nearestBarangay';
+                                                            });
+                                                          } else {
+                                                            setState(() {
+                                                              selectedAddress =
+                                                                  'Selected Location';
+                                                              selectedBarangay =
+                                                                  null;
+                                                              selectedDistrict =
+                                                                  null;
+                                                            });
+                                                          }
+                                                        }
+                                                      } catch (e) {
+                                                        print(
+                                                            "Reverse geocoding error: $e");
+                                                        // Try to find the nearest barangay as fallback
+                                                        String?
+                                                            nearestBarangay =
+                                                            _findNearestBarangay(
+                                                                pos);
+                                                        if (nearestBarangay !=
+                                                            null) {
+                                                          setState(() {
+                                                            selectedBarangay =
+                                                                nearestBarangay;
+                                                            selectedDistrict =
+                                                                guessDistrictFromBarangay(
+                                                                    nearestBarangay);
+                                                            selectedAddress =
+                                                                'Near $nearestBarangay';
+                                                          });
+                                                        } else {
+                                                          setState(() {
+                                                            selectedAddress =
+                                                                'Selected Location';
+                                                            selectedBarangay =
+                                                                null;
+                                                            selectedDistrict =
+                                                                null;
+                                                          });
+                                                        }
+                                                      }
+                                                    },
+                                                    markers:
+                                                        selectedCoordinates !=
+                                                                null
+                                                            ? {
+                                                                Marker(
+                                                                  markerId:
+                                                                      const MarkerId(
+                                                                          'selected'),
+                                                                  position:
+                                                                      selectedCoordinates!,
+                                                                )
+                                                              }
+                                                            : {},
+                                                    zoomGesturesEnabled: true,
+                                                    scrollGesturesEnabled: true,
+                                                    rotateGesturesEnabled: true,
+                                                    tiltGesturesEnabled: true,
+                                                    myLocationEnabled: true,
+                                                    myLocationButtonEnabled:
+                                                        true,
+                                                  ),
                                                 ),
-                                              );
-                                              return;
-                                            }
-
-                                            if (_showMapTutorial) {
-                                              print(
-                                                  'Starting fade animation'); // Debug print
-                                              await _fadeController.forward();
-                                              print(
-                                                  'Fade animation completed'); // Debug print
-                                              if (mounted) {
-                                                setState(() {
-                                                  _showMapTutorial = false;
-                                                });
-                                              }
-                                            }
-
-                                            setState(() {
-                                              selectedCoordinates = pos;
-                                            });
-
-                                            try {
-                                              List<Placemark> placemarks =
-                                                  await placemarkFromCoordinates(
-                                                      pos.latitude,
-                                                      pos.longitude);
-
-                                              if (placemarks.isNotEmpty) {
-                                                final place = placemarks.first;
-                                                setState(() {
-                                                  selectedAddress =
-                                                      '${place.name}, ${place.subLocality}, ${place.locality}';
-                                                  selectedBarangay =
-                                                      place.subLocality;
-                                                  selectedDistrict =
-                                                      guessDistrictFromBarangay(
-                                                          place.subLocality);
-                                                });
-                                              } else {
-                                                // If no placemarks found, try to find the nearest barangay
-                                                String? nearestBarangay =
-                                                    _findNearestBarangay(pos);
-                                                if (nearestBarangay != null) {
-                                                  setState(() {
-                                                    selectedBarangay =
-                                                        nearestBarangay;
-                                                    selectedDistrict =
-                                                        guessDistrictFromBarangay(
-                                                            nearestBarangay);
-                                                    selectedAddress =
-                                                        'Near $nearestBarangay';
-                                                  });
-                                                } else {
-                                                  setState(() {
-                                                    selectedAddress =
-                                                        'Selected Location';
-                                                    selectedBarangay = null;
-                                                    selectedDistrict = null;
-                                                  });
-                                                }
-                                              }
-                                            } catch (e) {
-                                              print(
-                                                  "Reverse geocoding error: $e");
-                                              // Try to find the nearest barangay as fallback
-                                              String? nearestBarangay =
-                                                  _findNearestBarangay(pos);
-                                              if (nearestBarangay != null) {
-                                                setState(() {
-                                                  selectedBarangay =
-                                                      nearestBarangay;
-                                                  selectedDistrict =
-                                                      guessDistrictFromBarangay(
-                                                          nearestBarangay);
-                                                  selectedAddress =
-                                                      'Near $nearestBarangay';
-                                                });
-                                              } else {
-                                                setState(() {
-                                                  selectedAddress =
-                                                      'Selected Location';
-                                                  selectedBarangay = null;
-                                                  selectedDistrict = null;
-                                                });
-                                              }
-                                            }
-                                          },
-                                          markers: selectedCoordinates != null
-                                              ? {
-                                                  Marker(
-                                                    markerId: const MarkerId(
-                                                        'selected'),
-                                                    position:
-                                                        selectedCoordinates!,
-                                                  )
-                                                }
-                                              : {},
-                                          zoomGesturesEnabled: true,
-                                          scrollGesturesEnabled: true,
-                                          rotateGesturesEnabled: true,
-                                          tiltGesturesEnabled: true,
-                                          myLocationEnabled: true,
-                                          myLocationButtonEnabled: true,
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            // Tutorial overlay
-                            if (_showMapTutorial && selectedCoordinates == null)
-                              Positioned.fill(
-                                child: IgnorePointer(
-                                  child: Container(
-                                    alignment: Alignment.bottomCenter,
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        AnimatedBuilder(
-                                          animation: _pulseAnimation,
-                                          builder: (context, child) {
-                                            return Opacity(
-                                              opacity: _fadeAnimation.value,
-                                              child: Transform.scale(
-                                                scale: _pulseAnimation.value,
-                                                child: Container(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 8,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white
-                                                        .withOpacity(0.95),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            12),
-                                                    boxShadow: [
-                                                      BoxShadow(
-                                                        color: Colors.black12,
-                                                        blurRadius: 8,
-                                                        offset:
-                                                            const Offset(0, 2),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  child: Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      Icon(
-                                                        Icons.touch_app,
-                                                        size: 16,
-                                                        color: theme.colorScheme
-                                                            .primary,
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      Text(
-                                                        'Tap the map to select your location',
-                                                        style: theme
-                                                            .textTheme.bodySmall
-                                                            ?.copyWith(
-                                                          color: theme
-                                                              .colorScheme
-                                                              .primary,
-                                                          fontWeight:
-                                                              FontWeight.w600,
+                                      // Tutorial overlay
+                                      if (_showMapTutorial &&
+                                          selectedCoordinates == null)
+                                        Positioned.fill(
+                                          child: IgnorePointer(
+                                            child: Container(
+                                              alignment: Alignment.bottomCenter,
+                                              child: Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.end,
+                                                children: [
+                                                  AnimatedBuilder(
+                                                    animation: _pulseAnimation,
+                                                    builder: (context, child) {
+                                                      return Opacity(
+                                                        opacity: _fadeAnimation
+                                                            .value,
+                                                        child: Transform.scale(
+                                                          scale: _pulseAnimation
+                                                              .value,
+                                                          child: Container(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal: 12,
+                                                              vertical: 8,
+                                                            ),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: Colors
+                                                                  .white
+                                                                  .withOpacity(
+                                                                      0.95),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          12),
+                                                              boxShadow: [
+                                                                BoxShadow(
+                                                                  color: Colors
+                                                                      .black12,
+                                                                  blurRadius: 8,
+                                                                  offset:
+                                                                      const Offset(
+                                                                          0, 2),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                            child: Row(
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              children: [
+                                                                Icon(
+                                                                  Icons
+                                                                      .touch_app,
+                                                                  size: 16,
+                                                                  color: theme
+                                                                      .colorScheme
+                                                                      .primary,
+                                                                ),
+                                                                const SizedBox(
+                                                                    width: 8),
+                                                                Text(
+                                                                  'Tap the map to select your location',
+                                                                  style: theme
+                                                                      .textTheme
+                                                                      .bodySmall
+                                                                      ?.copyWith(
+                                                                    color: theme
+                                                                        .colorScheme
+                                                                        .primary,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
                                                         ),
-                                                      ),
-                                                    ],
+                                                      );
+                                                    },
                                                   ),
-                                                ),
+                                                  const SizedBox(height: 12),
+                                                ],
                                               ),
-                                            );
-                                          },
+                                            ),
+                                          ),
                                         ),
-                                        const SizedBox(height: 12),
-                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  IgnorePointer(
+                                    child: CustomTextField(
+                                      hintText: 'Selected Location',
+                                      isRequired: false,
+                                      suffixIcon: const Icon(
+                                          Icons.location_on_outlined),
+                                      controller: TextEditingController(
+                                          text: selectedAddress ?? ''),
                                     ),
                                   ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        IgnorePointer(
-                          child: CustomTextField(
-                            hintText: 'Selected Location',
-                            isRequired: false,
-                            suffixIcon: const Icon(Icons.location_on_outlined),
-                            controller: TextEditingController(
-                                text: selectedAddress ?? ''),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text('🕒 Date & Time:',
-                            style: theme.textTheme.titleSmall
-                                ?.copyWith(color: theme.colorScheme.primary)),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: CustomTextField(
-                                hintText: 'Date',
-                                isRequired: true,
-                                controller: dateController,
-                                isDate: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: CustomTextField(
-                                hintText: 'Time',
-                                isRequired: false,
-                                controller: timeController,
-                                isTime: true,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              onPressed: () {
-                                final now = DateTime.now();
-                                dateController.text =
-                                    DateFormat('MM-dd-yyyy').format(now);
-                                timeController.text =
-                                    DateFormat('h:mm a').format(now);
-                              },
-                              icon: Icon(Icons.access_time,
-                                  color: theme.colorScheme.primary),
-                              tooltip: 'Use current date and time',
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text('⚠ Report Type:',
-                            style: theme.textTheme.titleSmall
-                                ?.copyWith(color: theme.colorScheme.primary)),
-                        const SizedBox(height: 10),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: CustomTextField(
-                                hintText: 'Choose a Report Type',
-                                isRequired: true,
-                                suffixIcon:
-                                    const Icon(Icons.arrow_drop_down, size: 20),
-                                choices: reportTypes,
-                                onChanged: (value) {
-                                  setState(() {
-                                    selectedReportType = value;
-                                  });
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.info_outline,
-                                  color: Colors.blueGrey),
-                              tooltip: 'Report Type Info',
-                              onPressed: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text('Report Type Meanings'),
-                                    content: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            GestureDetector(
-                                              onTap: () {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (context) => Dialog(
-                                                    backgroundColor:
-                                                        Colors.transparent,
-                                                    child: InteractiveViewer(
-                                                      child: ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(16),
-                                                        child: Image.asset(
-                                                          'assets/images/BreedingPots.jpg',
-                                                          fit: BoxFit.contain,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                child: Image.asset(
-                                                  'assets/images/BreedingPots.jpg',
-                                                  width: 48,
-                                                  height: 48,
-                                                  fit: BoxFit.cover,
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            const Expanded(
-                                              child: Text(
-                                                'Breeding Site: A place where mosquitoes lay eggs (e.g., containers, tires, pots).',
-                                                style: TextStyle(fontSize: 14),
-                                              ),
-                                            ),
-                                          ],
+                                  const SizedBox(height: 8),
+                                  Text('🕒 Date & Time:',
+                                      style: theme.textTheme.titleSmall
+                                          ?.copyWith(
+                                              color:
+                                                  theme.colorScheme.primary)),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: CustomTextField(
+                                          hintText: 'Date',
+                                          isRequired: true,
+                                          controller: dateController,
+                                          isDate: true,
                                         ),
-                                        const SizedBox(height: 16),
-                                        Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            GestureDetector(
-                                              onTap: () {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (context) => Dialog(
-                                                    backgroundColor:
-                                                        Colors.transparent,
-                                                    child: InteractiveViewer(
-                                                      child: ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(16),
-                                                        child: Image.asset(
-                                                          'assets/images/standingwater.jpg',
-                                                          fit: BoxFit.contain,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                child: Image.asset(
-                                                  'assets/images/standingwater.jpg',
-                                                  width: 48,
-                                                  height: 48,
-                                                  fit: BoxFit.cover,
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            const Expanded(
-                                              child: Text(
-                                                'Standing Water: Any stagnant water that can become a mosquito habitat.',
-                                                style: TextStyle(fontSize: 14),
-                                              ),
-                                            ),
-                                          ],
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: CustomTextField(
+                                          hintText: 'Time',
+                                          isRequired: false,
+                                          controller: timeController,
+                                          isTime: true,
                                         ),
-                                        const SizedBox(height: 16),
-                                        Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            GestureDetector(
-                                              onTap: () {
-                                                showDialog(
-                                                  context: context,
-                                                  builder: (context) => Dialog(
-                                                    backgroundColor:
-                                                        Colors.transparent,
-                                                    child: InteractiveViewer(
-                                                      child: ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(16),
-                                                        child: Image.asset(
-                                                          'assets/images/infestation.jpg',
-                                                          fit: BoxFit.contain,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                child: Image.asset(
-                                                  'assets/images/infestation.jpg',
-                                                  width: 48,
-                                                  height: 48,
-                                                  fit: BoxFit.cover,
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            const Expanded(
-                                              child: Text(
-                                                'Infestation: An area with a high number of mosquitoes or larvae.',
-                                                style: TextStyle(fontSize: 14),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.of(context).pop(),
-                                        child: const Text('Close'),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        onPressed: () {
+                                          final now = DateTime.now();
+                                          dateController.text =
+                                              DateFormat('MM-dd-yyyy')
+                                                  .format(now);
+                                          timeController.text =
+                                              DateFormat('h:mm a').format(now);
+                                        },
+                                        icon: Icon(Icons.access_time,
+                                            color: theme.colorScheme.primary),
+                                        tooltip: 'Use current date and time',
                                       ),
                                     ],
                                   ),
-                                );
-                              },
+                                  const SizedBox(height: 8),
+                                  Text('⚠ Report Type:',
+                                      style: theme.textTheme.titleSmall
+                                          ?.copyWith(
+                                              color:
+                                                  theme.colorScheme.primary)),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Expanded(
+                                        child: CustomTextField(
+                                          hintText: 'Choose a Report Type',
+                                          isRequired: true,
+                                          suffixIcon: const Icon(
+                                              Icons.arrow_drop_down,
+                                              size: 20),
+                                          choices: reportTypes,
+                                          onChanged: (value) {
+                                            setState(() {
+                                              selectedReportType = value;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        icon: const Icon(Icons.info_outline,
+                                            color: Colors.blueGrey),
+                                        tooltip: 'Report Type Info',
+                                        onPressed: () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (context) => AlertDialog(
+                                              title: const Text(
+                                                  'Report Type Meanings'),
+                                              content: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      GestureDetector(
+                                                        onTap: () {
+                                                          showDialog(
+                                                            context: context,
+                                                            builder:
+                                                                (context) =>
+                                                                    Dialog(
+                                                              backgroundColor:
+                                                                  Colors
+                                                                      .transparent,
+                                                              child:
+                                                                  InteractiveViewer(
+                                                                child:
+                                                                    ClipRRect(
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              16),
+                                                                  child: Image
+                                                                      .asset(
+                                                                    'assets/images/BreedingPots.jpg',
+                                                                    fit: BoxFit
+                                                                        .contain,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
+                                                        child: ClipRRect(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(8),
+                                                          child: Image.asset(
+                                                            'assets/images/BreedingPots.jpg',
+                                                            width: 48,
+                                                            height: 48,
+                                                            fit: BoxFit.cover,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 12),
+                                                      const Expanded(
+                                                        child: Text(
+                                                          'Breeding Site: A place where mosquitoes lay eggs (e.g., containers, tires, pots).',
+                                                          style: TextStyle(
+                                                              fontSize: 14),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 16),
+                                                  Row(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      GestureDetector(
+                                                        onTap: () {
+                                                          showDialog(
+                                                            context: context,
+                                                            builder:
+                                                                (context) =>
+                                                                    Dialog(
+                                                              backgroundColor:
+                                                                  Colors
+                                                                      .transparent,
+                                                              child:
+                                                                  InteractiveViewer(
+                                                                child:
+                                                                    ClipRRect(
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              16),
+                                                                  child: Image
+                                                                      .asset(
+                                                                    'assets/images/standingwater.jpg',
+                                                                    fit: BoxFit
+                                                                        .contain,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
+                                                        child: ClipRRect(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(8),
+                                                          child: Image.asset(
+                                                            'assets/images/standingwater.jpg',
+                                                            width: 48,
+                                                            height: 48,
+                                                            fit: BoxFit.cover,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 12),
+                                                      const Expanded(
+                                                        child: Text(
+                                                          'Standing Water: Any stagnant water that can become a mosquito habitat.',
+                                                          style: TextStyle(
+                                                              fontSize: 14),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 16),
+                                                  Row(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      GestureDetector(
+                                                        onTap: () {
+                                                          showDialog(
+                                                            context: context,
+                                                            builder:
+                                                                (context) =>
+                                                                    Dialog(
+                                                              backgroundColor:
+                                                                  Colors
+                                                                      .transparent,
+                                                              child:
+                                                                  InteractiveViewer(
+                                                                child:
+                                                                    ClipRRect(
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              16),
+                                                                  child: Image
+                                                                      .asset(
+                                                                    'assets/images/infestation.jpg',
+                                                                    fit: BoxFit
+                                                                        .contain,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
+                                                        child: ClipRRect(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(8),
+                                                          child: Image.asset(
+                                                            'assets/images/infestation.jpg',
+                                                            width: 48,
+                                                            height: 48,
+                                                            fit: BoxFit.cover,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 12),
+                                                      const Expanded(
+                                                        child: Text(
+                                                          'Infestation: An area with a high number of mosquitoes or larvae.',
+                                                          style: TextStyle(
+                                                              fontSize: 14),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.of(context)
+                                                          .pop(),
+                                                  child: const Text('Close'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
+                        Divider(
+                            color: customColors?.surfaceLight,
+                            thickness: 1,
+                            height: 56),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('📝 Description:',
+                                style: theme.textTheme.titleSmall),
+                            const SizedBox(height: 8),
+                            if (!keyboardOpen)
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: TextFormField(
+                                  controller: descriptionController,
+                                  maxLines: 3,
+                                  keyboardType: TextInputType.multiline,
+                                  style: theme.textTheme.bodyMedium,
+                                  decoration: InputDecoration(
+                                    hintText:
+                                        'What did you see? Is there anything you\'d like to share?',
+                                    hintStyle:
+                                        theme.textTheme.bodyMedium?.copyWith(
+                                      color: theme.colorScheme.onSurface
+                                          .withOpacity(0.5),
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.grey[100],
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    contentPadding: const EdgeInsets.all(12),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (_selectedImages.isNotEmpty) ...[
+                          const SizedBox(height: 5),
+                          Text('🖼 Attached Images:',
+                              style: theme.textTheme.titleSmall),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _selectedImages
+                                .map((image) => Stack(
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          child: Image.file(
+                                            image,
+                                            height: 100,
+                                            width: 100,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                        Positioned(
+                                          top: 2,
+                                          right: 2,
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              setState(() {
+                                                _selectedImages.remove(image);
+                                              });
+                                            },
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.black
+                                                    .withOpacity(0.6),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              padding: const EdgeInsets.all(4),
+                                              child: const Icon(Icons.close,
+                                                  size: 16,
+                                                  color: Colors.white),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ))
+                                .toList(),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
-              Divider(
-                  color: customColors?.surfaceLight, thickness: 1, height: 56),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('📝 Description:', style: theme.textTheme.titleSmall),
-                  const SizedBox(height: 8),
-                  TextFormField(
+            ],
+          ),
+          // Overlay when keyboard is open
+          if (keyboardOpen)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => FocusScope.of(context).unfocus(),
+                child: Container(
+                  color: Colors.black.withOpacity(0.3),
+                ),
+              ),
+            ),
+          // Floating description card when keyboard is open
+          if (keyboardOpen)
+            Positioned(
+              left: 16,
+              right: 16,
+              top: cardTop,
+              child: Material(
+                elevation: 12,
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.transparent,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: TextFormField(
                     controller: descriptionController,
                     maxLines: 3,
+                    autofocus: true,
                     keyboardType: TextInputType.multiline,
                     style: theme.textTheme.bodyMedium,
                     decoration: InputDecoration(
@@ -1370,55 +1614,10 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
                       contentPadding: const EdgeInsets.all(12),
                     ),
                   ),
-                ],
-              ),
-              if (_selectedImages.isNotEmpty) ...[
-                const SizedBox(height: 5),
-                Text('🖼 Attached Images:', style: theme.textTheme.titleSmall),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _selectedImages
-                      .map((image) => Stack(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(
-                                  image,
-                                  height: 100,
-                                  width: 100,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              Positioned(
-                                top: 2,
-                                right: 2,
-                                child: GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedImages.remove(image);
-                                    });
-                                  },
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.6),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    padding: const EdgeInsets.all(4),
-                                    child: const Icon(Icons.close,
-                                        size: 16, color: Colors.white),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ))
-                      .toList(),
                 ),
-              ],
-            ],
-          ),
-        ),
+              ),
+            ),
+        ],
       ),
       floatingActionButton: Stack(
         children: [
