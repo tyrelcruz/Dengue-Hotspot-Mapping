@@ -278,6 +278,9 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
 
           if (response.statusCode == 200 || response.statusCode == 201) {
             if (mounted) {
+              // Refresh notifications to show the new pending review post
+              await NotificationService().refreshNotifications();
+
               await AppFlushBar.showSuccess(
                 context,
                 title: 'Success',

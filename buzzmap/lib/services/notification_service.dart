@@ -35,7 +35,7 @@ class NotificationService with ChangeNotifier {
   void _startPeriodicRefresh() {
     _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(_cacheDuration, (_) {
-      _refreshNotifications();
+      refreshNotifications();
     });
   }
 
@@ -46,7 +46,7 @@ class NotificationService with ChangeNotifier {
   }
 
   // Refresh notifications if needed
-  Future<void> _refreshNotifications() async {
+  Future<void> refreshNotifications() async {
     if (_isRefreshing) return;
     _isRefreshing = true;
 
@@ -118,7 +118,6 @@ class NotificationService with ChangeNotifier {
   // Public method to get notifications
   Future<List<Map<String, dynamic>>> fetchNotifications(
       BuildContext context) async {
-    // If cache is valid, return cached notifications
     if (_lastFetchTime != null &&
         DateTime.now().difference(_lastFetchTime!) < _cacheDuration &&
         _cachedNotifications.isNotEmpty) {
@@ -126,7 +125,7 @@ class NotificationService with ChangeNotifier {
     }
 
     // Otherwise fetch fresh notifications
-    await _refreshNotifications();
+    await refreshNotifications();
     return _cachedNotifications;
   }
 
