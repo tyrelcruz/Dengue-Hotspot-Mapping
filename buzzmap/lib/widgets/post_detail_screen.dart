@@ -9,7 +9,6 @@ import 'package:buzzmap/auth/config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:buzzmap/providers/comment_provider.dart';
-import 'package:buzzmap/providers/vote_provider.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Map<String, dynamic> post;
@@ -26,8 +25,6 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   late SharedPreferences _prefs;
   bool _isInitialized = false;
-  List<Map<String, dynamic>> _comments = [];
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -46,70 +43,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   Future<void> _loadComments() async {
-    if (!_isInitialized) {
-      await _initializePrefs();
-    }
-
-    if (_prefs == null) {
-      print('Error: SharedPreferences not initialized');
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final postId =
-          widget.post['_id']?.toString() ?? widget.post['id']?.toString();
-      if (postId == null) {
-        throw Exception('Post ID is missing');
-      }
-
-      final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/$postId/comments'),
-        headers: {
-          'Authorization': 'Bearer ${_prefs!.getString('authToken')}',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final List<dynamic> commentsData = jsonDecode(response.body);
-        final userId = _prefs!.getString('userId');
-        final currentUserProfilePhoto = _prefs!.getString('profilePhotoUrl');
-
-        setState(() {
-          _comments = commentsData
-              .map((comment) {
-                final user = comment['user'] as Map<String, dynamic>?;
-                if (user == null) return null;
-
-                final isCurrentUser = user['_id'] == userId;
-                return {
-                  ...comment as Map<String, dynamic>,
-                  'user': {
-                    ...user,
-                    'avatarUrl':
-                        isCurrentUser && currentUserProfilePhoto != null
-                            ? currentUserProfilePhoto
-                            : user['avatarUrl'],
-                  },
-                };
-              })
-              .whereType<Map<String, dynamic>>()
-              .toList();
-          _isLoading = false;
-        });
-      } else {
-        throw Exception('Failed to load comments');
-      }
-    } catch (e) {
-      print('Error loading comments: $e');
-      setState(() {
-        _isLoading = false;
-      });
-    }
+    final commentProvider =
+        Provider.of<CommentProvider>(context, listen: false);
+    await commentProvider.fetchComments(widget.post['_id']);
   }
 
   String _getTimeAgo(String isoDate) {
@@ -133,370 +69,270 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final customColors = Theme.of(context).extension<CustomColors>();
-    final isDark = theme.brightness == Brightness.dark;
-    final iconColor = isDark ? Colors.white : Colors.black;
+    final images =
+        (widget.post['images'] is List) ? widget.post['images'] as List : [];
+    final validImages =
+        images.where((img) => img != null && img.isNotEmpty).toList();
+    final username = (widget.post['username'] ?? '').toString();
+    final whenPosted = (widget.post['whenPosted'] ?? '').toString();
+    final location = (widget.post['location'] ?? '').toString();
+    final date = (widget.post['date'] ?? '').toString();
+    final time = (widget.post['time'] ?? '').toString();
+    final reportType = (widget.post['reportType'] ?? '').toString();
+    final description = (widget.post['description'] ?? '').toString();
+    final iconUrl =
+        (widget.post['iconUrl'] ?? 'assets/icons/person_1.svg').toString();
+    final numUpvotes = widget.post['numUpvotes'] ?? 0;
+    final numDownvotes = widget.post['numDownvotes'] ?? 0;
+    final postId = widget.post['_id'] ?? '';
+
+    final commentProvider = Provider.of<CommentProvider>(context);
+    final comments = commentProvider.getComments(postId);
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: iconColor),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: Text(
-          'Post Details',
-          style: theme.textTheme.titleLarge?.copyWith(
-            color: iconColor,
-            fontWeight: FontWeight.bold,
+          username.isNotEmpty ? username : 'Post',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
           ),
         ),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          color: Colors.black,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        iconTheme: const IconThemeData(color: Colors.black),
+        elevation: 0,
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Post Details
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  UserInfoRow(
-                    title: widget.post['isAnonymous']
-                        ? 'Anonymous'
-                        : widget.post['username']?.toString() ?? 'Unknown',
-                    subtitle:
-                        widget.post['whenPosted']?.toString() ?? 'Just now',
-                    iconUrl: widget.post['iconUrl']?.toString() ??
-                        'assets/icons/person_1.svg',
+      body: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          // User info
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: UserInfoRow(
+                    title: username,
+                    subtitle: whenPosted,
+                    iconUrl: iconUrl,
                     type: 'post',
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        '📍 Location: ',
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        widget.post['location']?.toString() ??
-                            'Unknown location',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        '🕒 Date & Time: ',
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        '${widget.post['date']?.toString() ?? ''}, ${widget.post['time']?.toString() ?? ''}',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        '⚠️ Report Type: ',
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        widget.post['reportType']?.toString() ?? 'Unknown',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        '📝 Description: ',
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        widget.post['description']?.toString() ?? '',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                  if ((widget.post['images'] as List<dynamic>?)?.isNotEmpty ??
-                      false) ...[
-                    const SizedBox(height: 8),
-                    _buildImageGrid(
-                        (widget.post['images'] as List<dynamic>)
-                            .map((e) => e.toString())
-                            .toList(),
-                        context),
-                  ],
-                ],
-              ),
-            ),
-            // Engagement row
-            Builder(
-              builder: (context) {
-                final voteProvider =
-                    Provider.of<VoteProvider>(context, listen: false);
-                final postId = widget.post['_id']?.toString() ??
-                    widget.post['id']?.toString() ??
-                    '';
-                final numUpvotes = voteProvider.getUpvoteCount(postId);
-                final numDownvotes = voteProvider.getDownvoteCount(postId);
-
-                return EngagementRow(
-                  key: ValueKey('engagement_$postId'),
-                  postId: postId,
-                  post: widget.post,
-                  initialUpvotes: numUpvotes,
-                  initialDownvotes: numDownvotes,
-                  isAdminPost: false,
-                  themeMode: Theme.of(context).brightness == Brightness.dark
-                      ? 'dark'
-                      : 'light',
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            // Comments Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Text(
-                    'Comments',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '(${_comments.length})',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (_isLoading)
-              const Center(child: CircularProgressIndicator())
-            else if (_comments.isEmpty)
-              Center(
-                child: Text(
-                  'No comments yet',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey,
+                    isOwner: false,
                   ),
                 ),
-              )
-            else
-              ..._comments.map((comment) {
-                final user = comment['user'] as Map<String, dynamic>?;
-                if (user == null) return const SizedBox.shrink();
-
-                final username = user['username']?.toString() ?? 'Unknown';
-                final avatarUrl = user['avatarUrl']?.toString();
-                final createdAt = comment['createdAt']?.toString();
-                final content = comment['content']?.toString() ?? '';
-
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(
-                            radius: 16,
-                            backgroundColor: theme.colorScheme.primary,
-                            child: avatarUrl != null
-                                ? ClipOval(
-                                    child: Image.network(
-                                      avatarUrl,
-                                      width: 32,
-                                      height: 32,
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (context, error, stackTrace) => Text(
-                                        username.isNotEmpty
-                                            ? username[0].toUpperCase()
-                                            : '?',
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  )
-                                : Text(
-                                    username.isNotEmpty
-                                        ? username[0].toUpperCase()
-                                        : '?',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                if (widget.post['distance'] != null)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 14,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatDistance(widget.post['distance']),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w500,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[100],
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // Post details (captions) above the image
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      '🕒 Date & Time:',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$date, $time',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      '⚠️ Report Type:',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      reportType,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.start,
+                  children: [
+                    Text(
+                      '📝 Description',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      description,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Edge-to-edge image(s)
+          if (validImages.isNotEmpty)
+            SizedBox(
+              height: 240,
+              width: double.infinity,
+              child: PageView.builder(
+                itemCount: validImages.length,
+                itemBuilder: (context, index) {
+                  return CachedNetworkImage(
+                    imageUrl: validImages[index],
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  );
+                },
+              ),
+            ),
+          // Engagement row close to image, in light mode
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+            child: EngagementRow(
+              postId: postId,
+              post: widget.post,
+              initialUpvotes: numUpvotes,
+              initialDownvotes: numDownvotes,
+              isAdminPost: false,
+              themeMode: theme.brightness == Brightness.dark ? 'dark' : 'light',
+            ),
+          ),
+          // Comments section
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Comments',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (comments.isEmpty)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text(
+                        'No comments yet. Be the first to comment!',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                  )
+                else
+                  ...comments.map((comment) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundImage: comment['user']?['avatarUrl'] !=
+                                      null
+                                  ? NetworkImage(comment['user']['avatarUrl'])
+                                  : null,
+                              child: comment['user']?['avatarUrl'] == null
+                                  ? Text(
+                                      (comment['user']?['username'] ?? 'U')[0]
+                                          .toUpperCase(),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold),
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
                                     children: [
                                       Text(
-                                        username,
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                        comment['user']?['username'] ??
+                                            'Anonymous',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold),
                                       ),
-                                      const SizedBox(height: 2),
+                                      const SizedBox(width: 8),
                                       Text(
-                                        content,
-                                        style: theme.textTheme.bodyMedium,
+                                        _getTimeAgo(comment['createdAt']),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ),
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.only(left: 12, top: 4),
-                                  child: Text(
-                                    createdAt != null
-                                        ? _formatTimeAgo(
-                                            DateTime.parse(createdAt))
-                                        : 'Just now',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: Colors.grey[600],
-                                    ),
+                                  const SizedBox(height: 4),
+                                  Text(comment['content']),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      // Remove upvote and downvote buttons
+                                    ],
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              }).toList(),
-          ],
-        ),
+                          ],
+                        ),
+                      )),
+              ],
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: CommentInputBar(
-        postId: widget.post['_id'],
+        postId: postId,
         onCommentPosted: () async {
           await _loadComments();
         },
       ),
-    );
-  }
-
-  String _formatTimeAgo(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inDays > 0) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
-  }
-
-  Widget _buildImageGrid(List<String> images, BuildContext context) {
-    if (images.isEmpty) return const SizedBox.shrink();
-
-    final validImages = images.where((img) => img.isNotEmpty).toList();
-
-    if (validImages.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    int crossAxisCount = 2; // Default grid for 2 images per row
-    if (validImages.length == 1) {
-      crossAxisCount = 1; // Single image takes full width
-    } else if (validImages.length == 2) {
-      crossAxisCount = 2; // Two images in one row
-    } else if (validImages.length == 3) {
-      crossAxisCount = 2; // Two images in the first row, one in the second row
-    } else if (validImages.length == 4) {
-      crossAxisCount = 2; // Two rows with two images each
-    }
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 1,
-      ),
-      itemCount: validImages.length,
-      itemBuilder: (context, index) {
-        return GestureDetector(
-          onTap: () {
-            // Open image in full view on click
-            showDialog(
-              context: context,
-              builder: (context) {
-                return Dialog(
-                  child: CachedNetworkImage(
-                    imageUrl: validImages[index],
-                    placeholder: (context, url) => Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                    errorWidget: (context, url, error) => Icon(Icons.error),
-                  ),
-                );
-              },
-            );
-          },
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: CachedNetworkImage(
-              imageUrl: validImages[index],
-              placeholder: (context, url) => Center(
-                child: CircularProgressIndicator(),
-              ),
-              errorWidget: (context, url, error) => Icon(Icons.error),
-              fit: BoxFit.cover,
-            ),
-          ),
-        );
-      },
     );
   }
 }

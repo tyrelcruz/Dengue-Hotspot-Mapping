@@ -14,6 +14,7 @@ import 'package:provider/provider.dart';
 import 'package:buzzmap/providers/vote_provider.dart';
 import 'package:buzzmap/providers/post_provider.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 
 class LocationDetailsScreen extends StatefulWidget {
   final String location;
@@ -24,6 +25,7 @@ class LocationDetailsScreen extends StatefulWidget {
   final String? severity;
   final String? streetName;
   final Color? barangayColor;
+  final String? reportType;
 
   const LocationDetailsScreen({
     Key? key,
@@ -35,6 +37,7 @@ class LocationDetailsScreen extends StatefulWidget {
     this.streetName,
     this.district,
     this.barangayColor,
+    this.reportType,
   }) : super(key: key);
 
   @override
@@ -52,19 +55,29 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   Set<Polyline> _polylines = {};
   LatLng? _currentLocation;
   GoogleMapController? _controller;
+  final Completer<GoogleMapController> _controllerCompleter = Completer();
+  bool _isMapReady = false;
+  bool _customIconsLoaded = false;
+  BitmapDescriptor? othersIcon;
+  BitmapDescriptor? stagnantWaterIcon;
+  BitmapDescriptor? trashIcon;
 
   @override
   void initState() {
     super.initState();
-    _loadDengueData();
+    print('DEBUG: initState called');
     _loadCurrentUsername();
-    _loadBarangayPolygon();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Initialize providers
-      await Provider.of<PostProvider>(context, listen: false)
-          .fetchPosts(forceRefresh: true);
-      await Provider.of<VoteProvider>(context, listen: false).refreshAllVotes();
-    });
+    _initializeScreen();
+  }
+
+  Future<void> _initializeScreen() async {
+    print('DEBUG: Starting screen initialization');
+    await _loadCustomMarkerIcons();
+    print('DEBUG: Custom icons loaded, proceeding with data load');
+    await _loadDengueData();
+    print('DEBUG: Data loaded, proceeding with polygon load');
+    await _loadBarangayPolygon();
+    print('DEBUG: Screen initialization complete');
   }
 
   Future<void> _loadCurrentUsername() async {
@@ -76,6 +89,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
   Future<void> _loadDengueData() async {
     try {
+      print('DEBUG: Starting _loadDengueData');
       final response = await http.get(
         Uri.parse('${Config.baseUrl}/api/v1/barangays/get-all-barangays'),
       );
@@ -101,12 +115,125 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
             print('DEBUG: Severity loaded from API: $severity');
           });
 
-          // Reload the polygon with the new severity
-          await _loadBarangayPolygon();
+          print('DEBUG: About to create report marker');
+          print('DEBUG: Report type from widget: ${widget.reportType}');
+          print('DEBUG: Custom icons loaded: $_customIconsLoaded');
+
+          // Add the report marker
+          final reportMarker = await _createReportMarker();
+          if (reportMarker != null) {
+            print('DEBUG: Report marker created successfully');
+            setState(() {
+              _markers = {reportMarker};
+              print('DEBUG: Report marker added to map');
+            });
+          } else {
+            print('DEBUG: Failed to create report marker');
+          }
         }
       }
     } catch (e) {
       print('Error loading dengue data: $e');
+    }
+  }
+
+  Future<void> _loadCustomMarkerIcons() async {
+    print('DEBUG: Starting to load custom marker icons');
+    try {
+      othersIcon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/markers/others.png',
+      );
+      print('DEBUG: Others icon loaded');
+
+      stagnantWaterIcon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/markers/stagnantwater.png',
+      );
+      print('DEBUG: Stagnant water icon loaded');
+
+      trashIcon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/markers/trash.png',
+      );
+      print('DEBUG: Trash icon loaded');
+
+      if (mounted) {
+        setState(() {
+          _customIconsLoaded = true;
+          print('DEBUG: All custom icons loaded successfully');
+        });
+      }
+    } catch (e) {
+      print('Error loading custom marker icons: $e');
+      // Fallback to default markers if loading fails
+      othersIcon =
+          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+      stagnantWaterIcon =
+          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+      trashIcon =
+          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+
+      if (mounted) {
+        setState(() {
+          _customIconsLoaded = true;
+          print('DEBUG: Using fallback default markers');
+        });
+      }
+    }
+  }
+
+  Future<Marker?> _createReportMarker() async {
+    try {
+      if (!_customIconsLoaded) {
+        print('DEBUG: Waiting for custom icons to load...');
+        return null;
+      }
+
+      // Get the report type from the widget or default to 'others'
+      final reportType = widget.reportType?.toLowerCase() ?? 'others';
+      print('DEBUG: Creating marker for report type: $reportType');
+
+      // Get the appropriate icon
+      BitmapDescriptor icon;
+      switch (reportType) {
+        case 'stagnant water':
+        case 'stagnantwater':
+          icon = stagnantWaterIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+          print('DEBUG: Using stagnant water icon');
+          break;
+        case 'uncollected garbage or trash':
+        case 'garbage':
+        case 'trash':
+          icon = trashIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+          print('DEBUG: Using trash icon');
+          break;
+        case 'others':
+        default:
+          icon = othersIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+          print('DEBUG: Using others icon');
+      }
+
+      print('DEBUG: Marker icon selected successfully');
+      print(
+          'DEBUG: Creating marker at position: ${widget.latitude}, ${widget.longitude}');
+
+      final marker = Marker(
+        markerId: const MarkerId('report_location'),
+        position: LatLng(widget.latitude, widget.longitude),
+        icon: icon,
+        anchor: const Offset(0.5, 0.5),
+        zIndex: 2,
+      );
+
+      print('DEBUG: Marker created with icon: ${marker.icon}');
+      return marker;
+    } catch (e) {
+      print('Error creating report marker: $e');
+      return null;
     }
   }
 

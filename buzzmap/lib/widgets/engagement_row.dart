@@ -10,6 +10,7 @@ import 'package:buzzmap/providers/vote_provider.dart';
 import 'package:buzzmap/providers/comment_provider.dart';
 import 'package:buzzmap/providers/user_provider.dart';
 import 'package:buzzmap/widgets/post_detail_screen.dart';
+import 'package:buzzmap/widgets/admin_post_detail_screen.dart';
 
 class EngagementRow extends StatefulWidget {
   const EngagementRow({
@@ -137,13 +138,21 @@ class _EngagementRowState extends State<EngagementRow> {
     final isDownvoted = voteProvider.isDownvoted(widget.postId);
     final upvoteCount = voteProvider.getUpvoteCount(widget.postId);
     final downvoteCount = voteProvider.getDownvoteCount(widget.postId);
-    final commentCount = commentProvider.getCommentCount(widget.postId) ?? 0;
+
+    // Get comment count from provider
+    int commentCount = 0;
+    if (widget.isAdminPost) {
+      commentCount = commentProvider.getCommentCount(widget.postId) ?? 0;
+    } else {
+      commentCount = widget.post['_commentCount'] ?? 0;
+    }
 
     print('Building EngagementRow for post ${widget.postId}:');
     print('Upvoted: $isUpvoted');
     print('Downvoted: $isDownvoted');
     print('Upvote count: $upvoteCount');
     print('Downvote count: $downvoteCount');
+    print('Comment count: $commentCount');
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
@@ -202,9 +211,9 @@ class _EngagementRowState extends State<EngagementRow> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => PostDetailScreen(
-                        post: widget.post,
-                      ),
+                      builder: (context) => widget.isAdminPost
+                          ? AdminPostDetailScreen(post: widget.post)
+                          : PostDetailScreen(post: widget.post),
                     ),
                   );
                 },

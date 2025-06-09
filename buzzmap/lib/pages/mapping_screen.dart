@@ -45,14 +45,18 @@ class MappingScreen extends StatefulWidget {
 
 class _MappingScreenState extends State<MappingScreen>
     with TickerProviderStateMixin {
+  final Completer<GoogleMapController> _controller = Completer();
+  Set<Marker> _markers = {};
+  Set<Polyline> _polylines = {};
+  Set<Polygon> _barangayPolygons = {};
+  Set<Circle> _circles = {};
+  final PageController _pageController = PageController();
+  int _currentFacilityPage = 0;
+  List<Map<String, dynamic>> _facilities = [];
   late GoogleMapController _mapController;
   String? selectedDistrict;
   String? selectedBarangay;
-  Set<Circle> _circles = {};
-  Set<Marker> _markers = {};
   Set<Polygon> _polygons = {};
-  Set<Polygon> _barangayPolygons = {};
-  Set<Polyline> _polylines = {};
   String? selectedSeverity;
 
   Map<String, String> hazardRiskLevels = {};
@@ -824,13 +828,23 @@ class _MappingScreenState extends State<MappingScreen>
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> reports = jsonDecode(response.body);
+        final dynamic responseData = jsonDecode(response.body);
+        print('📄 Raw response data: $responseData');
+
+        // Handle both possible response formats
+        final List<dynamic> reports = responseData is Map<String, dynamic>
+            ? responseData['data'] ?? []
+            : responseData is List
+                ? responseData
+                : [];
+
         print('📊 Total reports fetched: ${reports.length}');
 
         final verifiedReports = reports.where((r) {
           final status = r['status']?.toString().toLowerCase();
           final isVerified = status == 'validated';
           print('🔍 Report status: $status, isVerified: $isVerified');
+          print('🔍 Report data: $r');
           return isVerified;
         }).toList();
 
@@ -847,6 +861,15 @@ class _MappingScreenState extends State<MappingScreen>
 
           final position = LatLng(coords[1], coords[0]);
           final reportType = report['report_type']?.toString() ?? '';
+
+          print('📍 Creating marker for report:');
+          print('  - ID: ${report['_id']}');
+          print('  - Type: $reportType');
+          print('  - Status: ${report['status']}');
+          print('  - Date: ${report['date']}');
+          print('  - Address: ${report['address']}');
+          print('  - Barangay: ${report['barangay']}');
+          print('  - Coordinates: ${coords[1]}, ${coords[0]}');
 
           final icon = await _getReportMarkerIcon(reportType);
 
@@ -2331,183 +2354,255 @@ class _MappingScreenState extends State<MappingScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => FutureBuilder<List<Map<String, dynamic>>>(
-        future:
-            fetchNearbyHealthFacilities(location.latitude, location.longitude),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
-          final facilities = snapshot.data!;
-          int _currentFacilityPage = 0;
-          final PageController _pageController = PageController();
-          return StatefulBuilder(
-            builder: (context, setModalState) {
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                streetName.isNotEmpty ? streetName : barangay,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height *
+            0.7, // Limit to 70% of screen height
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              streetName.isNotEmpty ? streetName : barangay,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '${barangay.toUpperCase()}',
                                 style: const TextStyle(
-                                  fontSize: 22,
+                                  fontSize: 12,
+                                  color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  '${barangay.toUpperCase()}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _getColorForSeverity(severity),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            severity,
-                            style: TextStyle(
-                              color: severity == 'Low'
-                                  ? Colors.black
-                                  : Colors.white,
-                              fontWeight: FontWeight.bold,
                             ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _getColorForSeverity(severity),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          severity,
+                          style: TextStyle(
+                            color:
+                                severity == 'Low' ? Colors.black : Colors.white,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
 
-                    // Cases
-                    Row(
-                      children: [
-                        const Icon(Icons.warning_amber_rounded),
-                        const SizedBox(width: 8),
-                        Text(
-                          '$cases reported cases',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
+                  // Cases
+                  Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$cases reported cases',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Coordinates
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Coordinates: ${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Recommendations
+                  const Text(
+                    'Recommendations:',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  RecommendationsWidget(
+                    severity: severity,
+                    hazardRiskLevels: hazardRiskLevels,
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    selectedBarangay: barangay,
+                    barangayColor: _getColorForBarangay(barangay),
+                  ),
+
+                  const SizedBox(height: 20),
+                  // --- Critical Facilities Carousel ---
+                  const Text(
+                    'Health Care Facilities Nearby:',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (_facilities.isEmpty)
+                    const Text('No nearby health facilities found.'),
+                  if (_facilities.isNotEmpty)
+                    SizedBox(
+                      height: 170,
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_left,
+                                size: 32, color: Colors.blue),
+                            onPressed: () {
+                              if (_currentFacilityPage > 0) {
+                                setModalState(() {
+                                  _currentFacilityPage--;
+                                  _pageController.animateToPage(
+                                    _currentFacilityPage,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeInOut,
+                                  );
+                                });
+                              }
+                            },
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Coordinates
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Coordinates: ${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}',
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Recommendations
-                    const Text(
-                      'Recommendations:',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    RecommendationsWidget(
-                      severity: severity,
-                      hazardRiskLevels: hazardRiskLevels,
-                      latitude: location.latitude,
-                      longitude: location.longitude,
-                      selectedBarangay: barangay,
-                      barangayColor: _getColorForBarangay(barangay),
-                    ),
-
-                    const SizedBox(height: 20),
-                    // --- Critical Facilities Carousel ---
-                    const Text(
-                      'Health Care Facilities Nearby:',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (facilities.isEmpty)
-                      const Text('No nearby health facilities found.'),
-                    if (facilities.isNotEmpty)
-                      SizedBox(
-                        height: 170,
-                        child: Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_left,
-                                  size: 32, color: Colors.blue),
-                              onPressed: () {
-                                if (_currentFacilityPage > 0) {
-                                  setModalState(() {
-                                    _currentFacilityPage--;
-                                    _pageController.animateToPage(
-                                      _currentFacilityPage,
-                                      duration:
-                                          const Duration(milliseconds: 300),
-                                      curve: Curves.easeInOut,
-                                    );
-                                  });
-                                }
+                          Expanded(
+                            child: PageView.builder(
+                              controller: _pageController,
+                              itemCount: _facilities.length,
+                              onPageChanged: (index) {
+                                setModalState(() {
+                                  _currentFacilityPage = index;
+                                });
                               },
-                            ),
-                            Expanded(
-                              child: PageView.builder(
-                                controller: _pageController,
-                                itemCount: facilities.length,
-                                onPageChanged: (index) {
-                                  setModalState(() {
-                                    _currentFacilityPage = index;
-                                  });
-                                },
-                                itemBuilder: (context, index) {
-                                  final facility = facilities[index];
-                                  return GestureDetector(
-                                    onTap: () async {
-                                      // Close the bottom sheet
-                                      Navigator.pop(context);
+                              itemBuilder: (context, index) {
+                                final facility = _facilities[index];
+                                return GestureDetector(
+                                  onTap: () async {
+                                    // Close the bottom sheet
+                                    Navigator.pop(context);
 
-                                      // First zoom out slightly to show context
+                                    // First zoom out slightly to show context
+                                    _mapController.animateCamera(
+                                      CameraUpdate.newCameraPosition(
+                                        CameraPosition(
+                                          target: LatLng(
+                                            facility['lat'],
+                                            facility['lng'],
+                                          ),
+                                          zoom: 14.0,
+                                        ),
+                                      ),
+                                    );
+
+                                    // Get directions between report and facility
+                                    final routePoints = await _getDirections(
+                                      location,
+                                      LatLng(facility['lat'], facility['lng']),
+                                    );
+
+                                    // Update markers and polyline in the main widget's state
+                                    this.setState(() {
+                                      // Remove any existing facility markers and polylines
+                                      _markers.removeWhere((marker) => marker
+                                          .markerId.value
+                                          .startsWith('facility-'));
+                                      _polylines.clear();
+
+                                      // Add new marker
+                                      _markers.add(
+                                        Marker(
+                                          markerId: MarkerId(
+                                              'facility-${facility['name']}'),
+                                          position: LatLng(
+                                            facility['lat'],
+                                            facility['lng'],
+                                          ),
+                                          icon: BitmapDescriptor
+                                              .defaultMarkerWithHue(
+                                            BitmapDescriptor.hueBlue,
+                                          ),
+                                          infoWindow: InfoWindow(
+                                            title: facility['name'],
+                                            snippet:
+                                                '${facility['type']} • ${facility['distance_km'].toStringAsFixed(1)} km away',
+                                          ),
+                                        ),
+                                      );
+
+                                      // Add glow effect polyline
+                                      _polylines.add(
+                                        Polyline(
+                                          polylineId:
+                                              const PolylineId('route-glow'),
+                                          points: routePoints,
+                                          color: const Color(0xFFFFD700)
+                                              .withOpacity(
+                                                  0.3), // Semi-transparent yellow
+                                          width: 12, // Wider than the main line
+                                          patterns: [
+                                            PatternItem.dash(40),
+                                            PatternItem.gap(20),
+                                          ],
+                                        ),
+                                      );
+
+                                      // Add main polyline with proper route
+                                      _polylines.add(
+                                        Polyline(
+                                          polylineId: const PolylineId('route'),
+                                          points: routePoints,
+                                          color: const Color(
+                                              0xFFFFD700), // Bright golden yellow
+                                          width: 6, // Increased width
+                                          patterns: [
+                                            PatternItem.dash(
+                                                40), // Longer dashes
+                                            PatternItem.gap(20), // Longer gaps
+                                          ],
+                                        ),
+                                      );
+                                    });
+
+                                    // After a short delay, zoom in closer
+                                    Future.delayed(
+                                        const Duration(milliseconds: 800), () {
                                       _mapController.animateCamera(
                                         CameraUpdate.newCameraPosition(
                                           CameraPosition(
@@ -2515,351 +2610,256 @@ class _MappingScreenState extends State<MappingScreen>
                                               facility['lat'],
                                               facility['lng'],
                                             ),
-                                            zoom: 14.0,
+                                            zoom: 16.5,
+                                            tilt: 45.0,
                                           ),
                                         ),
                                       );
+                                    });
 
-                                      // Get directions between report and facility
-                                      final routePoints = await _getDirections(
-                                        location,
-                                        LatLng(
-                                            facility['lat'], facility['lng']),
-                                      );
-
-                                      // Update markers and polyline in the main widget's state
-                                      this.setState(() {
-                                        // Remove any existing facility markers and polylines
-                                        _markers.removeWhere((marker) => marker
-                                            .markerId.value
-                                            .startsWith('facility-'));
-                                        _polylines.clear();
-
-                                        // Add new marker
-                                        _markers.add(
-                                          Marker(
-                                            markerId: MarkerId(
-                                                'facility-${facility['name']}'),
-                                            position: LatLng(
-                                              facility['lat'],
-                                              facility['lng'],
+                                    // Show a snackbar with facility info
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.location_on,
+                                              color: Colors.white,
+                                              size: 20,
                                             ),
-                                            icon: BitmapDescriptor
-                                                .defaultMarkerWithHue(
-                                              BitmapDescriptor.hueBlue,
-                                            ),
-                                            infoWindow: InfoWindow(
-                                              title: facility['name'],
-                                              snippet:
-                                                  '${facility['type']} • ${facility['distance_km'].toStringAsFixed(1)} km away',
-                                            ),
-                                          ),
-                                        );
-
-                                        // Add glow effect polyline
-                                        _polylines.add(
-                                          Polyline(
-                                            polylineId:
-                                                const PolylineId('route-glow'),
-                                            points: routePoints,
-                                            color: const Color(0xFFFFD700)
-                                                .withOpacity(
-                                                    0.3), // Semi-transparent yellow
-                                            width:
-                                                12, // Wider than the main line
-                                            patterns: [
-                                              PatternItem.dash(40),
-                                              PatternItem.gap(20),
-                                            ],
-                                          ),
-                                        );
-
-                                        // Add main polyline with proper route
-                                        _polylines.add(
-                                          Polyline(
-                                            polylineId:
-                                                const PolylineId('route'),
-                                            points: routePoints,
-                                            color: const Color(
-                                                0xFFFFD700), // Bright golden yellow
-                                            width: 6, // Increased width
-                                            patterns: [
-                                              PatternItem.dash(
-                                                  40), // Longer dashes
-                                              PatternItem.gap(
-                                                  20), // Longer gaps
-                                            ],
-                                          ),
-                                        );
-                                      });
-
-                                      // After a short delay, zoom in closer
-                                      Future.delayed(
-                                          const Duration(milliseconds: 800),
-                                          () {
-                                        _mapController.animateCamera(
-                                          CameraUpdate.newCameraPosition(
-                                            CameraPosition(
-                                              target: LatLng(
-                                                facility['lat'],
-                                                facility['lng'],
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'Viewing ${facility['name']}',
+                                                style: const TextStyle(
+                                                    color: Colors.white),
                                               ),
-                                              zoom: 16.5,
-                                              tilt: 45.0,
                                             ),
-                                          ),
-                                        );
-                                      });
-
-                                      // Show a snackbar with facility info
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.location_on,
-                                                color: Colors.white,
-                                                size: 20,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: Text(
-                                                  'Viewing ${facility['name']}',
-                                                  style: const TextStyle(
-                                                      color: Colors.white),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          backgroundColor:
-                                              Theme.of(context).primaryColor,
-                                          duration: const Duration(seconds: 3),
-                                          behavior: SnackBarBehavior.floating,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                          ),
+                                          ],
                                         ),
-                                      );
-                                    },
-                                    child: Card(
-                                      elevation: 2,
-                                      margin: const EdgeInsets.symmetric(
-                                          horizontal: 13, vertical: 8),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
+                                        backgroundColor:
+                                            Theme.of(context).primaryColor,
+                                        duration: const Duration(seconds: 3),
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
                                       ),
-                                      color: Colors.white,
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: SingleChildScrollView(
-                                          child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  Expanded(
-                                                    child: Text(
-                                                      facility['name'],
-                                                      style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 16,
-                                                        color: Colors.black87,
-                                                      ),
+                                    );
+                                  },
+                                  child: Card(
+                                    elevation: 2,
+                                    margin: const EdgeInsets.symmetric(
+                                        horizontal: 13, vertical: 8),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    color: Colors.white,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: SingleChildScrollView(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    facility['name'],
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 16,
+                                                      color: Colors.black87,
                                                     ),
                                                   ),
-                                                  Container(
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 4,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.blue
-                                                          .withOpacity(0.1),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12),
-                                                    ),
-                                                    child: Text(
-                                                      facility['type'],
-                                                      style: const TextStyle(
-                                                        color: Colors.blue,
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                      ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.blue
+                                                        .withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                  child: Text(
+                                                    facility['type'],
+                                                    style: const TextStyle(
+                                                      color: Colors.blue,
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w500,
                                                     ),
                                                   ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 8),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Row(
+                                              children: [
+                                                const Icon(
+                                                  Icons.location_on,
+                                                  size: 14,
+                                                  color: Colors.black54,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: Text(
+                                                    facility['vicinity'],
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                      color: Colors.black54,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            if (facility['distance_km'] != null)
                                               Row(
                                                 children: [
                                                   const Icon(
-                                                    Icons.location_on,
+                                                    Icons.directions_walk,
                                                     size: 14,
                                                     color: Colors.black54,
                                                   ),
                                                   const SizedBox(width: 4),
-                                                  Expanded(
-                                                    child: Text(
-                                                      facility['vicinity'],
-                                                      style: const TextStyle(
-                                                        fontSize: 13,
-                                                        color: Colors.black54,
-                                                      ),
+                                                  Text(
+                                                    '${facility['distance_km'].toStringAsFixed(1)} km away',
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                      color: Colors.black87,
                                                     ),
                                                   ),
                                                 ],
                                               ),
-                                              const SizedBox(height: 8),
-                                              if (facility['distance_km'] !=
-                                                  null)
-                                                Row(
-                                                  children: [
-                                                    const Icon(
-                                                      Icons.directions_walk,
-                                                      size: 14,
-                                                      color: Colors.black54,
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      '${facility['distance_km'].toStringAsFixed(1)} km away',
-                                                      style: const TextStyle(
-                                                        fontSize: 13,
-                                                        color: Colors.black87,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              const SizedBox(height: 12),
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 6,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.blue
-                                                      .withOpacity(0.1),
-                                                  borderRadius:
-                                                      BorderRadius.circular(20),
-                                                ),
-                                                child: const Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Icon(
-                                                      Icons.touch_app,
-                                                      color: Colors.blue,
-                                                      size: 16,
-                                                    ),
-                                                    SizedBox(width: 4),
-                                                    Text(
-                                                      'Tap to view on map',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.blue,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
+                                            const SizedBox(height: 12),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 6,
                                               ),
-                                            ],
-                                          ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                              ),
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.touch_app,
+                                                    color: Colors.blue,
+                                                    size: 16,
+                                                  ),
+                                                  SizedBox(width: 4),
+                                                  Text(
+                                                    'Tap to view on map',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.blue,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                     ),
-                                  );
-                                },
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.arrow_right,
-                                  size: 32, color: Colors.blue),
-                              onPressed: () {
-                                if (_currentFacilityPage <
-                                    facilities.length - 1) {
-                                  setModalState(() {
-                                    _currentFacilityPage++;
-                                    _pageController.animateToPage(
-                                      _currentFacilityPage,
-                                      duration:
-                                          const Duration(milliseconds: 300),
-                                      curve: Curves.easeInOut,
-                                    );
-                                  });
-                                }
+                                  ),
+                                );
                               },
                             ),
-                          ],
-                        ),
-                      ),
-                    if (facilities.isNotEmpty)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(facilities.length, (index) {
-                          return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 4),
-                            width: _currentFacilityPage == index ? 16 : 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: _currentFacilityPage == index
-                                  ? Colors.blue
-                                  : Colors.blue.withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          );
-                        }),
-                      ),
-                    const SizedBox(height: 20),
-                    // View Detailed Report Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => LocationDetailsScreen(
-                                location: barangay,
-                                streetName: streetName,
-                                latitude: location.latitude,
-                                longitude: location.longitude,
-                                cases: _dengueData[barangay]?['cases'] as int,
-                                severity: _dengueData[barangay]?['severity']
-                                    as String,
-                                district: selectedDistrict,
-                              ),
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              Theme.of(context).colorScheme.primary,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 50),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
                           ),
-                        ),
-                        child: const Text('View Barangay Details'),
+                          IconButton(
+                            icon: const Icon(Icons.arrow_right,
+                                size: 32, color: Colors.blue),
+                            onPressed: () {
+                              if (_currentFacilityPage <
+                                  _facilities.length - 1) {
+                                setModalState(() {
+                                  _currentFacilityPage++;
+                                  _pageController.animateToPage(
+                                    _currentFacilityPage,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeInOut,
+                                  );
+                                });
+                              }
+                            },
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
-              );
-            },
+                  if (_facilities.isNotEmpty)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(_facilities.length, (index) {
+                        return Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: _currentFacilityPage == index ? 16 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: _currentFacilityPage == index
+                                ? Colors.blue
+                                : Colors.blue.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        );
+                      }),
+                    ),
+                  const SizedBox(height: 20),
+                  // View Detailed Report Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => LocationDetailsScreen(
+                              location: barangay,
+                              streetName: streetName,
+                              latitude: location.latitude,
+                              longitude: location.longitude,
+                              cases: _dengueData[barangay]?['cases'] as int,
+                              severity:
+                                  _dengueData[barangay]?['severity'] as String,
+                              district: selectedDistrict,
+                            ),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('View Barangay Details'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
           );
         },
       ),
@@ -3350,7 +3350,7 @@ class _MappingScreenState extends State<MappingScreen>
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text('View on Map'),
+                child: const Text('View Surveillance Details'),
               ),
             ),
           ],
@@ -3464,6 +3464,11 @@ class _MappingScreenState extends State<MappingScreen>
       icon: icon,
       anchor: const Offset(0.5, 0.5), // Center the marker
       zIndex: 2, // Ensure markers are above other map elements
+      infoWindow: InfoWindow(
+        title: report['report_type']?.toString() ?? 'Unknown Report',
+        snippet:
+            'Status: ${report['status']?.toString().toUpperCase() ?? 'Unknown'}',
+      ),
       onTap: () {
         _showReportDetails(report);
       },
@@ -3478,53 +3483,434 @@ class _MappingScreenState extends State<MappingScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
+      builder: (context) => Container(
         padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              report['type'] ?? 'Unknown Report',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+            // Report Type Header with Icon
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color:
+                        Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    _getReportTypeIcon(
+                        report['report_type']?.toString() ?? 'others'),
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    report['report_type']?.toString().toUpperCase() ??
+                        'Unknown Report',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Status Badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color:
+                    _getStatusColor(report['status']?.toString() ?? 'unknown'),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                report['status']?.toString().toUpperCase() ?? 'Unknown',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            _buildInfoRow('Status',
-                report['status']?.toString().toUpperCase() ?? 'Unknown'),
-            _buildInfoRow(
-                'Date', report['date']?.toString().split(' ')[0] ?? 'Unknown'),
-            _buildInfoRow('Address', report['address'] ?? 'Unknown'),
-            _buildInfoRow('Barangay', report['barangay'] ?? 'Unknown'),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _zoomToLocation(
-                    LatLng(
-                      report['location']['coordinates'][1],
-                      report['location']['coordinates'][0],
+
+            // Action Buttons
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _zoomToLocation(
+                        LatLng(
+                          report['specific_location']?['coordinates']?[1] ??
+                              0.0,
+                          report['specific_location']?['coordinates']?[0] ??
+                              0.0,
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.location_on),
+                    label: const Text('View Location'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[200],
+                      foregroundColor: Colors.black87,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text('View on Map'),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => LocationDetailsScreen(
+                            location: report['barangay'] ?? 'Unknown',
+                            streetName: report['address'] ?? 'Unknown',
+                            latitude: report['specific_location']
+                                    ?['coordinates']?[1] ??
+                                0.0,
+                            longitude: report['specific_location']
+                                    ?['coordinates']?[0] ??
+                                0.0,
+                            cases: 1,
+                            severity:
+                                report['status']?.toString().toLowerCase() ??
+                                    'unknown',
+                            district: report['district'] ?? 'Unknown',
+                            reportType:
+                                report['report_type']?.toString() ?? 'others',
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.info_outline),
+                    label: const Text('View Details'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  IconData _getReportTypeIcon(String reportType) {
+    switch (reportType.toLowerCase()) {
+      case 'stagnant water':
+      case 'stagnantwater':
+        return Icons.water_drop;
+      case 'uncollected garbage or trash':
+      case 'garbage':
+      case 'trash':
+        return Icons.delete;
+      default:
+        return Icons.report;
+    }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'validated':
+        return Colors.green;
+      case 'pending':
+        return Colors.orange;
+      case 'rejected':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return 'Unknown';
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  void _showBarangayDetails(
+    String barangay,
+    String selectedDistrict,
+    LatLng location,
+    String streetName,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.7,
+      ),
+      builder: (context) => FutureBuilder<List<Map<String, dynamic>>>(
+        future:
+            fetchNearbyHealthFacilities(location.latitude, location.longitude),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          _facilities = snapshot.data!;
+
+          return StatefulBuilder(
+            builder: (context, setModalState) {
+              return Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.7,
+                ),
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    barangay,
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    selectedDistrict,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Dengue Pattern Assessment
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Dengue Pattern Assessment',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Current Status: ${_getSeverityStatus(barangay)}',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: _getColorForBarangay(barangay),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Nearby Health Facilities
+                        if (_facilities.isNotEmpty) ...[
+                          const Text(
+                            'Nearby Health Facilities',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            height: 200,
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.arrow_left,
+                                      size: 32, color: Colors.blue),
+                                  onPressed: () {
+                                    if (_currentFacilityPage > 0) {
+                                      setModalState(() {
+                                        _currentFacilityPage--;
+                                        _pageController.animateToPage(
+                                          _currentFacilityPage,
+                                          duration:
+                                              const Duration(milliseconds: 300),
+                                          curve: Curves.easeInOut,
+                                        );
+                                      });
+                                    }
+                                  },
+                                ),
+                                Expanded(
+                                  child: PageView.builder(
+                                    controller: _pageController,
+                                    onPageChanged: (index) {
+                                      setModalState(() {
+                                        _currentFacilityPage = index;
+                                      });
+                                    },
+                                    itemCount: _facilities.length,
+                                    itemBuilder: (context, index) {
+                                      final facility = _facilities[index];
+                                      return Card(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(16),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                facility['name'] ??
+                                                    'Unknown Facility',
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                'Distance: ${facility['distance']?.toStringAsFixed(1) ?? 'N/A'} km',
+                                                style: TextStyle(
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                              Text(
+                                                facility['address'] ??
+                                                    'No address available',
+                                                style: TextStyle(
+                                                  color: Colors.grey[600],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.arrow_right,
+                                      size: 32, color: Colors.blue),
+                                  onPressed: () {
+                                    if (_currentFacilityPage <
+                                        _facilities.length - 1) {
+                                      setModalState(() {
+                                        _currentFacilityPage++;
+                                        _pageController.animateToPage(
+                                          _currentFacilityPage,
+                                          duration:
+                                              const Duration(milliseconds: 300),
+                                          curve: Curves.easeInOut,
+                                        );
+                                      });
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (_facilities.length > 1)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(
+                                _facilities.length,
+                                (index) => Container(
+                                  width: 8,
+                                  height: 8,
+                                  margin:
+                                      const EdgeInsets.symmetric(horizontal: 4),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _currentFacilityPage == index
+                                        ? Theme.of(context).primaryColor
+                                        : Colors.grey[300],
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  String _getSeverityPattern(String barangay) {
+    // Get the severity pattern from the hazard risk levels map
+    return hazardRiskLevels[barangay] ?? 'unknown';
+  }
+
+  String _getSeverityStatus(String barangay) {
+    final pattern = _getSeverityPattern(barangay);
+    switch (pattern.toLowerCase()) {
+      case 'spike':
+        return 'Spike';
+      case 'gradual_rise':
+        return 'Gradual Rise';
+      case 'decline':
+        return 'Decline';
+      case 'stable':
+      case 'stability':
+        return 'Stable';
+      default:
+        return 'Unknown';
+    }
   }
 }

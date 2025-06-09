@@ -1440,6 +1440,7 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
                 height: 30,
                 width: 130,
                 child: FloatingActionButton.extended(
+                  heroTag: 'report_submit_button',
                   onPressed: _isLoading ? null : _submitPost,
                   backgroundColor: Colors.transparent,
                   elevation: 0,

@@ -10,6 +10,8 @@ import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:buzzmap/auth/config.dart';
+import 'package:provider/provider.dart';
+import 'package:buzzmap/providers/comment_provider.dart';
 
 class AnnouncementCard extends StatefulWidget {
   final VoidCallback? onRefresh;
@@ -230,6 +232,33 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
             });
 
             final latestAnnouncement = announcements[0];
+            // Fetch comments count for the latest announcement
+            int commentCount = 0;
+            try {
+              final commentsResponse = await http.get(
+                Uri.parse(
+                    '${Config.baseUrl}/api/v1/comments/${latestAnnouncement['_id']}'),
+                headers: {
+                  'Authorization': 'Bearer $token',
+                  'Content-Type': 'application/json',
+                },
+              );
+              if (commentsResponse.statusCode == 200) {
+                final List<dynamic> comments =
+                    jsonDecode(commentsResponse.body);
+                commentCount = comments.length;
+                // Update CommentProvider with the comment count
+                if (mounted) {
+                  final commentProvider =
+                      Provider.of<CommentProvider>(context, listen: false);
+                  commentProvider.fetchComments(latestAnnouncement['_id'],
+                      isAdminPost: true);
+                }
+              }
+            } catch (e) {
+              print('Error fetching comment count: $e');
+            }
+
             setState(() {
               _announcement = {
                 '_id': latestAnnouncement['_id'],
@@ -242,6 +271,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                 'category': latestAnnouncement['category'] ?? 'announcement',
                 'upvotes': latestAnnouncement['upvotes'] ?? [],
                 'downvotes': latestAnnouncement['downvotes'] ?? [],
+                '_commentCount': commentCount,
               };
               _numUpvotes = latestAnnouncement['upvotes']?.length ?? 0;
               _numDownvotes = latestAnnouncement['downvotes']?.length ?? 0;

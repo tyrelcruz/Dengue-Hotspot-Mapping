@@ -28,7 +28,7 @@ class CommentProvider with ChangeNotifier {
       _comments[postId] ?? [];
   int getCommentCount(String postId) => _commentCounts[postId] ?? 0;
 
-  Future<void> fetchComments(String postId) async {
+  Future<void> fetchComments(String postId, {bool isAdminPost = false}) async {
     if (!_isInitialized) {
       await _initializePrefs();
     }
@@ -39,8 +39,9 @@ class CommentProvider with ChangeNotifier {
     }
 
     try {
+      final endpoint = isAdminPost ? 'adminPosts' : 'reports';
       final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/$postId/comments'),
+        Uri.parse('${Config.baseUrl}/api/v1/$endpoint/$postId/comments'),
         headers: {
           'Authorization': 'Bearer ${_prefs!.getString('authToken')}',
           'Content-Type': 'application/json',
@@ -75,6 +76,8 @@ class CommentProvider with ChangeNotifier {
           };
         }).toList();
         _commentCounts[postId] = data.length;
+        print(
+            'CommentProvider: Updated comment count for $postId to ${data.length}');
         notifyListeners();
       }
     } catch (e) {
@@ -82,7 +85,8 @@ class CommentProvider with ChangeNotifier {
     }
   }
 
-  Future<void> postComment(String postId, String content) async {
+  Future<void> postComment(String postId, String content,
+      {bool isAdminPost = false}) async {
     if (!_isInitialized) {
       await _initializePrefs();
     }
@@ -93,8 +97,9 @@ class CommentProvider with ChangeNotifier {
     }
 
     try {
+      final endpoint = isAdminPost ? 'adminPosts' : 'reports';
       final response = await http.post(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/$postId/comments'),
+        Uri.parse('${Config.baseUrl}/api/v1/$endpoint/$postId/comments'),
         headers: {
           'Authorization': 'Bearer ${_prefs!.getString('authToken')}',
           'Content-Type': 'application/json',
@@ -106,7 +111,7 @@ class CommentProvider with ChangeNotifier {
 
       if (response.statusCode == 201) {
         // Fetch updated comments after posting
-        await fetchComments(postId);
+        await fetchComments(postId, isAdminPost: isAdminPost);
       } else {
         throw Exception('Failed to post comment');
       }
@@ -116,7 +121,8 @@ class CommentProvider with ChangeNotifier {
     }
   }
 
-  Future<void> deleteComment(String postId, String commentId) async {
+  Future<void> deleteComment(String postId, String commentId,
+      {bool isAdminPost = false}) async {
     if (!_isInitialized) {
       await _initializePrefs();
     }
@@ -127,9 +133,10 @@ class CommentProvider with ChangeNotifier {
     }
 
     try {
+      final endpoint = isAdminPost ? 'adminPosts' : 'reports';
       final response = await http.delete(
         Uri.parse(
-            '${Config.baseUrl}/api/v1/reports/$postId/comments/$commentId'),
+            '${Config.baseUrl}/api/v1/$endpoint/$postId/comments/$commentId'),
         headers: {
           'Authorization': 'Bearer ${_prefs!.getString('authToken')}',
           'Content-Type': 'application/json',
@@ -138,7 +145,7 @@ class CommentProvider with ChangeNotifier {
 
       if (response.statusCode == 200) {
         // Fetch updated comments after deletion
-        await fetchComments(postId);
+        await fetchComments(postId, isAdminPost: isAdminPost);
       } else {
         throw Exception('Failed to delete comment');
       }
