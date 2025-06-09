@@ -734,7 +734,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
             bottom: 55,
             right: 3,
             child: Container(
-              width: 40,
+              width: 160,
               height: 40,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -745,7 +745,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.2),
@@ -754,7 +754,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                   ),
                 ],
               ),
-              child: IconButton(
+              child: FloatingActionButton.extended(
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -763,16 +763,35 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                     ),
                   );
                 },
-                icon: SvgPicture.asset(
-                  'assets/icons/add.svg',
-                  width: 18,
-                  height: 18,
-                  colorFilter: ColorFilter.mode(
-                    theme.colorScheme.primary,
-                    BlendMode.srcIn,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                label: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Submit a Report',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.primary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SvgPicture.asset(
+                        'assets/icons/add.svg',
+                        width: 18,
+                        height: 18,
+                        colorFilter: ColorFilter.mode(
+                          theme.colorScheme.primary,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                padding: EdgeInsets.zero,
               ),
             ),
           ),

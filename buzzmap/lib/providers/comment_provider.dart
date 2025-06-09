@@ -49,16 +49,31 @@ class CommentProvider with ChangeNotifier {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        _comments[postId] = data
-            .map((comment) => {
-                  'id': comment['_id'],
-                  'content': comment['content'],
-                  'user': comment['user'],
-                  'createdAt': comment['createdAt'],
-                  'upvotes': comment['upvotes'] ?? [],
-                  'downvotes': comment['downvotes'] ?? [],
-                })
-            .toList();
+        _comments[postId] = data.map((comment) {
+          final user = comment['user'] ?? {};
+          final currentUserId = _prefs!.getString('userId');
+          final currentUserProfilePhotoUrl =
+              _prefs!.getString('profilePhotoUrl');
+
+          // Use the current user's profile photo if the comment is from the current user
+          final avatarUrl = (user['_id'] == currentUserId &&
+                  currentUserProfilePhotoUrl != null &&
+                  currentUserProfilePhotoUrl.isNotEmpty)
+              ? currentUserProfilePhotoUrl
+              : user['profilePhotoUrl'];
+
+          return {
+            'id': comment['_id'],
+            'content': comment['content'],
+            'user': {
+              ...user,
+              'avatarUrl': avatarUrl,
+            },
+            'createdAt': comment['createdAt'],
+            'upvotes': comment['upvotes'] ?? [],
+            'downvotes': comment['downvotes'] ?? [],
+          };
+        }).toList();
         _commentCounts[postId] = data.length;
         notifyListeners();
       }

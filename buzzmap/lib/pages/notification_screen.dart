@@ -718,8 +718,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
           const SliverToBoxAdapter(
             child: OfflinePostsList(),
           ),
-          const SliverToBoxAdapter(
-            child: Divider(),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Container(
+                height: 2,
+                width: double.infinity,
+                color: Color(0xFFE3F0FA),
+              ),
+            ),
           ),
           SliverToBoxAdapter(
             child: _buildFilterBar(),

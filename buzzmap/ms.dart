@@ -1087,8 +1087,7 @@ class _MappingScreenState extends State<MappingScreen>
       case 'decline':
         return Colors.green.shade600;
       case 'stable':
-      case 'stability':
-        return Colors.lightBlue.shade800;
+        return Colors.lightBlue.shade600;
       case 'low_level_activity':
         return Colors.grey.shade400;
       default:
@@ -2852,7 +2851,7 @@ class _MappingScreenState extends State<MappingScreen>
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text('View Barangay Details'),
+                        child: const Text('View Detailed Report'),
                       ),
                     ),
                     const SizedBox(height: 8),

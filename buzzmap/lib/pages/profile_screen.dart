@@ -339,58 +339,80 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   itemCount: myPosts.length,
                                   itemBuilder: (context, index) {
                                     final post = myPosts[index];
+                                    // Format post data to ensure all required fields are present
+                                    final formattedPost = {
+                                      '_id': post['_id']?.toString() ??
+                                          post['id']?.toString() ??
+                                          '',
+                                      'username':
+                                          post['username']?.toString() ??
+                                              'Anonymous',
+                                      'whenPosted':
+                                          post['whenPosted']?.toString() ??
+                                              'Just now',
+                                      'location':
+                                          post['location']?.toString() ??
+                                              'Unknown location',
+                                      'date': post['date']?.toString() ?? '',
+                                      'time': post['time']?.toString() ?? '',
+                                      'reportType':
+                                          post['reportType']?.toString() ??
+                                              'Unknown',
+                                      'description':
+                                          post['description']?.toString() ?? '',
+                                      'numUpvotes':
+                                          (post['numUpvotes'] as int?) ?? 0,
+                                      'numDownvotes':
+                                          (post['numDownvotes'] as int?) ?? 0,
+                                      'images':
+                                          (post['images'] as List<dynamic>?)
+                                                  ?.map((e) => e.toString())
+                                                  .toList() ??
+                                              [],
+                                      'iconUrl': post['iconUrl']?.toString() ??
+                                          'assets/icons/person_1.svg',
+                                      'isAnonymous':
+                                          post['isAnonymous'] ?? false,
+                                      'userId': post['userId']?.toString(),
+                                    };
                                     return GestureDetector(
                                       onTap: () async {
                                         await Navigator.push(
                                           context,
                                           MaterialPageRoute(
                                             builder: (context) =>
-                                                PostDetailScreen(post: post),
+                                                PostDetailScreen(
+                                                    post: formattedPost),
                                           ),
                                         );
                                         setState(() {});
                                       },
                                       child: PostCard(
-                                        key: ValueKey(
-                                            (post['_id'] ?? post['id'])
-                                                    ?.toString() ??
-                                                ''),
-                                        post: post,
-                                        username:
-                                            post['username']?.toString() ??
-                                                'Anonymous',
+                                        key: ValueKey(formattedPost['_id']),
+                                        post: formattedPost,
+                                        username: formattedPost['username']!,
                                         whenPosted:
-                                            post['whenPosted']?.toString() ??
-                                                'Just now',
-                                        location:
-                                            post['location']?.toString() ??
-                                                'Unknown location',
-                                        date: post['date']?.toString() ?? '',
-                                        time: post['time']?.toString() ?? '',
+                                            formattedPost['whenPosted']!,
+                                        location: formattedPost['location']!,
+                                        date: formattedPost['date']!,
+                                        time: formattedPost['time']!,
                                         reportType:
-                                            post['reportType']?.toString() ??
-                                                'Unknown',
+                                            formattedPost['reportType']!,
                                         description:
-                                            post['description']?.toString() ??
-                                                '',
+                                            formattedPost['description']!,
                                         numUpvotes:
-                                            (post['numUpvotes'] as int?) ?? 0,
+                                            formattedPost['numUpvotes'] as int,
                                         numDownvotes:
-                                            (post['numDownvotes'] as int?) ?? 0,
-                                        images:
-                                            (post['images'] as List<dynamic>?)
-                                                    ?.map((e) => e.toString())
-                                                    .toList() ??
-                                                [],
-                                        iconUrl: post['iconUrl']?.toString() ??
-                                            'assets/icons/person_1.svg',
+                                            formattedPost['numDownvotes']
+                                                as int,
+                                        images: formattedPost['images']
+                                            as List<String>,
+                                        iconUrl: formattedPost['iconUrl']!,
                                         type: 'bordered',
                                         onReport: () {},
                                         onDelete: () {},
                                         isOwner: true,
-                                        postId: (post['_id'] ?? post['id'])
-                                                ?.toString() ??
-                                            '',
+                                        postId: formattedPost['_id']!,
                                         showDistance: false,
                                       ),
                                     );
@@ -579,9 +601,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       height: 150,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.grey[300],
+                        color: Colors.white,
                         border: Border.all(
-                          color: Color(0xFF245262),
+                          color: Colors.white,
                           width: 4,
                         ),
                         boxShadow: [
@@ -592,71 +614,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ],
                       ),
-                      child: _profilePhotoUrl != null &&
-                              _profilePhotoUrl!.isNotEmpty
-                          ? Image.network(
-                              _profilePhotoUrl!,
-                              fit: BoxFit.cover,
-                              width: 150,
-                              height: 150,
-                              errorBuilder: (context, error, stackTrace) {
-                                print('Debug: Image loading error: $error');
-                                print('Debug: Image URL: $_profilePhotoUrl');
-                                return Container(
-                                  width: 150,
-                                  height: 150,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[300],
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.person,
-                                      size: 50, color: Colors.grey),
-                                );
-                              },
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                print('Debug: Image loading progress: '
-                                    '${loadingProgress.expectedTotalBytes != null ? (loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes! * 100).toStringAsFixed(1) : 'unknown'}%');
-                                return Container(
-                                  width: 150,
-                                  height: 150,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[300],
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Center(
-                                    child: CircularProgressIndicator(
-                                      value:
-                                          loadingProgress.expectedTotalBytes !=
-                                                  null
-                                              ? loadingProgress
-                                                      .cumulativeBytesLoaded /
-                                                  loadingProgress
-                                                      .expectedTotalBytes!
-                                              : null,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(75),
+                        child: _profilePhotoUrl != null &&
+                                _profilePhotoUrl!.isNotEmpty
+                            ? Image.network(
+                                _profilePhotoUrl!,
+                                fit: BoxFit.cover,
+                                width: 150,
+                                height: 150,
+                                errorBuilder: (context, error, stackTrace) {
+                                  print('Debug: Image loading error: $error');
+                                  print('Debug: Image URL: $_profilePhotoUrl');
+                                  return Container(
+                                    width: 150,
+                                    height: 150,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[300],
+                                      shape: BoxShape.circle,
                                     ),
-                                  ),
-                                );
-                              },
-                              headers: {
-                                'Accept': '*/*',
-                                'Access-Control-Allow-Origin': '*',
-                              },
-                            )
-                          : Container(
-                              width: 150,
-                              height: 150,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[300],
-                                shape: BoxShape.circle,
+                                    child: const Icon(Icons.person,
+                                        size: 50, color: Colors.grey),
+                                  );
+                                },
+                                loadingBuilder:
+                                    (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  print('Debug: Image loading progress: '
+                                      '${loadingProgress.expectedTotalBytes != null ? (loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes! * 100).toStringAsFixed(1) : 'unknown'}%');
+                                  return Container(
+                                    width: 150,
+                                    height: 150,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[300],
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress
+                                                    .expectedTotalBytes !=
+                                                null
+                                            ? loadingProgress
+                                                    .cumulativeBytesLoaded /
+                                                loadingProgress
+                                                    .expectedTotalBytes!
+                                            : null,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                headers: {
+                                  'Accept': '*/*',
+                                  'Access-Control-Allow-Origin': '*',
+                                },
+                              )
+                            : Container(
+                                width: 150,
+                                height: 150,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[300],
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.person,
+                                  size: 50,
+                                  color: Colors.grey,
+                                ),
                               ),
-                              child: const Icon(
-                                Icons.person,
-                                size: 50,
-                                color: Colors.grey,
-                              ),
-                            ),
+                      ),
                     ),
                     Positioned(
                       bottom: 8,

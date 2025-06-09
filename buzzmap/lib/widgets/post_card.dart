@@ -172,13 +172,16 @@ class PostCard extends StatelessWidget {
             },
           )
         else
-          EngagementRow(
-            postId: postIdStr,
-            post: post,
-            initialUpvotes: numUpvotes,
-            initialDownvotes: numDownvotes,
-            isAdminPost: false,
-            themeMode: theme.brightness == Brightness.dark ? 'dark' : 'light',
+          Builder(
+            builder: (context) => EngagementRow(
+              key: ValueKey('engagement_$postIdStr'),
+              postId: postIdStr,
+              post: post,
+              initialUpvotes: numUpvotes,
+              initialDownvotes: numDownvotes,
+              isAdminPost: false,
+              themeMode: theme.brightness == Brightness.dark ? 'dark' : 'light',
+            ),
           ),
       ],
     );

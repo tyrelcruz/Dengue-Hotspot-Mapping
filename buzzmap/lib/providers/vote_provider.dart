@@ -41,7 +41,11 @@ class VoteProvider with ChangeNotifier {
       _isLoadingAllVotes = true;
 
       final userId = _prefs!.getString('userId');
-      if (userId == null) return;
+      if (userId == null) {
+        print(
+            'VoteProvider: No user ID available, initializing with default states');
+        return;
+      }
 
       // Get all posts that have votes
       final response = await http.get(
@@ -66,10 +70,12 @@ class VoteProvider with ChangeNotifier {
           final postId = post['_id']?.toString();
           if (postId == null) continue;
 
-          final upvotesList = List<String>.from(post['upvotes'] ?? []);
-          final downvotesList = List<String>.from(post['downvotes'] ?? []);
+          final upvotesList = List<dynamic>.from(post['upvotes'] ?? []);
+          final downvotesList = List<dynamic>.from(post['downvotes'] ?? []);
 
-          // Update vote counts from response, fallback to array length if needed
+          // Initialize vote states with default values if not present
+          _upvotedPosts[postId] = _upvotedPosts[postId] ?? false;
+          _downvotedPosts[postId] = _downvotedPosts[postId] ?? false;
           _upvoteCounts[postId] = post['upvoteCount'] ?? upvotesList.length;
           _downvoteCounts[postId] =
               post['downvoteCount'] ?? downvotesList.length;
@@ -100,27 +106,38 @@ class VoteProvider with ChangeNotifier {
             final postId = post['_id']?.toString();
             if (postId == null) continue;
 
-            final upvotesList = List<String>.from(post['upvotes'] ?? []);
-            final downvotesList = List<String>.from(post['downvotes'] ?? []);
+            final upvotesList = List<dynamic>.from(post['upvotes'] ?? []);
+            final downvotesList = List<dynamic>.from(post['downvotes'] ?? []);
 
             _updateVoteState(postId, upvotesList, downvotesList, userId);
           }
         }
       }
     } catch (e) {
-      // Silent error handling
+      print('VoteProvider: Error loading vote states: $e');
     } finally {
       _isLoadingAllVotes = false;
       notifyListeners();
     }
   }
 
-  void _updateVoteState(String postId, List<String> upvotesList,
-      List<String> downvotesList, String userId) {
-    _upvotedPosts[postId] = upvotesList.contains(userId);
-    _downvotedPosts[postId] = downvotesList.contains(userId);
-    _upvoteCounts[postId] = upvotesList.length;
-    _downvoteCounts[postId] = downvotesList.length;
+  void _updateVoteState(String postId, List<dynamic> upvotesList,
+      List<dynamic> downvotesList, String userId) {
+    // Convert upvotes and downvotes to list of user IDs
+    final upvoteIds = upvotesList
+        .map((vote) => vote is Map ? vote['_id']?.toString() : vote.toString())
+        .where((id) => id != null)
+        .toList();
+
+    final downvoteIds = downvotesList
+        .map((vote) => vote is Map ? vote['_id']?.toString() : vote.toString())
+        .where((id) => id != null)
+        .toList();
+
+    _upvotedPosts[postId] = upvoteIds.contains(userId);
+    _downvotedPosts[postId] = downvoteIds.contains(userId);
+    _upvoteCounts[postId] = upvoteIds.length;
+    _downvoteCounts[postId] = downvoteIds.length;
 
     // Store vote state in SharedPreferences
     _prefs?.setBool('upvoted_$postId', _upvotedPosts[postId] ?? false);
@@ -420,39 +437,23 @@ class VoteProvider with ChangeNotifier {
   }
 
   bool isUpvoted(String postId) {
-    // First check memory state
-    if (_upvotedPosts.containsKey(postId)) {
-      return _upvotedPosts[postId] ?? false;
-    }
-    // Then check SharedPreferences
-    return _prefs?.getBool('upvoted_$postId') ?? false;
+    if (!_isInitialized || _prefs == null) return false;
+    return _upvotedPosts[postId] ?? false;
   }
 
   bool isDownvoted(String postId) {
-    // First check memory state
-    if (_downvotedPosts.containsKey(postId)) {
-      return _downvotedPosts[postId] ?? false;
-    }
-    // Then check SharedPreferences
-    return _prefs?.getBool('downvoted_$postId') ?? false;
+    if (!_isInitialized || _prefs == null) return false;
+    return _downvotedPosts[postId] ?? false;
   }
 
   int getUpvoteCount(String postId) {
-    // First check memory state
-    if (_upvoteCounts.containsKey(postId)) {
-      return _upvoteCounts[postId] ?? 0;
-    }
-    // Then check SharedPreferences
-    return _prefs?.getInt('upvotes_$postId') ?? 0;
+    if (!_isInitialized || _prefs == null) return 0;
+    return _upvoteCounts[postId] ?? 0;
   }
 
   int getDownvoteCount(String postId) {
-    // First check memory state
-    if (_downvoteCounts.containsKey(postId)) {
-      return _downvoteCounts[postId] ?? 0;
-    }
-    // Then check SharedPreferences
-    return _prefs?.getInt('downvotes_$postId') ?? 0;
+    if (!_isInitialized || _prefs == null) return 0;
+    return _downvoteCounts[postId] ?? 0;
   }
 
   Future<void> clearUserVotes() async {

@@ -9,10 +9,60 @@ import 'package:buzzmap/auth/config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:buzzmap/providers/comment_provider.dart';
 
-class AdminPostDetailScreen extends StatelessWidget {
+class AdminPostDetailScreen extends StatefulWidget {
   final Map<String, dynamic> post;
   const AdminPostDetailScreen({super.key, required this.post});
+
+  @override
+  State<AdminPostDetailScreen> createState() => _AdminPostDetailScreenState();
+}
+
+class _AdminPostDetailScreenState extends State<AdminPostDetailScreen> {
+  late SharedPreferences _prefs;
+  bool _isInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializePrefs();
+  }
+
+  Future<void> _initializePrefs() async {
+    try {
+      _prefs = await SharedPreferences.getInstance();
+      _isInitialized = true;
+      await _loadComments();
+    } catch (e) {
+      print('Error initializing SharedPreferences: $e');
+    }
+  }
+
+  Future<void> _loadComments() async {
+    final commentProvider =
+        Provider.of<CommentProvider>(context, listen: false);
+    await commentProvider.fetchComments(widget.post['_id']);
+  }
+
+  String _getTimeAgo(String isoDate) {
+    final date = DateTime.parse(isoDate);
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    return '${diff.inDays}d';
+  }
+
+  String _formatDistance(double distance) {
+    if (distance < 1) {
+      return '${(distance * 1000).round()}m away';
+    } else {
+      return '${distance.toStringAsFixed(1)}km away';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,17 +73,21 @@ class AdminPostDetailScreen extends StatelessWidget {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
-    final images = (post['images'] is List) ? post['images'] as List : [];
+    final images =
+        (widget.post['images'] is List) ? widget.post['images'] as List : [];
     final validImages =
         images.where((img) => img != null && img.isNotEmpty).toList();
-    final title = post['title'] ?? '';
-    final content = post['content'] ?? '';
-    final publishDate = post['publishDate'] ?? '';
-    final category = post['category'] ?? '';
-    final references = post['references'] ?? '';
-    final postId = post['_id'] ?? '';
-    final numUpvotes = post['upvotes']?.length ?? 0;
-    final numDownvotes = post['downvotes']?.length ?? 0;
+    final title = widget.post['title'] ?? '';
+    final content = widget.post['content'] ?? '';
+    final publishDate = widget.post['publishDate'] ?? '';
+    final category = widget.post['category'] ?? '';
+    final references = widget.post['references'] ?? '';
+    final postId = widget.post['_id'] ?? '';
+    final numUpvotes = widget.post['upvotes']?.length ?? 0;
+    final numDownvotes = widget.post['downvotes']?.length ?? 0;
+
+    final commentProvider = Provider.of<CommentProvider>(context);
+    final comments = commentProvider.getComments(postId);
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -153,7 +207,7 @@ class AdminPostDetailScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
               child: EngagementRow(
                 postId: postId,
-                post: post,
+                post: widget.post,
                 initialUpvotes: numUpvotes,
                 initialDownvotes: numDownvotes,
                 isAdminPost: true,
@@ -161,12 +215,109 @@ class AdminPostDetailScreen extends StatelessWidget {
               ),
             ),
             // Comments section
-            CommentsSection(postId: postId),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Comments',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (comments.isEmpty)
+                    Center(
+                      child: Text(
+                        'No comments yet',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey,
+                        ),
+                      ),
+                    )
+                  else
+                    ...comments.map((comment) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              CircleAvatar(
+                                radius: 18,
+                                backgroundImage: comment['user']
+                                            ?['avatarUrl'] !=
+                                        null
+                                    ? NetworkImage(comment['user']['avatarUrl'])
+                                    : null,
+                                child: comment['user']?['avatarUrl'] == null
+                                    ? Text(
+                                        (comment['user']?['username'] ?? 'U')[0]
+                                            .toUpperCase(),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold),
+                                      )
+                                    : null,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            comment['user']?['username'] ??
+                                                'Unknown',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            comment['content'] ?? '',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w200,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _getTimeAgo(comment['createdAt'] ?? ''),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                ],
+              ),
+            ),
             const SizedBox(height: 8),
           ],
         ),
       ),
-      bottomNavigationBar: CommentInputBar(postId: postId, userName: 'You'),
+      bottomNavigationBar: CommentInputBar(
+        postId: postId,
+        onCommentPosted: _loadComments,
+      ),
     );
   }
 
@@ -180,400 +331,14 @@ class AdminPostDetailScreen extends StatelessWidget {
   }
 }
 
-class CommentsSection extends StatefulWidget {
-  final String postId;
-  const CommentsSection({super.key, required this.postId});
-
-  @override
-  State<CommentsSection> createState() => _CommentsSectionState();
-}
-
-class _CommentsSectionState extends State<CommentsSection> {
-  List<Map<String, dynamic>> comments = [];
-  bool isLoading = true;
-  bool isError = false;
-  late SharedPreferences _prefs;
-  Map<String, bool> upvotedComments = {};
-  Map<String, bool> downvotedComments = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _initPrefsAndFetch();
-  }
-
-  Future<void> _initPrefsAndFetch() async {
-    _prefs = await SharedPreferences.getInstance();
-    await _fetchComments();
-  }
-
-  Future<void> _fetchComments() async {
-    setState(() {
-      isLoading = true;
-      isError = false;
-    });
-    try {
-      final token = _prefs.getString('authToken');
-      print('Fetching comments for post: ${widget.postId}');
-
-      final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/comments/${widget.postId}'),
-        headers: {
-          if (token != null) 'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        setState(() {
-          comments = data
-              .map((comment) => {
-                    'id': comment['_id'],
-                    'content': comment['content'],
-                    'user': comment['user'],
-                    'createdAt': comment['createdAt'],
-                    'upvotes': comment['upvotes'] ?? [],
-                    'downvotes': comment['downvotes'] ?? [],
-                  })
-              .toList();
-
-          // Initialize vote states
-          for (var comment in comments) {
-            final userId = _prefs.getString('userId');
-            if (userId != null) {
-              upvotedComments[comment['id']] =
-                  (comment['upvotes'] as List).contains(userId);
-              downvotedComments[comment['id']] =
-                  (comment['downvotes'] as List).contains(userId);
-            }
-          }
-
-          isLoading = false;
-        });
-      } else {
-        print(
-            'Error loading comments: ${response.statusCode} - ${response.body}');
-        setState(() {
-          isError = true;
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('Error fetching comments: $e');
-      setState(() {
-        isError = true;
-        isLoading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    if (isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          color: Colors.white,
-        ),
-      );
-    }
-
-    if (isError) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Failed to load comments',
-              style: TextStyle(color: Colors.white),
-            ),
-            TextButton(
-              onPressed: _fetchComments,
-              child: const Text(
-                'Retry',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (comments.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Text(
-          'No comments yet. Be the first to comment!',
-          style: TextStyle(color: Colors.white),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.all(11.0),
-        ),
-        ...comments.map((comment) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Avatar
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundImage: comment['user']?['avatarUrl'] != null
-                        ? NetworkImage(comment['user']['avatarUrl'])
-                        : null,
-                    child: comment['user']?['avatarUrl'] == null
-                        ? Text(
-                            (comment['user']?['username'] ?? 'U')[0]
-                                .toUpperCase(),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 10),
-                  // Comment bubble and actions
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Bubble
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                comment['user']?['username'] ?? 'Unknown',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                comment['content'] ?? '',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w200,
-                                  fontSize: 14,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        // Actions row
-                        Row(
-                          children: [
-                            // Upvote button
-                            GestureDetector(
-                              onTap: () => _handleVote(comment['id'], 'upvote'),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: upvotedComments[comment['id']] == true
-                                      ? Colors.green.withOpacity(0.2)
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color:
-                                        upvotedComments[comment['id']] == true
-                                            ? Colors.green
-                                            : Colors.white30,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      upvotedComments[comment['id']] == true
-                                          ? Icons.arrow_upward_rounded
-                                          : Icons.arrow_upward_outlined,
-                                      size: 16,
-                                      color:
-                                          upvotedComments[comment['id']] == true
-                                              ? Colors.green
-                                              : Colors.white70,
-                                      weight: 100,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${(comment['upvotes'] as List).length}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: upvotedComments[comment['id']] ==
-                                                true
-                                            ? Colors.green
-                                            : Colors.white70,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // Downvote button
-                            GestureDetector(
-                              onTap: () =>
-                                  _handleVote(comment['id'], 'downvote'),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color:
-                                      downvotedComments[comment['id']] == true
-                                          ? Colors.red.withOpacity(0.2)
-                                          : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color:
-                                        downvotedComments[comment['id']] == true
-                                            ? Colors.red
-                                            : Colors.white30,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      downvotedComments[comment['id']] == true
-                                          ? Icons.arrow_downward_rounded
-                                          : Icons.arrow_downward_outlined,
-                                      size: 16,
-                                      color: downvotedComments[comment['id']] ==
-                                              true
-                                          ? Colors.red
-                                          : Colors.white70,
-                                      weight: 100,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${(comment['downvotes'] as List).length}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color:
-                                            downvotedComments[comment['id']] ==
-                                                    true
-                                                ? Colors.red
-                                                : Colors.white70,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            )),
-      ],
-    );
-  }
-
-  Future<void> _handleVote(String commentId, String voteType) async {
-    try {
-      final token = _prefs.getString('authToken');
-      if (token == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please log in to vote')),
-        );
-        return;
-      }
-
-      bool isUpvoted = upvotedComments[commentId] ?? false;
-      bool isDownvoted = downvotedComments[commentId] ?? false;
-
-      // If clicking the same vote type, remove the vote
-      if ((voteType == 'upvote' && isUpvoted) ||
-          (voteType == 'downvote' && isDownvoted)) {
-        final response = await http.delete(
-          Uri.parse(
-              '${Config.baseUrl}/api/v1/adminPosts/comments/$commentId/$voteType'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          setState(() {
-            upvotedComments[commentId] = false;
-            downvotedComments[commentId] = false;
-            // Update comment in the list
-            final index = comments.indexWhere((c) => c['id'] == commentId);
-            if (index != -1) {
-              comments[index]['upvotes'] = data['upvotes'] ?? [];
-              comments[index]['downvotes'] = data['downvotes'] ?? [];
-            }
-          });
-        }
-      } else {
-        // Add new vote
-        final response = await http.post(
-          Uri.parse(
-              '${Config.baseUrl}/api/v1/adminPosts/comments/$commentId/$voteType'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          setState(() {
-            upvotedComments[commentId] = voteType == 'upvote';
-            downvotedComments[commentId] = voteType == 'downvote';
-            // Update comment in the list
-            final index = comments.indexWhere((c) => c['id'] == commentId);
-            if (index != -1) {
-              comments[index]['upvotes'] = data['upvotes'] ?? [];
-              comments[index]['downvotes'] = data['downvotes'] ?? [];
-            }
-          });
-        }
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to submit vote')),
-      );
-    }
-  }
-}
-
 class CommentInputBar extends StatefulWidget {
   final String postId;
-  final String userName;
+  final Function() onCommentPosted;
 
   const CommentInputBar({
     super.key,
     required this.postId,
-    required this.userName,
+    required this.onCommentPosted,
   });
 
   @override
@@ -622,11 +387,7 @@ class _CommentInputBarState extends State<CommentInputBar> {
         _controller.clear();
         // Refresh comments
         if (context.mounted) {
-          final commentsSection =
-              context.findAncestorStateOfType<_CommentsSectionState>();
-          if (commentsSection != null) {
-            commentsSection._fetchComments();
-          }
+          widget.onCommentPosted();
         }
       } else {
         if (context.mounted) {
@@ -698,7 +459,7 @@ class _CommentInputBarState extends State<CommentInputBar> {
                     enabled: !isPosting,
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      hintText: 'Comment as ${widget.userName}',
+                      hintText: 'Comment as You',
                       hintStyle: const TextStyle(color: Colors.white70),
                       border: InputBorder.none,
                       isDense: true,

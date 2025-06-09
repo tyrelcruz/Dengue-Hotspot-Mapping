@@ -300,6 +300,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -323,168 +324,169 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
     print('Images: $images');
     print('References: $references');
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AdminPostDetailScreen(post: _announcement!),
-          ),
-        );
-      },
-      child: Card(
-        elevation: 0,
-        color: Theme.of(context).colorScheme.primary,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(
-            color: Colors.grey.shade300,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // User Info Row
-              UserInfoRow(
-                title: 'Latest ${_formatCategory(category)}',
-                subtitle: 'Quezon City Surveillance and Epidemiology Division',
-                iconUrl: 'assets/icons/surveillance_logo.svg',
-              ),
-              const SizedBox(height: 16),
-
-              // Title with emoji
-              Text.rich(
-                TextSpan(
-                  children: [
-                    const TextSpan(
-                      text: '🚨 ',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    TextSpan(
-                      text: title,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const TextSpan(
-                      text: ' 🚨',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AdminPostDetailScreen(post: _announcement!),
+            ),
+          );
+        },
+        child: Card(
+          margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 0),
+          elevation: 2,
+          color: theme.colorScheme.primary,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // User Info Row
+                UserInfoRow(
+                  title: 'Latest ${_formatCategory(category)}',
+                  subtitle:
+                      'Quezon City Surveillance and Epidemiology Division',
+                  iconUrl: 'assets/icons/surveillance_logo.svg',
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 16),
 
-              // Content with show more/less
-              Text(
-                content,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                ),
-                maxLines: _showFullContent ? null : 3,
-                overflow: _showFullContent ? null : TextOverflow.ellipsis,
-              ),
-              if (content.length > 150) ...[
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _showFullContent = !_showFullContent;
-                    });
-                  },
-                  child: const Text(
-                    'Show More',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      decoration: TextDecoration.underline,
-                    ),
+                // Title with emoji
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(
+                        text: '🚨 ',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      TextSpan(
+                        text: title,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const TextSpan(
+                        text: ' 🚨',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+                const SizedBox(height: 12),
 
-              // References
-              if (references.isNotEmpty) ...[
-                const SizedBox(height: 8),
+                // Content with show more/less
                 Text(
-                  'Source: $references',
+                  content,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                  maxLines: _showFullContent ? null : 3,
+                  overflow: _showFullContent ? null : TextOverflow.ellipsis,
+                ),
+                if (content.length > 150) ...[
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _showFullContent = !_showFullContent;
+                      });
+                    },
+                    child: const Text(
+                      'Show More',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+
+                // References
+                if (references.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Source: $references',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+
+                // Images
+                if (images.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  if (images.length == 1)
+                    // Single image - stretch to full width
+                    _buildImage(images[0])
+                  else
+                    // Multiple images - horizontal scroll
+                    SizedBox(
+                      height: 200,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: images.length,
+                        itemBuilder: (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: _buildImage(images[index]),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+
+                // Date
+                const SizedBox(height: 12),
+                Text(
+                  'Published: ${_formatDate(publishDate)}',
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
-                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+
+                // Engagement Row
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onTap: () {
+                    if (_announcement != null) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              AdminPostDetailScreen(post: _announcement!),
+                        ),
+                      );
+                    }
+                  },
+                  child: EngagementRow(
+                    postId: _announcement?['_id'] ?? '',
+                    post: _announcement ?? {},
+                    initialUpvotes: _numUpvotes,
+                    initialDownvotes: _numDownvotes,
+                    isAdminPost: true,
+                    themeMode: 'dark',
                   ),
                 ),
               ],
-
-              // Images
-              if (images.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                if (images.length == 1)
-                  // Single image - stretch to full width
-                  _buildImage(images[0])
-                else
-                  // Multiple images - horizontal scroll
-                  SizedBox(
-                    height: 200,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: images.length,
-                      itemBuilder: (context, index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: _buildImage(images[index]),
-                        );
-                      },
-                    ),
-                  ),
-              ],
-
-              // Date
-              const SizedBox(height: 12),
-              Text(
-                'Published: ${_formatDate(publishDate)}',
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                ),
-              ),
-
-              // Engagement Row
-              const SizedBox(height: 16),
-              GestureDetector(
-                onTap: () {
-                  if (_announcement != null) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            AdminPostDetailScreen(post: _announcement!),
-                      ),
-                    );
-                  }
-                },
-                child: EngagementRow(
-                  postId: _announcement?['_id'] ?? '',
-                  post: _announcement ?? {},
-                  initialUpvotes: _numUpvotes,
-                  initialDownvotes: _numDownvotes,
-                  isAdminPost: true,
-                  themeMode: 'dark',
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -527,7 +529,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                   'Failed to load image',
                   style: TextStyle(
                     color: Colors.grey.shade600,
-                    fontSize: 12,
                   ),
                 ),
               ],
@@ -536,5 +537,19 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
         },
       ),
     );
+  }
+
+  String _formatTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
   }
 }

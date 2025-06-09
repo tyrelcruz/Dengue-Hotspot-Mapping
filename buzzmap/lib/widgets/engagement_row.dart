@@ -66,7 +66,7 @@ class _EngagementRowState extends State<EngagementRow> {
     }
   }
 
-  Future<void> _handleVote(bool isUpvote) async {
+  Future<void> _handleVote(String voteType) async {
     if (_isLoading) return;
 
     final voteProvider = Provider.of<VoteProvider>(context, listen: false);
@@ -87,7 +87,7 @@ class _EngagementRowState extends State<EngagementRow> {
     setState(() => _isLoading = true);
 
     try {
-      if (isUpvote) {
+      if (voteType == 'upvote') {
         if (voteProvider.isUpvoted(widget.postId)) {
           await voteProvider.removeUpvote(widget.postId,
               isAdminPost: widget.isAdminPost);
@@ -95,7 +95,7 @@ class _EngagementRowState extends State<EngagementRow> {
           await voteProvider.upvotePost(widget.postId,
               isAdminPost: widget.isAdminPost);
         }
-      } else {
+      } else if (voteType == 'downvote') {
         if (voteProvider.isDownvoted(widget.postId)) {
           await voteProvider.removeDownvote(widget.postId,
               isAdminPost: widget.isAdminPost);
@@ -132,12 +132,12 @@ class _EngagementRowState extends State<EngagementRow> {
     final voteProvider = Provider.of<VoteProvider>(context);
     final commentProvider = Provider.of<CommentProvider>(context);
 
-    // Get vote states
+    // Get vote states - VoteProvider now guarantees non-null values
     final isUpvoted = voteProvider.isUpvoted(widget.postId);
     final isDownvoted = voteProvider.isDownvoted(widget.postId);
     final upvoteCount = voteProvider.getUpvoteCount(widget.postId);
     final downvoteCount = voteProvider.getDownvoteCount(widget.postId);
-    final commentCount = commentProvider.getCommentCount(widget.postId);
+    final commentCount = commentProvider.getCommentCount(widget.postId) ?? 0;
 
     print('Building EngagementRow for post ${widget.postId}:');
     print('Upvoted: $isUpvoted');
@@ -152,68 +152,79 @@ class _EngagementRowState extends State<EngagementRow> {
         children: [
           Row(
             children: [
-              IconButton(
+              // Upvote Button
+              TextButton.icon(
+                onPressed: () => _handleVote('upvote'),
                 icon: Icon(
-                  Icons.arrow_upward,
-                  color: isUpvoted ? Colors.blue : Colors.grey,
+                  isUpvoted ? Icons.arrow_upward : Icons.arrow_upward_outlined,
+                  color: isUpvoted ? Colors.green : Colors.grey[600],
+                  size: 20,
                 ),
-                onPressed: _isLoading ? null : () => _handleVote(true),
-              ),
-              Text(
-                formatCount(upvoteCount),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isUpvoted ? Colors.blue : iconColor,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 12),
-              IconButton(
-                icon: Icon(
-                  Icons.arrow_downward,
-                  color: isDownvoted ? Colors.red : Colors.grey,
-                ),
-                onPressed: _isLoading ? null : () => _handleVote(false),
-              ),
-              Text(
-                formatCount(downvoteCount),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isDownvoted ? Colors.red : iconColor,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              if (!widget.disableCommentButton) ...[
-                const SizedBox(width: 15),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => PostDetailScreen(
-                          post: widget.post,
-                        ),
-                      ),
-                    );
-                  },
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.comment_outlined,
-                        color: iconColor,
-                        size: 22,
-                        weight: 100,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        formatCount(commentCount),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: iconColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
+                label: Text(
+                  formatCount(upvoteCount),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: isUpvoted ? Colors.green : Colors.grey[600],
                   ),
                 ),
-              ],
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Downvote Button
+              TextButton.icon(
+                onPressed: () => _handleVote('downvote'),
+                icon: Icon(
+                  isDownvoted
+                      ? Icons.arrow_downward
+                      : Icons.arrow_downward_outlined,
+                  color: isDownvoted ? Colors.red : Colors.grey[600],
+                  size: 20,
+                ),
+                label: Text(
+                  formatCount(downvoteCount),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: isDownvoted ? Colors.red : Colors.grey[600],
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Comment Button
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PostDetailScreen(
+                        post: widget.post,
+                      ),
+                    ),
+                  );
+                },
+                icon: Icon(
+                  Icons.chat_bubble_outline,
+                  color: Colors.grey[600],
+                  size: 20,
+                ),
+                label: Text(
+                  formatCount(commentCount),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
             ],
           ),
         ],
