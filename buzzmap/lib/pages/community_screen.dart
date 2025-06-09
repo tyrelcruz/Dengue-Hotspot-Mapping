@@ -39,6 +39,9 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
   bool _isLocationLoading = false;
   RouteObserver<PageRoute>? _routeObserver;
 
+  // Add a map to store userId -> profilePhotoUrl
+  Map<String, String> _userProfilePhotos = {};
+
   void _onTabSelected(int index) {
     setState(() {
       selectedIndex = index;
@@ -50,9 +53,9 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
     super.initState();
     _initializePrefs();
     _getCurrentLocation();
-    // Fetch posts when the screen initializes
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _ensureProfilePhotoLoaded();
+      await _fetchUserProfiles();
       await Provider.of<PostProvider>(context, listen: false).fetchPosts();
       await Provider.of<VoteProvider>(context, listen: false).refreshAllVotes();
     });
@@ -418,6 +421,28 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
     }
   }
 
+  // Fetch all user profiles and map userId to profilePhotoUrl
+  Future<void> _fetchUserProfiles() async {
+    try {
+      final response =
+          await http.get(Uri.parse('${Config.baseUrl}/api/v1/accounts/basic'));
+      if (response.statusCode == 200) {
+        final List<dynamic> users = jsonDecode(response.body);
+        setState(() {
+          _userProfilePhotos = {
+            for (var user in users)
+              if (user['_id'] != null && user['profilePhotoUrl'] != null)
+                user['_id']: user['profilePhotoUrl'] ?? ''
+          };
+        });
+      } else {
+        print('Failed to fetch user profiles: \\${response.body}');
+      }
+    } catch (e) {
+      print('Error fetching user profiles: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final customColors = Theme.of(context).extension<CustomColors>();
@@ -436,6 +461,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
             onRefresh: () async {
               await _initializePrefs();
               await _ensureProfilePhotoLoaded();
+              await _fetchUserProfiles();
               await postProvider.fetchPosts(forceRefresh: true);
               await Provider.of<VoteProvider>(context, listen: false)
                   .refreshAllVotes();
@@ -549,49 +575,74 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                           postWithId['id'] != null) {
                         postWithId['_id'] = postWithId['id'];
                       }
-                      return GestureDetector(
-                        onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  PostDetailScreen(post: postWithId),
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        child: GestureDetector(
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    PostDetailScreen(post: postWithId),
+                              ),
+                            );
+                            setState(
+                                () {}); // Refresh EngagementRow/comment count
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.08),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                          );
-                          setState(
-                              () {}); // Refresh EngagementRow/comment count
-                        },
-                        child: PostCard(
-                          key: ValueKey(postWithId['_id']?.toString() ?? ''),
-                          post: postWithId,
-                          username:
-                              postWithId['username']?.toString() ?? 'Anonymous',
-                          whenPosted: postWithId['whenPosted']?.toString() ??
-                              'Just now',
-                          location: postWithId['location']?.toString() ??
-                              'Unknown location',
-                          date: postWithId['date']?.toString() ?? '',
-                          time: postWithId['time']?.toString() ?? '',
-                          reportType:
-                              postWithId['reportType']?.toString() ?? 'Unknown',
-                          description:
-                              postWithId['description']?.toString() ?? '',
-                          numUpvotes: (postWithId['numUpvotes'] as int?) ?? 0,
-                          numDownvotes:
-                              (postWithId['numDownvotes'] as int?) ?? 0,
-                          images: (postWithId['images'] as List<dynamic>?)
-                                  ?.map((e) => e.toString())
-                                  .toList() ??
-                              [],
-                          iconUrl: postWithId['iconUrl']?.toString() ??
-                              'assets/icons/person_1.svg',
-                          type: 'bordered',
-                          onReport: () => _reportPost(postWithId),
-                          onDelete: () => _deletePost(postWithId),
-                          isOwner: postWithId['userId']?.toString() ==
-                              _prefs.getString('userId'),
-                          postId: postWithId['_id']?.toString() ?? '',
-                          showDistance: selectedIndex == 3,
+                            child: PostCard(
+                              key:
+                                  ValueKey(postWithId['_id']?.toString() ?? ''),
+                              post: postWithId,
+                              username: postWithId['username']?.toString() ??
+                                  'Anonymous',
+                              whenPosted:
+                                  postWithId['whenPosted']?.toString() ??
+                                      'Just now',
+                              location: postWithId['location']?.toString() ??
+                                  'Unknown location',
+                              date: postWithId['date']?.toString() ?? '',
+                              time: postWithId['time']?.toString() ?? '',
+                              reportType:
+                                  postWithId['reportType']?.toString() ??
+                                      'Unknown',
+                              description:
+                                  postWithId['description']?.toString() ?? '',
+                              numUpvotes:
+                                  (postWithId['numUpvotes'] as int?) ?? 0,
+                              numDownvotes:
+                                  (postWithId['numDownvotes'] as int?) ?? 0,
+                              images: (postWithId['images'] as List<dynamic>?)
+                                      ?.map((e) => e.toString())
+                                      .toList() ??
+                                  [],
+                              iconUrl: _userProfilePhotos[postWithId['userId']]
+                                          ?.isNotEmpty ==
+                                      true
+                                  ? _userProfilePhotos[postWithId['userId']]!
+                                  : 'assets/icons/person_1.svg',
+                              type: 'bordered',
+                              onReport: () => _reportPost(postWithId),
+                              onDelete: () => _deletePost(postWithId),
+                              isOwner: postWithId['userId']?.toString() ==
+                                  _prefs.getString('userId'),
+                              postId: postWithId['_id']?.toString() ?? '',
+                              showDistance: selectedIndex == 3,
+                            ),
+                          ),
                         ),
                       );
                     }),

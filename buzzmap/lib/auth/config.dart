@@ -2,17 +2,22 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart';
 
 //Login
 class Config {
   static String get baseUrl {
     if (Platform.isAndroid) {
       return dotenv.env['API_BASE_URL_ANDROID_EMULATOR'] ??
-          'http://10.0.2.2:4000';
+          'https://buzzmap-server.vercel.app';
     } else if (Platform.isIOS) {
-      return dotenv.env['API_BASE_URL_IOS'] ?? 'http://localhost:4000';
+      return dotenv.env['API_BASE_URL_IOS'] ??
+          'https://buzzmap-server.vercel.app';
+    } else if (kIsWeb) {
+      return dotenv.env['API_BASE_URL_WEB'] ??
+          'https://buzzmap-server.vercel.app';
     }
-    return 'http://localhost:4000';
+    return 'https://buzzmap-server.vercel.app';
   }
 
   static String get createPostUrl => '$baseUrl/api/v1/reports';

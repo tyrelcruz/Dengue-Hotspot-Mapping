@@ -22,6 +22,7 @@ class EngagementRow extends StatefulWidget {
     this.isAdminPost = false,
     this.themeMode = 'dark',
     this.disableCommentButton = false,
+    this.forceWhiteIcons = false,
   });
 
   final String postId;
@@ -31,6 +32,7 @@ class EngagementRow extends StatefulWidget {
   final bool isAdminPost;
   final String themeMode;
   final bool disableCommentButton;
+  final bool forceWhiteIcons;
 
   @override
   _EngagementRowState createState() => _EngagementRowState();
@@ -129,7 +131,9 @@ class _EngagementRowState extends State<EngagementRow> {
     final theme = Theme.of(context);
     final customColors = Theme.of(context).extension<CustomColors>();
     final isDark = widget.themeMode == 'dark';
-    final iconColor = isDark ? Colors.white : Colors.black;
+    final iconColor = widget.forceWhiteIcons
+        ? Colors.white
+        : (isDark ? Colors.white : Colors.black);
     final voteProvider = Provider.of<VoteProvider>(context);
     final commentProvider = Provider.of<CommentProvider>(context);
 
@@ -166,13 +170,13 @@ class _EngagementRowState extends State<EngagementRow> {
                 onPressed: () => _handleVote('upvote'),
                 icon: Icon(
                   isUpvoted ? Icons.arrow_upward : Icons.arrow_upward_outlined,
-                  color: isUpvoted ? Colors.green : Colors.grey[600],
+                  color: isUpvoted ? Colors.green : iconColor,
                   size: 20,
                 ),
                 label: Text(
                   formatCount(upvoteCount),
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: isUpvoted ? Colors.green : Colors.grey[600],
+                    color: isUpvoted ? Colors.green : iconColor,
                   ),
                 ),
                 style: TextButton.styleFrom(
@@ -189,13 +193,13 @@ class _EngagementRowState extends State<EngagementRow> {
                   isDownvoted
                       ? Icons.arrow_downward
                       : Icons.arrow_downward_outlined,
-                  color: isDownvoted ? Colors.red : Colors.grey[600],
+                  color: isDownvoted ? Colors.red : iconColor,
                   size: 20,
                 ),
                 label: Text(
                   formatCount(downvoteCount),
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: isDownvoted ? Colors.red : Colors.grey[600],
+                    color: isDownvoted ? Colors.red : iconColor,
                   ),
                 ),
                 style: TextButton.styleFrom(
@@ -219,13 +223,13 @@ class _EngagementRowState extends State<EngagementRow> {
                 },
                 icon: Icon(
                   Icons.chat_bubble_outline,
-                  color: Colors.grey[600],
+                  color: iconColor,
                   size: 20,
                 ),
                 label: Text(
                   formatCount(commentCount),
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
+                    color: iconColor,
                   ),
                 ),
                 style: TextButton.styleFrom(

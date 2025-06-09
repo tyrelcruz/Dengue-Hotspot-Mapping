@@ -9,6 +9,7 @@ import 'package:buzzmap/auth/config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'package:buzzmap/errors/flushbar.dart';
 
 class AdminPostDetailScreen extends StatelessWidget {
   final Map<String, dynamic> post;
@@ -38,133 +39,140 @@ class AdminPostDetailScreen extends StatelessWidget {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        backgroundColor: theme.colorScheme.primary,
+        backgroundColor: Colors.white,
         title: Text(
           'Announcement',
           style: theme.textTheme.titleMedium?.copyWith(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: Colors.white,
+            color: Colors.black,
           ),
         ),
         leading: IconButton(
           icon: const Icon(Icons.close),
-          color: Colors.white,
+          color: Colors.black,
           onPressed: () => Navigator.of(context).pop(),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Colors.black),
         elevation: 0,
       ),
-      backgroundColor: theme.colorScheme.primary,
-      body: Container(
-        color: theme.colorScheme.primary,
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            // User info
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: UserInfoRow(
-                type: 'announcement',
-                title: 'Quezon City Surveillance and Epidemiology Division',
-                subtitle: _formatDate(publishDate),
-                iconUrl: 'assets/icons/surveillance_logo.svg',
-              ),
-            ),
-            // Title
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text.rich(
-                TextSpan(
+      backgroundColor: Colors.white,
+      body: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          // User info
+          Padding(
+            padding: const EdgeInsets.only(top: 16, bottom: 8),
+            child: Card(
+              color: theme.colorScheme.primary,
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const TextSpan(
-                      text: '🚨 ',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                    UserInfoRow(
+                      type: 'announcement',
+                      title:
+                          'Quezon City Surveillance and Epidemiology Division',
+                      subtitle: _formatDate(publishDate),
+                      iconUrl: 'assets/icons/surveillance_logo.svg',
+                    ),
+                    const SizedBox(height: 12),
+                    // Title
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          const TextSpan(
+                            text: '🚨 ',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          TextSpan(
+                            text: title,
+                            style: const TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const TextSpan(
+                            text: ' 🚨',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Content
+                    Text(
+                      content,
+                      style: theme.textTheme.bodyLarge?.copyWith(
                         color: Colors.white,
                       ),
                     ),
-                    TextSpan(
-                      text: title,
-                      style: const TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    if (references.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Source: $references',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontStyle: FontStyle.italic,
+                            color: Colors.black54,
+                          ),
+                        ),
                       ),
-                    ),
-                    const TextSpan(
-                      text: ' 🚨',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    // Edge-to-edge image(s)
+                    if (validImages.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: SizedBox(
+                          height: 240,
+                          width: double.infinity,
+                          child: PageView.builder(
+                            itemCount: validImages.length,
+                            itemBuilder: (context, index) {
+                              return CachedNetworkImage(
+                                imageUrl: validImages[index],
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              );
+                            },
+                          ),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            // Content
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                content,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: Colors.white,
-                ),
-              ),
+          ),
+          // Engagement row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+            child: EngagementRow(
+              postId: postId,
+              post: post,
+              initialUpvotes: numUpvotes,
+              initialDownvotes: numDownvotes,
+              isAdminPost: true,
+              themeMode: 'light',
+              forceWhiteIcons: false,
             ),
-            // References
-            if (references.isNotEmpty)
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text(
-                  'Source: $references',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontStyle: FontStyle.italic,
-                    color: Colors.white70,
-                  ),
-                ),
-              ),
-            // Edge-to-edge image(s)
-            if (validImages.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: SizedBox(
-                  height: 240,
-                  width: double.infinity,
-                  child: PageView.builder(
-                    itemCount: validImages.length,
-                    itemBuilder: (context, index) {
-                      return CachedNetworkImage(
-                        imageUrl: validImages[index],
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      );
-                    },
-                  ),
-                ),
-              ),
-            // Engagement row
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-              child: EngagementRow(
-                postId: postId,
-                post: post,
-                initialUpvotes: numUpvotes,
-                initialDownvotes: numDownvotes,
-                isAdminPost: true,
-                themeMode: 'dark',
-              ),
-            ),
-            // Comments section
-            CommentsSection(postId: postId),
-            const SizedBox(height: 8),
-          ],
-        ),
+          ),
+          // Comments section
+          CommentsSection(postId: postId),
+          const SizedBox(height: 8),
+        ],
       ),
       bottomNavigationBar: CommentInputBar(postId: postId, userName: 'You'),
     );
@@ -196,15 +204,40 @@ class _CommentsSectionState extends State<CommentsSection> {
   Map<String, bool> upvotedComments = {};
   Map<String, bool> downvotedComments = {};
 
+  // Add a map to store userId -> profilePhotoUrl
+  Map<String, String> _userProfilePhotos = {};
+
   @override
   void initState() {
     super.initState();
     _initPrefsAndFetch();
+    _fetchUserProfiles();
   }
 
   Future<void> _initPrefsAndFetch() async {
     _prefs = await SharedPreferences.getInstance();
     await _fetchComments();
+  }
+
+  Future<void> _fetchUserProfiles() async {
+    try {
+      final response =
+          await http.get(Uri.parse('${Config.baseUrl}/api/v1/accounts/basic'));
+      if (response.statusCode == 200) {
+        final List<dynamic> users = jsonDecode(response.body);
+        setState(() {
+          _userProfilePhotos = {
+            for (var user in users)
+              if (user['_id'] != null && user['profilePhotoUrl'] != null)
+                user['_id']: user['profilePhotoUrl'] ?? ''
+          };
+        });
+      } else {
+        print('Failed to fetch user profiles: \\${response.body}');
+      }
+    } catch (e) {
+      print('Error fetching user profiles: $e');
+    }
   }
 
   Future<void> _fetchComments() async {
@@ -320,6 +353,17 @@ class _CommentsSectionState extends State<CommentsSection> {
         const Padding(
           padding: EdgeInsets.all(11.0),
         ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Text(
+            'Comments',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: Colors.black,
+            ),
+          ),
+        ),
         ...comments.map((comment) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
@@ -328,17 +372,23 @@ class _CommentsSectionState extends State<CommentsSection> {
                   // Avatar
                   CircleAvatar(
                     radius: 18,
-                    backgroundImage: comment['user']?['avatarUrl'] != null
-                        ? NetworkImage(comment['user']['avatarUrl'])
+                    backgroundImage: comment['user']?['_id'] != null &&
+                            _userProfilePhotos[comment['user']['_id']]
+                                    ?.isNotEmpty ==
+                                true
+                        ? NetworkImage(
+                            _userProfilePhotos[comment['user']['_id']]!)
                         : null,
-                    child: comment['user']?['avatarUrl'] == null
+                    child: (comment['user']?['_id'] == null ||
+                            _userProfilePhotos[comment['user']['_id']]
+                                    ?.isEmpty !=
+                                false)
                         ? Text(
                             (comment['user']?['username'] ?? 'U')[0]
                                 .toUpperCase(),
                             style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white),
                           )
                         : null,
                   ),
@@ -353,7 +403,7 @@ class _CommentsSectionState extends State<CommentsSection> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.grey.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Column(
@@ -362,19 +412,16 @@ class _CommentsSectionState extends State<CommentsSection> {
                               Text(
                                 comment['user']?['username'] ?? 'Unknown',
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                  color: Colors.white,
-                                ),
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 comment['content'] ?? '',
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.w200,
-                                  fontSize: 14,
-                                  color: Colors.white,
-                                ),
+                                    fontWeight: FontWeight.w200,
+                                    fontSize: 14,
+                                    color: Colors.black),
                               ),
                             ],
                           ),
@@ -496,8 +543,10 @@ class _CommentInputBarState extends State<CommentInputBar> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('authToken');
       if (token == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please log in to comment')),
+        await AppFlushBar.showError(
+          context,
+          title: 'Not Logged In',
+          message: 'Please log in to comment',
         );
         return;
       }
@@ -523,17 +572,26 @@ class _CommentInputBarState extends State<CommentInputBar> {
             commentsSection._fetchComments();
           }
         }
+        await AppFlushBar.showSuccess(
+          context,
+          title: 'Comment Posted',
+          message: 'Your comment was posted successfully!',
+        );
       } else {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to post comment')),
+          await AppFlushBar.showError(
+            context,
+            title: 'Comment Failed',
+            message: 'Failed to post comment',
           );
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to post comment')),
+        await AppFlushBar.showError(
+          context,
+          title: 'Comment Failed',
+          message: 'Failed to post comment',
         );
       }
     } finally {
@@ -547,78 +605,41 @@ class _CommentInputBarState extends State<CommentInputBar> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
-      color: theme.colorScheme.primary,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Material(
-          elevation: 2,
-          borderRadius: BorderRadius.circular(30),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary,
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(
-                color: Colors.white30,
-                width: 1,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _controller,
+              decoration: const InputDecoration(
+                hintText: 'Add a comment...',
+                border: InputBorder.none,
               ),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon:
-                      const Icon(Icons.gif_box_outlined, color: Colors.white70),
-                  onPressed: () {}, // Add GIF picker logic
-                ),
-                IconButton(
-                  icon: const Icon(Icons.emoji_emotions_outlined,
-                      color: Colors.white70),
-                  onPressed: () {}, // Add emoji picker logic
-                ),
-                IconButton(
-                  icon:
-                      const Icon(Icons.face_4_outlined, color: Colors.white70),
-                  onPressed: () {}, // Add sticker logic
-                ),
-                IconButton(
-                  icon: const Icon(Icons.auto_awesome_outlined,
-                      color: Colors.white70),
-                  onPressed: () {}, // Add effects logic
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    enabled: !isPosting,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Comment as ${widget.userName}',
-                      hintStyle: const TextStyle(color: Colors.white70),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 10),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: isPosting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.send, color: Colors.white),
-                  onPressed: isPosting ? null : _postComment,
-                ),
-              ],
+              maxLines: null,
             ),
           ),
-        ),
+          IconButton(
+            icon: isPosting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.send),
+            onPressed: isPosting ? null : _postComment,
+          ),
+        ],
       ),
     );
   }

@@ -24,6 +24,8 @@ import 'package:flutter_svg/flutter_svg.dart' as svg;
 import 'dart:ui' as ui;
 import 'package:flutter_svg/svg.dart';
 import 'dart:typed_data';
+import 'package:provider/provider.dart';
+import 'package:buzzmap/providers/post_provider.dart';
 
 class MappingScreen extends StatefulWidget {
   final double? initialLatitude;
@@ -2208,30 +2210,61 @@ class _MappingScreenState extends State<MappingScreen>
         dropdownButtonProps: const DropdownButtonProps(
           icon: Icon(Icons.arrow_drop_down, color: Colors.white),
         ),
-        onChanged: (value) {
-          setState(() {
-            selectedBarangay = value;
+        onChanged: (value) async {
+          if (value != null && _barangayCentroids.containsKey(value)) {
+            setState(() {
+              selectedBarangay = value;
+              // Set the district for the selected barangay
+              selectedDistrict = districtData.entries
+                  .firstWhere(
+                    (entry) => entry.value.contains(value),
+                    orElse: () => MapEntry('Unknown', <String>[]),
+                  )
+                  .key;
+            });
 
-            if (value != null && _barangayCentroids.containsKey(value)) {
-              _zoomToLocation(_barangayCentroids[value]!, barangay: value);
+            _zoomToLocation(_barangayCentroids[value]!, barangay: value);
 
-              final data = _dengueData[value];
-              if (data != null) {
-                selectedSeverity = data['severity'] as String;
+            // Fetch the latest data from the API
+            try {
+              final response = await http.get(
+                Uri.parse(
+                    '${Config.baseUrl}/api/v1/barangays/get-all-barangays'),
+              );
 
-                // 🔥 ADD THESE:
-                hazardRiskLevels = {
-                  'Mosquito Breeding Risk':
-                      _convertSeverityToRisk(data['severity']),
-                  'Dengue Infection Risk':
-                      _convertSeverityToRisk(data['severity']),
-                  'Home Safety Status':
-                      _convertSeverityToRisk(data['severity']),
-                };
-                _isCardVisible = true; // 🔥 show the card when user selects
+              if (response.statusCode == 200) {
+                final List<dynamic> data = jsonDecode(response.body);
+                final barangayData = data.firstWhere(
+                  (item) => item['name'] == value,
+                  orElse: () => null,
+                );
+
+                if (barangayData != null) {
+                  final pattern = barangayData['status_and_recommendation']
+                              ?['pattern_based']?['status']
+                          ?.toString()
+                          .toLowerCase() ??
+                      'unknown';
+                  final cases =
+                      Provider.of<PostProvider>(context, listen: false)
+                          .posts
+                          .where((post) => post['barangay'] == value)
+                          .length;
+
+                  // Show the modal bottom sheet with details
+                  _showDengueDetails(
+                    context,
+                    value,
+                    cases,
+                    pattern.toUpperCase(),
+                    _barangayCentroids[value]!,
+                  );
+                }
               }
+            } catch (e) {
+              print('Error fetching barangay data: $e');
             }
-          });
+          }
         },
         dropdownBuilder: (context, selectedItem) {
           return Text(

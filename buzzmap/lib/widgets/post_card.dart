@@ -180,7 +180,7 @@ class PostCard extends StatelessWidget {
               initialUpvotes: numUpvotes,
               initialDownvotes: numDownvotes,
               isAdminPost: false,
-              themeMode: theme.brightness == Brightness.dark ? 'dark' : 'light',
+              themeMode: 'light',
             ),
           ),
       ],

@@ -59,6 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    print('DEBUG: _handleLogin called');
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);

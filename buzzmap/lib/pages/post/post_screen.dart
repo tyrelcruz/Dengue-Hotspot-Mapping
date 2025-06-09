@@ -35,9 +35,20 @@ class PostScreen extends StatefulWidget {
 }
 
 class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
+  final TextEditingController descriptionController = TextEditingController();
   final TextEditingController dateController = TextEditingController();
   final TextEditingController timeController = TextEditingController();
-  final TextEditingController descriptionController = TextEditingController();
+  String? selectedBarangay;
+  String? selectedReportType;
+  LatLng? selectedCoordinates;
+  String? selectedAddress;
+  String? selectedDistrict;
+  List<File> _selectedImages = [];
+  bool _isLoading = false;
+  bool _isAnonymous = false;
+  String? _currentUsername;
+  String? _profilePhotoUrl;
+  late SharedPreferences _prefs;
 
   final List<String> reportTypes = [
     'Stagnant Water',
@@ -47,15 +58,8 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
 
   Set<Polygon> _barangayPolygons = {};
 
-  List<File> _selectedImages = [];
-
   final ImagePicker _picker = ImagePicker();
 
-  LatLng? selectedCoordinates;
-  String? selectedAddress;
-  String? selectedReportType;
-  String? selectedBarangay;
-  String? selectedDistrict;
   GoogleMapController? mapController;
   Map<String, LatLng> barangayCenters = {};
 
@@ -65,8 +69,6 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
 
   bool _isLoadingLocation = false;
 
-  bool _isLoading = false;
-
   // Tutorial overlay state
   bool _showMapTutorial = true;
 
@@ -75,83 +77,10 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
 
-  bool _isPointInsideBarangay(LatLng point) {
-    for (final polygon in _barangayPolygons) {
-      if (polygon.polygonId.value == 'outside-quezon-city') continue;
-
-      if (_isPointInPolygon(point, polygon.points)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  String? _combineDateAndTime(String selectedDate, String selectedTime) {
-    try {
-      // Parse date
-      DateTime parsedDate;
-      if (selectedDate.startsWith('20')) {
-        parsedDate = DateFormat('yyyy-MM-dd').parse(selectedDate);
-      } else {
-        parsedDate = DateFormat('MM-dd-yyyy').parse(selectedDate);
-      }
-
-      // Clean and split time
-      final parts = selectedTime.trim().split(RegExp(r'\s+'));
-      if (parts.length != 2) throw FormatException("Invalid time format");
-
-      final timePart = parts[0]; // e.g., "5:39"
-      final amPm = parts[1].toUpperCase(); // "PM" or "AM"
-
-      final hourMinute = timePart.split(":");
-      if (hourMinute.length != 2) throw FormatException("Invalid hour:minute");
-
-      int hour = int.parse(hourMinute[0]);
-      int minute = int.parse(hourMinute[1]);
-
-      if (amPm == "PM" && hour != 12) hour += 12;
-      if (amPm == "AM" && hour == 12) hour = 0;
-
-      final combined = DateTime(
-        parsedDate.year,
-        parsedDate.month,
-        parsedDate.day,
-        hour,
-        minute,
-      );
-
-      return combined.toUtc().toIso8601String();
-    } catch (e) {
-      print("❌ Date/time combination error: $e");
-      return null;
-    }
-  }
-
-  bool _isPointInPolygon(LatLng point, List<LatLng> polygon) {
-    int intersectCount = 0;
-
-    for (int j = 0; j < polygon.length - 1; j++) {
-      LatLng p1 = polygon[j];
-      LatLng p2 = polygon[j + 1];
-
-      if ((p1.longitude > point.longitude) !=
-          (p2.longitude > point.longitude)) {
-        double atX = (p2.latitude - p1.latitude) *
-                (point.longitude - p1.longitude) /
-                (p2.longitude - p1.longitude) +
-            p1.latitude;
-        if (point.latitude < atX) {
-          intersectCount++;
-        }
-      }
-    }
-
-    return (intersectCount % 2) == 1;
-  }
-
   @override
   void initState() {
     super.initState();
+    _initializePrefs();
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1000),
       vsync: this,
@@ -185,6 +114,43 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
 
     _loadGeoJsonPolygons();
     _showMapTutorial = selectedCoordinates == null;
+  }
+
+  Future<void> _initializePrefs() async {
+    _prefs = await SharedPreferences.getInstance();
+    await _ensureProfilePhotoLoaded();
+  }
+
+  Future<void> _ensureProfilePhotoLoaded() async {
+    String? profilePhotoUrl = _prefs.getString('profilePhotoUrl');
+    final token = _prefs.getString('authToken');
+    if ((profilePhotoUrl == null || profilePhotoUrl.isEmpty) && token != null) {
+      try {
+        final response = await http.get(
+          Uri.parse('${Config.baseUrl}/api/v1/auth/me'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        );
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final photoUrl = data['user']?['profilePhotoUrl'];
+          if (photoUrl != null && photoUrl.isNotEmpty) {
+            await _prefs.setString('profilePhotoUrl', photoUrl);
+            setState(() {
+              _profilePhotoUrl = photoUrl;
+            });
+          }
+        }
+      } catch (e) {
+        print('Error fetching profile photo URL: $e');
+      }
+    } else {
+      setState(() {
+        _profilePhotoUrl = profilePhotoUrl;
+      });
+    }
   }
 
   @override
@@ -584,22 +550,33 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
     Set<String> barangayNames = {};
 
     for (var feature in geojson['features']) {
-      final name = feature['properties']['name'];
+      final properties = feature['properties'];
+      final geometry = feature['geometry'];
+
+      if (properties == null ||
+          geometry == null ||
+          geometry['type'] != 'Polygon') continue;
+
+      // Get the name from either name or NAME_3 property
+      final name = properties['name'] ?? properties['NAME_3'];
       if (name == null) continue;
 
-      final geometry = feature['geometry'];
-      if (geometry != null && geometry['type'] == 'Polygon') {
-        final coords = geometry['coordinates'][0];
-        double latSum = 0;
-        double lngSum = 0;
-        for (var point in coords) {
-          lngSum += point[0];
-          latSum += point[1];
-        }
-        final count = coords.length;
-        centers[name] = LatLng(latSum / count, lngSum / count);
-        barangayNames.add(name);
+      // Handle special cases for barangay names
+      String processedName = name;
+      if (name == 'E. Rodriguez Sr.') {
+        processedName = 'E. Rodriguez';
       }
+
+      final coords = geometry['coordinates'][0];
+      double latSum = 0;
+      double lngSum = 0;
+      for (var point in coords) {
+        lngSum += point[0];
+        latSum += point[1];
+      }
+      final count = coords.length;
+      centers[processedName] = LatLng(latSum / count, lngSum / count);
+      barangayNames.add(processedName);
     }
 
     // Update the district data with all barangays
@@ -843,21 +820,28 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
     final customColors = Theme.of(context).extension<CustomColors>();
 
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text('New Report',
-            style: theme.textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w600)),
-        centerTitle: true,
         backgroundColor: Colors.white,
+        title: Text(
+          'Create Post',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          color: Colors.black,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        iconTheme: const IconThemeData(color: Colors.black),
+        elevation: 0,
       ),
-      body: NotificationListener<ScrollNotification>(
-        onNotification: (_) => !_mapScrollable,
-        child: SingleChildScrollView(
-          physics: _mapScrollable
-              ? const ClampingScrollPhysics()
-              : const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16.0, 16.0, 27.0, 16.0),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -868,9 +852,21 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
                     width: 45,
                     height: 45,
                     decoration: BoxDecoration(
-                        shape: BoxShape.circle, color: Colors.grey.shade200),
+                      shape: BoxShape.circle,
+                      color: Colors.grey.shade200,
+                    ),
                     child: ClipOval(
-                      child: SvgPicture.asset('assets/icons/person_4.svg'),
+                      child: _profilePhotoUrl != null &&
+                              _profilePhotoUrl!.isNotEmpty
+                          ? Image.network(
+                              _profilePhotoUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  SvgPicture.asset('assets/icons/person_1.svg',
+                                      fit: BoxFit.cover),
+                            )
+                          : SvgPicture.asset('assets/icons/person_1.svg',
+                              fit: BoxFit.cover),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1137,6 +1133,19 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
                                 controller: timeController,
                                 isTime: true,
                               ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: () {
+                                final now = DateTime.now();
+                                dateController.text =
+                                    DateFormat('MM-dd-yyyy').format(now);
+                                timeController.text =
+                                    DateFormat('h:mm a').format(now);
+                              },
+                              icon: Icon(Icons.access_time,
+                                  color: theme.colorScheme.primary),
+                              tooltip: 'Use current date and time',
                             ),
                           ],
                         ),
@@ -1542,5 +1551,102 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
     double distance = earthRadius * c;
 
     return distance;
+  }
+
+  bool _isPointInsideBarangay(LatLng point) {
+    for (final polygon in _barangayPolygons) {
+      if (polygon.polygonId.value == 'outside-quezon-city') continue;
+      if (_isPointInPolygon(point, polygon.points)) {
+        // When we find a match, update the selected barangay
+        setState(() {
+          selectedBarangay = polygon.polygonId.value;
+          selectedDistrict = guessDistrictFromBarangay(selectedBarangay);
+        });
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isPointInPolygon(LatLng point, List<LatLng> polygon) {
+    if (polygon.isEmpty) return false;
+
+    bool isInside = false;
+    int j = polygon.length - 1;
+    double epsilon = 0.000001; // Small value for floating point comparison
+
+    for (int i = 0; i < polygon.length; i++) {
+      // Check if point is on the boundary
+      if ((point.latitude == polygon[i].latitude &&
+              point.longitude == polygon[i].longitude) ||
+          (point.latitude == polygon[j].latitude &&
+              point.longitude == polygon[j].longitude)) {
+        return true;
+      }
+
+      // Check if point is on a horizontal boundary
+      if ((polygon[i].latitude == polygon[j].latitude) &&
+          (point.latitude == polygon[i].latitude) &&
+          (point.longitude > min(polygon[i].longitude, polygon[j].longitude)) &&
+          (point.longitude < max(polygon[i].longitude, polygon[j].longitude))) {
+        return true;
+      }
+
+      if ((polygon[i].latitude > point.latitude) !=
+          (polygon[j].latitude > point.latitude)) {
+        double intersect = (polygon[j].longitude - polygon[i].longitude) *
+                (point.latitude - polygon[i].latitude) /
+                (polygon[j].latitude - polygon[i].latitude) +
+            polygon[i].longitude;
+
+        if (point.longitude < intersect) {
+          isInside = !isInside;
+        }
+      }
+      j = i;
+    }
+
+    return isInside;
+  }
+
+  String? _combineDateAndTime(String selectedDate, String selectedTime) {
+    try {
+      // Parse date
+      DateTime parsedDate;
+      if (selectedDate.startsWith('20')) {
+        parsedDate = DateFormat('yyyy-MM-dd').parse(selectedDate);
+      } else {
+        parsedDate = DateFormat('MM-dd-yyyy').parse(selectedDate);
+      }
+
+      // Clean and split time
+      final parts = selectedTime.trim().split(RegExp(r'\s+'));
+      if (parts.length != 2) throw FormatException("Invalid time format");
+
+      final timePart = parts[0]; // e.g., "5:39"
+      final amPm = parts[1].toUpperCase(); // "PM" or "AM"
+
+      final hourMinute = timePart.split(":");
+      if (hourMinute.length != 2) throw FormatException("Invalid hour:minute");
+
+      int hour = int.parse(hourMinute[0]);
+      int minute = int.parse(hourMinute[1]);
+
+      if (amPm == "PM" && hour != 12) hour += 12;
+      if (amPm == "AM" && hour == 12) hour = 0;
+
+      final combined = DateTime(
+        parsedDate.year,
+        parsedDate.month,
+        parsedDate.day,
+        hour,
+        minute,
+      );
+
+      return combined.toUtc().toIso8601String();
+    } catch (e) {
+      print("❌ Date/time combination error: $e");
+      return null;
+    }
   }
 }

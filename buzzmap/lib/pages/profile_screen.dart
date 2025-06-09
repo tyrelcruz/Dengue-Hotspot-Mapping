@@ -32,10 +32,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // Editable About fields
   String _bio =
       'Mom, teacher, and dengue awareness advocate in Brgy. Bagong Silangan. Actively contributing to a healthier community.';
-  String _barangay = 'Bagong Silangan';
   bool _isEditingAbout = false;
   final TextEditingController _bioController = TextEditingController();
-  final TextEditingController _barangayController = TextEditingController();
 
   @override
   void initState() {
@@ -46,7 +44,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await Provider.of<VoteProvider>(context, listen: false).refreshAllVotes();
     });
     _bioController.text = _bio;
-    _barangayController.text = _barangay;
   }
 
   Future<void> _initPrefs() async {
@@ -60,19 +57,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     print(
         'Debug: Loaded profile photo URL from SharedPreferences: $_profilePhotoUrl');
 
-    // If no profile photo URL in SharedPreferences, fetch from server
-    if (_profilePhotoUrl == null || _profilePhotoUrl!.isEmpty) {
-      await _fetchProfilePhotoUrl();
-    }
+    // Fetch latest profile data from server
+    await _fetchProfileData();
   }
 
-  Future<void> _fetchProfilePhotoUrl() async {
+  Future<void> _fetchProfileData() async {
     final token = _prefs.getString('authToken');
     if (token == null) return;
 
     try {
       final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/auth/me'),
+        Uri.parse('${Config.baseUrl}/api/v1/accounts/basic/$_userId'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -81,7 +76,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final photoUrl = data['user']?['profilePhotoUrl'];
+        final photoUrl = data['profilePhotoUrl'];
+        final fetchedBio = data['bio'];
 
         if (photoUrl != null && photoUrl.isNotEmpty) {
           print('Debug: Fetched profile photo URL from server: $photoUrl');
@@ -90,12 +86,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _profilePhotoUrl = photoUrl;
           });
         }
+
+        if (fetchedBio != null) {
+          print('Debug: Fetched bio from server: $fetchedBio');
+          setState(() {
+            _bio = fetchedBio;
+            _bioController.text = fetchedBio;
+          });
+        }
       } else {
-        print(
-            'Debug: Failed to fetch profile photo URL: ${response.statusCode}');
+        print('Debug: Failed to fetch profile data: ${response.statusCode}');
       }
     } catch (e) {
-      print('Debug: Error fetching profile photo URL: $e');
+      print('Debug: Error fetching profile data: $e');
     }
   }
 
@@ -179,16 +182,83 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _updateBio() async {
+    if (_userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User ID not found. Please try again.')),
+      );
+      return;
+    }
+
+    final token = _prefs.getString('authToken');
+    if (token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content:
+                Text('Authentication token not found. Please log in again.')),
+      );
+      return;
+    }
+
+    // Validate bio length (500 characters max as per backend)
+    if (_bioController.text.length > 500) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bio cannot exceed 500 characters.')),
+      );
+      return;
+    }
+
+    try {
+      final response = await http.patch(
+        Uri.parse('${Config.baseUrl}/api/v1/accounts/$_userId/bio'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'bio': _bioController.text,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _bio = data['account']['bio'] ?? _bioController.text;
+          _isEditingAbout = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bio updated successfully!')),
+        );
+      } else {
+        final error =
+            jsonDecode(response.body)['error'] ?? 'Failed to update bio';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error)),
+        );
+      }
+    } catch (e) {
+      print('Error updating bio: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Failed to update bio. Please try again.')),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _bioController.dispose();
-    _barangayController.dispose();
     // Save the current profile photo URL when the screen is disposed
     if (_profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty) {
       _prefs.setString('profilePhotoUrl', _profilePhotoUrl!);
       print('Debug: Saved profile photo URL on dispose: $_profilePhotoUrl');
     }
     super.dispose();
+  }
+
+  List<Map<String, dynamic>> _getFilteredPosts(
+      List<Map<String, dynamic>> posts) {
+    return posts;
   }
 
   @override
@@ -210,6 +280,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 image: DecorationImage(
                   image: AssetImage('assets/images/pattern_overlay.png'),
                   fit: BoxFit.cover,
+                ),
+              ),
+            ),
+
+            // Close button
+            Positioned(
+              top: 50,
+              right: 20,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.close, size: 24, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
                 ),
               ),
             ),
@@ -326,98 +412,131 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       // My Posts Tab
                       _isPrefsLoaded
-                          ? (myPosts.isEmpty
-                              ? const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(32),
-                                    child: Text('No posts yet.'),
-                                  ),
-                                )
-                              : ListView.builder(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 16),
-                                  itemCount: myPosts.length,
-                                  itemBuilder: (context, index) {
-                                    final post = myPosts[index];
-                                    // Format post data to ensure all required fields are present
-                                    final formattedPost = {
-                                      '_id': post['_id']?.toString() ??
-                                          post['id']?.toString() ??
-                                          '',
-                                      'username':
-                                          post['username']?.toString() ??
-                                              'Anonymous',
-                                      'whenPosted':
-                                          post['whenPosted']?.toString() ??
-                                              'Just now',
-                                      'location':
-                                          post['location']?.toString() ??
-                                              'Unknown location',
-                                      'date': post['date']?.toString() ?? '',
-                                      'time': post['time']?.toString() ?? '',
-                                      'reportType':
-                                          post['reportType']?.toString() ??
-                                              'Unknown',
-                                      'description':
-                                          post['description']?.toString() ?? '',
-                                      'numUpvotes':
-                                          (post['numUpvotes'] as int?) ?? 0,
-                                      'numDownvotes':
-                                          (post['numDownvotes'] as int?) ?? 0,
-                                      'images':
-                                          (post['images'] as List<dynamic>?)
-                                                  ?.map((e) => e.toString())
-                                                  .toList() ??
-                                              [],
-                                      'iconUrl': post['iconUrl']?.toString() ??
-                                          'assets/icons/person_1.svg',
-                                      'isAnonymous':
-                                          post['isAnonymous'] ?? false,
-                                      'userId': post['userId']?.toString(),
-                                    };
-                                    return GestureDetector(
-                                      onTap: () async {
-                                        await Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                PostDetailScreen(
-                                                    post: formattedPost),
+                          ? Column(
+                              children: [
+                                // Posts list
+                                Expanded(
+                                  child: _getFilteredPosts(myPosts).isEmpty
+                                      ? const Center(
+                                          child: Padding(
+                                            padding: EdgeInsets.all(32),
+                                            child: Text(
+                                              'No posts yet.',
+                                              style: TextStyle(
+                                                color: Color(0xFF718096),
+                                                fontSize: 16,
+                                              ),
+                                            ),
                                           ),
-                                        );
-                                        setState(() {});
-                                      },
-                                      child: PostCard(
-                                        key: ValueKey(formattedPost['_id']),
-                                        post: formattedPost,
-                                        username: formattedPost['username']!,
-                                        whenPosted:
-                                            formattedPost['whenPosted']!,
-                                        location: formattedPost['location']!,
-                                        date: formattedPost['date']!,
-                                        time: formattedPost['time']!,
-                                        reportType:
-                                            formattedPost['reportType']!,
-                                        description:
-                                            formattedPost['description']!,
-                                        numUpvotes:
-                                            formattedPost['numUpvotes'] as int,
-                                        numDownvotes:
-                                            formattedPost['numDownvotes']
-                                                as int,
-                                        images: formattedPost['images']
-                                            as List<String>,
-                                        iconUrl: formattedPost['iconUrl']!,
-                                        type: 'bordered',
-                                        onReport: () {},
-                                        onDelete: () {},
-                                        isOwner: true,
-                                        postId: formattedPost['_id']!,
-                                        showDistance: false,
-                                      ),
-                                    );
-                                  },
-                                ))
+                                        )
+                                      : ListView.builder(
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 16),
+                                          itemCount:
+                                              _getFilteredPosts(myPosts).length,
+                                          itemBuilder: (context, index) {
+                                            final post = _getFilteredPosts(
+                                                myPosts)[index];
+                                            // Format post data to ensure all required fields are present
+                                            final formattedPost = {
+                                              '_id': post['_id']?.toString() ??
+                                                  post['id']?.toString() ??
+                                                  '',
+                                              'username': post['username']
+                                                      ?.toString() ??
+                                                  'Anonymous',
+                                              'whenPosted': post['whenPosted']
+                                                      ?.toString() ??
+                                                  'Just now',
+                                              'location': post['location']
+                                                      ?.toString() ??
+                                                  'Unknown location',
+                                              'date':
+                                                  post['date']?.toString() ??
+                                                      '',
+                                              'time':
+                                                  post['time']?.toString() ??
+                                                      '',
+                                              'reportType': post['reportType']
+                                                      ?.toString() ??
+                                                  'Unknown',
+                                              'description': post['description']
+                                                      ?.toString() ??
+                                                  '',
+                                              'numUpvotes': (post['numUpvotes']
+                                                      as int?) ??
+                                                  0,
+                                              'numDownvotes':
+                                                  (post['numDownvotes']
+                                                          as int?) ??
+                                                      0,
+                                              'images': (post['images']
+                                                          as List<dynamic>?)
+                                                      ?.map((e) => e.toString())
+                                                      .toList() ??
+                                                  [],
+                                              'iconUrl': post['iconUrl']
+                                                      ?.toString() ??
+                                                  'assets/icons/person_1.svg',
+                                              'isAnonymous':
+                                                  post['isAnonymous'] ?? false,
+                                              'userId':
+                                                  post['userId']?.toString(),
+                                              'status':
+                                                  post['status']?.toString() ??
+                                                      'Pending',
+                                            };
+                                            return GestureDetector(
+                                              onTap: () async {
+                                                await Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        PostDetailScreen(
+                                                            post:
+                                                                formattedPost),
+                                                  ),
+                                                );
+                                                setState(() {});
+                                              },
+                                              child: PostCard(
+                                                key: ValueKey(
+                                                    formattedPost['_id']),
+                                                post: formattedPost,
+                                                username:
+                                                    formattedPost['username']!,
+                                                whenPosted: formattedPost[
+                                                    'whenPosted']!,
+                                                location:
+                                                    formattedPost['location']!,
+                                                date: formattedPost['date']!,
+                                                time: formattedPost['time']!,
+                                                reportType: formattedPost[
+                                                    'reportType']!,
+                                                description: formattedPost[
+                                                    'description']!,
+                                                numUpvotes:
+                                                    formattedPost['numUpvotes']
+                                                        as int,
+                                                numDownvotes: formattedPost[
+                                                    'numDownvotes'] as int,
+                                                images: formattedPost['images']
+                                                    as List<String>,
+                                                iconUrl:
+                                                    formattedPost['iconUrl']!,
+                                                type: 'bordered',
+                                                onReport: () {},
+                                                onDelete: () {},
+                                                isOwner: true,
+                                                postId: formattedPost['_id']!,
+                                                showDistance: false,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                ),
+                              ],
+                            )
                           : const Center(
                               child: Padding(
                                 padding: EdgeInsets.all(32),
@@ -492,22 +611,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 16),
-                                  TextField(
-                                    controller: _barangayController,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Barangay',
-                                      border: OutlineInputBorder(),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
                                   ElevatedButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        _bio = _bioController.text;
-                                        _barangay = _barangayController.text;
-                                        _isEditingAbout = false;
-                                      });
-                                    },
+                                    onPressed: _updateBio,
                                     child: const Text('Save'),
                                   ),
                                 ] else ...[
@@ -525,17 +630,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   // Info row
                                   Row(
                                     children: [
-                                      const Icon(Icons.location_on,
-                                          size: 18, color: Color(0xFF718096)),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        _barangay,
-                                        style: const TextStyle(
-                                          color: Color(0xFF718096),
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 18),
                                       const Icon(Icons.calendar_today,
                                           size: 16, color: Color(0xFF718096)),
                                       const SizedBox(width: 6),
@@ -572,7 +666,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     _isEditingAbout = !_isEditingAbout;
                                     if (_isEditingAbout) {
                                       _bioController.text = _bio;
-                                      _barangayController.text = _barangay;
                                     }
                                   });
                                 },
@@ -640,32 +733,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 loadingBuilder:
                                     (context, child, loadingProgress) {
                                   if (loadingProgress == null) return child;
-                                  print('Debug: Image loading progress: '
-                                      '${loadingProgress.expectedTotalBytes != null ? (loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes! * 100).toStringAsFixed(1) : 'unknown'}%');
-                                  return Container(
-                                    width: 150,
-                                    height: 150,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[300],
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Center(
-                                      child: CircularProgressIndicator(
-                                        value: loadingProgress
-                                                    .expectedTotalBytes !=
-                                                null
-                                            ? loadingProgress
-                                                    .cumulativeBytesLoaded /
-                                                loadingProgress
-                                                    .expectedTotalBytes!
-                                            : null,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                headers: {
-                                  'Accept': '*/*',
-                                  'Access-Control-Allow-Origin': '*',
+                                  return const CircularProgressIndicator();
                                 },
                               )
                             : Container(
@@ -706,22 +774,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ],
-                ),
-              ),
-            ),
-
-            // Close button
-            Positioned(
-              top: 50,
-              right: 20,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.close, size: 24, color: Colors.white),
-                  onPressed: () => Navigator.pop(context),
                 ),
               ),
             ),

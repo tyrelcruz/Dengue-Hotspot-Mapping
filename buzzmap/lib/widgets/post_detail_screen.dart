@@ -9,6 +9,7 @@ import 'package:buzzmap/auth/config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:buzzmap/providers/comment_provider.dart';
+import 'dart:async';
 
 class PostDetailScreen extends StatefulWidget {
   final Map<String, dynamic> post;
@@ -26,10 +27,47 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   late SharedPreferences _prefs;
   bool _isInitialized = false;
 
+  // Add a map to store userId -> profilePhotoUrl
+  Map<String, String> _userProfilePhotos = {};
+
+  // Carousel state
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+  Timer? _carouselTimer;
+
   @override
   void initState() {
     super.initState();
     _initializePrefs();
+    _fetchUserProfiles();
+    _startAutoPlay();
+  }
+
+  void _startAutoPlay() {
+    _carouselTimer?.cancel();
+    _carouselTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (!mounted) return;
+      final images =
+          (widget.post['images'] is List) ? widget.post['images'] as List : [];
+      final validImages =
+          images.where((img) => img != null && img.isNotEmpty).toList();
+      if (validImages.length <= 1) return;
+      setState(() {
+        _currentPage = (_currentPage + 1) % validImages.length;
+        _pageController.animateToPage(
+          _currentPage,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+        );
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _carouselTimer?.cancel();
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _initializePrefs() async {
@@ -39,6 +77,27 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       await _loadComments();
     } catch (e) {
       print('Error initializing SharedPreferences: $e');
+    }
+  }
+
+  Future<void> _fetchUserProfiles() async {
+    try {
+      final response =
+          await http.get(Uri.parse('${Config.baseUrl}/api/v1/accounts/basic'));
+      if (response.statusCode == 200) {
+        final List<dynamic> users = jsonDecode(response.body);
+        setState(() {
+          _userProfilePhotos = {
+            for (var user in users)
+              if (user['_id'] != null && user['profilePhotoUrl'] != null)
+                user['_id']: user['profilePhotoUrl'] ?? ''
+          };
+        });
+      } else {
+        print('Failed to fetch user profiles: \\${response.body}');
+      }
+    } catch (e) {
+      print('Error fetching user profiles: $e');
     }
   }
 
@@ -81,7 +140,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final reportType = (widget.post['reportType'] ?? '').toString();
     final description = (widget.post['description'] ?? '').toString();
     final iconUrl =
-        (widget.post['iconUrl'] ?? 'assets/icons/person_1.svg').toString();
+        _userProfilePhotos[widget.post['userId']]?.isNotEmpty == true
+            ? _userProfilePhotos[widget.post['userId']]!
+            : 'assets/icons/person_1.svg';
     final numUpvotes = widget.post['numUpvotes'] ?? 0;
     final numDownvotes = widget.post['numDownvotes'] ?? 0;
     final postId = widget.post['_id'] ?? '';
@@ -215,18 +276,92 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ),
           // Edge-to-edge image(s)
           if (validImages.isNotEmpty)
-            SizedBox(
-              height: 240,
-              width: double.infinity,
-              child: PageView.builder(
-                itemCount: validImages.length,
-                itemBuilder: (context, index) {
-                  return CachedNetworkImage(
-                    imageUrl: validImages[index],
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    height: 240,
                     width: double.infinity,
-                    fit: BoxFit.cover,
-                  );
-                },
+                    child: PageView.builder(
+                      controller: _pageController,
+                      itemCount: validImages.length,
+                      onPageChanged: (index) {
+                        setState(() {
+                          _currentPage = index;
+                        });
+                      },
+                      itemBuilder: (context, index) {
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: CachedNetworkImage(
+                            imageUrl: validImages[index],
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  // Left arrow
+                  if (validImages.length > 1)
+                    Positioned(
+                      left: 8,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios,
+                            color: Colors.white, size: 28),
+                        onPressed: () {
+                          int prevPage = _currentPage - 1;
+                          if (prevPage < 0) prevPage = validImages.length - 1;
+                          _pageController.animateToPage(
+                            prevPage,
+                            duration: const Duration(milliseconds: 400),
+                            curve: Curves.easeInOut,
+                          );
+                        },
+                      ),
+                    ),
+                  // Right arrow
+                  if (validImages.length > 1)
+                    Positioned(
+                      right: 8,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_forward_ios,
+                            color: Colors.white, size: 28),
+                        onPressed: () {
+                          int nextPage =
+                              (_currentPage + 1) % validImages.length;
+                          _pageController.animateToPage(
+                            nextPage,
+                            duration: const Duration(milliseconds: 400),
+                            curve: Curves.easeInOut,
+                          );
+                        },
+                      ),
+                    ),
+                  // Dots indicator
+                  if (validImages.length > 1)
+                    Positioned(
+                      bottom: 12,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(validImages.length, (index) {
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _currentPage == index
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.4),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                ],
               ),
             ),
           // Engagement row close to image, in light mode
@@ -238,7 +373,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               initialUpvotes: numUpvotes,
               initialDownvotes: numDownvotes,
               isAdminPost: false,
-              themeMode: theme.brightness == Brightness.dark ? 'dark' : 'light',
+              themeMode: 'light',
+              forceWhiteIcons: false,
             ),
           ),
           // Comments section
@@ -272,11 +408,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           children: [
                             CircleAvatar(
                               radius: 18,
-                              backgroundImage: comment['user']?['avatarUrl'] !=
-                                      null
-                                  ? NetworkImage(comment['user']['avatarUrl'])
+                              backgroundImage: comment['user']?['_id'] !=
+                                          null &&
+                                      _userProfilePhotos[comment['user']['_id']]
+                                              ?.isNotEmpty ==
+                                          true
+                                  ? NetworkImage(_userProfilePhotos[
+                                      comment['user']['_id']]!)
                                   : null,
-                              child: comment['user']?['avatarUrl'] == null
+                              child: (comment['user']?['_id'] == null ||
+                                      _userProfilePhotos[comment['user']['_id']]
+                                              ?.isEmpty !=
+                                          false)
                                   ? Text(
                                       (comment['user']?['username'] ?? 'U')[0]
                                           .toUpperCase(),

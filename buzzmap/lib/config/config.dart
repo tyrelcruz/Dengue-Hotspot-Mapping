@@ -3,7 +3,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class Config {
   static String get baseUrl =>
-      dotenv.env['API_BASE_URL_ANDROID_EMULATOR'] ?? 'http://localhost:4000';
+      dotenv.env['API_BASE_URL_ANDROID_EMULATOR'] ??
+      'https://buzzmap-server.vercel.app';
 
   // HTTP request timeout duration
   static Duration get timeoutDuration => Duration(
