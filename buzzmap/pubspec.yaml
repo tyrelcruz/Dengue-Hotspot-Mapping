@@ -47,6 +47,8 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   flutter_dotenv: ^5.1.0
   google_maps_custom_marker: ^1.0.3
+  upgrader: ^8.4.0 # For handling app updates
+  package_info_plus: ^4.2.0 # For getting app version info
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

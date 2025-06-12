@@ -92,8 +92,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
       final oneWeekAgo = DateTime.now().subtract(const Duration(days: 7));
       final filteredNotifications = notifications.where((notification) {
         final report = notification['report'] as Map<String, dynamic>?;
+        if (report == null) return false;
+
         final createdAt = DateTime.parse(
-            report?['createdAt'] ?? DateTime.now().toIso8601String());
+            report['createdAt'] ?? DateTime.now().toIso8601String());
         return createdAt.isAfter(oneWeekAgo);
       }).toList();
 
@@ -101,9 +103,13 @@ class _NotificationScreenState extends State<NotificationScreen> {
         setState(() {
           _notifications = filteredNotifications;
           _cachedFilteredNotifications = null;
+          print('Loaded notifications: ${_notifications.length}');
+          print(
+              'Notification statuses: ${_notifications.map((n) => n['report']?['status']).toList()}');
         });
       }
     } catch (e) {
+      print('Error loading notifications: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -562,7 +568,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   Widget _buildAdminAnnouncementItem(Map<String, dynamic> notification) {
     return NotificationTemplate(
-      message: notification['content'] ?? 'No content available',
+      message: notification['title'] ?? 'No title available',
       reportId: notification['_id']?.toString(),
       barangay: 'All Areas',
       status: 'announcement',

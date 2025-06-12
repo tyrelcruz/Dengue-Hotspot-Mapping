@@ -24,6 +24,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:buzzmap/config/config.dart';
 import 'package:buzzmap/providers/post_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:buzzmap/services/update_service.dart';
 
 void main() async {
   // Ensure Flutter is initialized
@@ -208,7 +209,15 @@ class MyApp extends StatelessWidget {
             ),
             builder: (context, child) {
               return GlobalAlertOverlay(
-                child: child!,
+                child: Builder(
+                  builder: (context) {
+                    // Check for updates when the app starts
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      UpdateService.checkForUpdates(context);
+                    });
+                    return child!;
+                  },
+                ),
               );
             },
             initialRoute: '/',

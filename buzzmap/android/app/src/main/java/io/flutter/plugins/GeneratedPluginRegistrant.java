@@ -21,6 +21,11 @@ public final class GeneratedPluginRegistrant {
       Log.e(TAG, "Error registering plugin connectivity_plus, dev.fluttercommunity.plus.connectivity.ConnectivityPlugin", e);
     }
     try {
+      flutterEngine.getPlugins().add(new dev.fluttercommunity.plus.device_info.DeviceInfoPlusPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin device_info_plus, dev.fluttercommunity.plus.device_info.DeviceInfoPlusPlugin", e);
+    }
+    try {
       flutterEngine.getPlugins().add(new io.flutter.plugins.flutter_plugin_android_lifecycle.FlutterAndroidLifecyclePlugin());
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin flutter_plugin_android_lifecycle, io.flutter.plugins.flutter_plugin_android_lifecycle.FlutterAndroidLifecyclePlugin", e);
@@ -59,6 +64,11 @@ public final class GeneratedPluginRegistrant {
       flutterEngine.getPlugins().add(new io.flutter.plugins.imagepicker.ImagePickerPlugin());
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin image_picker_android, io.flutter.plugins.imagepicker.ImagePickerPlugin", e);
+    }
+    try {
+      flutterEngine.getPlugins().add(new dev.fluttercommunity.plus.packageinfo.PackageInfoPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin package_info_plus, dev.fluttercommunity.plus.packageinfo.PackageInfoPlugin", e);
     }
     try {
       flutterEngine.getPlugins().add(new io.flutter.plugins.pathprovider.PathProviderPlugin());
