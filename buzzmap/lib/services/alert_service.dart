@@ -66,7 +66,6 @@ class AlertService {
                 'severity': latestAlert['severity'],
                 'barangays': latestAlert['barangays'] ?? [],
               };
-
               debugPrint('Formatted alert for UI: $formattedAlert');
               _alertController.add(formattedAlert);
             } else {
@@ -93,5 +92,14 @@ class AlertService {
   void dispose() {
     stopPolling();
     _alertController.close();
+  }
+
+  void showAlert(Map<String, dynamic> alert) {
+    final formattedAlert = {
+      'messages': alert['messages'] ?? [],
+      'severity': alert['severity'],
+      'barangays': alert['barangays'] ?? [],
+    };
+    _alertController.add(formattedAlert);
   }
 }

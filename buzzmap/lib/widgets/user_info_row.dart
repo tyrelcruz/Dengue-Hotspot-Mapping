@@ -43,10 +43,17 @@ class UserInfoRow extends StatelessWidget {
                   color: Colors.grey.shade200,
                 ),
                 child: ClipOval(
-                  child: SvgPicture.asset(
-                    iconUrl,
-                    fit: BoxFit.cover,
-                  ),
+                  child: iconUrl.startsWith('http')
+                      ? Image.network(
+                          iconUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Icon(Icons.person, color: Colors.grey),
+                        )
+                      : SvgPicture.asset(
+                          iconUrl,
+                          fit: BoxFit.cover,
+                        ),
                 ),
               ),
               const SizedBox(width: 10),

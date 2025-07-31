@@ -3,6 +3,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:buzzmap/widgets/user_info_row.dart';
 import 'package:flutter/material.dart';
 import 'package:buzzmap/widgets/engagement_row.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:provider/provider.dart';
+import 'package:buzzmap/auth/config.dart';
 
 class PostCard extends StatelessWidget {
   final Map<String, dynamic> post;
@@ -22,6 +27,7 @@ class PostCard extends StatelessWidget {
   final VoidCallback? onDelete;
   final bool isOwner;
   final String postId;
+  final bool showDistance;
 
   const PostCard({
     super.key,
@@ -42,148 +48,133 @@ class PostCard extends StatelessWidget {
     this.onDelete,
     this.isOwner = false,
     required this.postId,
+    this.showDistance = false,
   });
+
+  String _formatDistance(double distance) {
+    if (distance < 1) {
+      return '${(distance * 1000).round()}m away';
+    } else {
+      return '${distance.toStringAsFixed(1)}km away';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final customColors = Theme.of(context).extension<CustomColors>();
     final theme = Theme.of(context);
-    final borderedType = type == 'bordered';
+    final customColors = Theme.of(context).extension<CustomColors>();
+    final isDark = theme.brightness == Brightness.dark;
+    final iconColor = isDark ? Colors.white : Colors.black;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-        border: Border.all(
-          color: customColors?.surfaceLight ?? Colors.grey.shade200,
-          width: 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                UserInfoRow(
-                  title: username,
-                  subtitle: whenPosted,
-                  iconUrl: iconUrl,
-                  type: 'post',
-                  onReport: onReport,
-                  onDelete: onDelete,
-                  isOwner: isOwner,
-                ),
-                const SizedBox(height: 12),
+    final postIdStr = postId;
+    print('PostCard debug: postId=$postIdStr full post=$post');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              UserInfoRow(
+                title: post['isAnonymous'] ? 'Anonymous' : username,
+                subtitle: whenPosted,
+                iconUrl: iconUrl,
+                type: 'post',
+                onReport: onReport,
+                onDelete: onDelete,
+                isOwner: isOwner,
+              ),
+              const SizedBox(height: 12),
+              if (showDistance && post['distance'] != null)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (!borderedType)
-                        Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              '📍 Location: ',
-                              style: theme.textTheme.bodyMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              location,
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            '🕒 Date & Time:',
-                            style: theme.textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '$date, $time',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            '⚠️ Report Type:',
-                            style: theme.textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            reportType,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.start,
-                        children: [
-                          Text(
-                            '📝 Description',
-                            style: theme.textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            description,
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 8),
-                          _buildImageGrid(images, context),
-                        ],
-                      ),
-                    ],
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    _formatDistance(post['distance']),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary,
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(12),
-                bottomRight: Radius.circular(12),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    '📍 Location: ',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    location,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
               ),
-            ),
-            child: EngagementRow(
-              numUpvotes: numUpvotes,
-              numDownvotes: numDownvotes,
-              postId: postId,
-              themeMode: type == 'bordered' ? 'dark' : 'light',
-              post: post,
-            ),
+              const SizedBox(height: 4),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    '🕒 Date & Time: ',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    '$date, $time',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    '⚠️ Report Type: ',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    reportType,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    '📝 Description: ',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    description,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+              if (images.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _buildImageGrid(images, context),
+              ],
+            ],
           ),
-        ],
-      ),
+        ),
+        // Engagement Row
+        EngagementRow(
+          key: ValueKey('engagement_$postIdStr'),
+          postId: postIdStr,
+          post: post,
+          initialUpvotes: numUpvotes,
+          initialDownvotes: numDownvotes,
+          isAdminPost: false,
+          themeMode: 'light',
+        ),
+      ],
     );
   }
 
@@ -250,5 +241,31 @@ class PostCard extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+Future<void> _ensureProfilePhotoLoaded() async {
+  final prefs = await SharedPreferences.getInstance();
+  String? profilePhotoUrl = prefs.getString('profilePhotoUrl');
+  final token = prefs.getString('authToken');
+  if ((profilePhotoUrl == null || profilePhotoUrl.isEmpty) && token != null) {
+    try {
+      final response = await http.get(
+        Uri.parse('${Config.baseUrl}/api/v1/auth/me'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final photoUrl = data['user']?['profilePhotoUrl'];
+        if (photoUrl != null && photoUrl.isNotEmpty) {
+          await prefs.setString('profilePhotoUrl', photoUrl);
+        }
+      }
+    } catch (e) {
+      print('Error fetching profile photo URL: $e');
+    }
   }
 }

@@ -13,6 +13,7 @@ import 'package:buzzmap/widgets/global_alert_overlay.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'dart:convert';
+import 'package:buzzmap/services/offline_post_service.dart';
 
 // Map of districts to their barangays
 final Map<String, List<String>> districtData = {
@@ -170,13 +171,27 @@ class _HomeScreenState extends State<HomeScreen> {
   String? selectedBarangay;
   List<String> allBarangays = [];
   bool isLoading = true;
+  late OfflinePostService _offlinePostService;
+  Map<String, LatLng> _barangayCentroids = {};
 
   @override
   void initState() {
     super.initState();
+    _initializeServices();
     // Start polling for alerts when the app starts
     AlertService().startPolling();
     _loadBarangays();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _offlinePostService.updateContext(context);
+  }
+
+  Future<void> _initializeServices() async {
+    _offlinePostService = OfflinePostService();
+    await _offlinePostService.initialize(context);
   }
 
   Future<void> _loadBarangays() async {
@@ -185,16 +200,30 @@ class _HomeScreenState extends State<HomeScreen> {
           await rootBundle.loadString('assets/geojson/barangays.geojson');
       final geojson = json.decode(data);
       Set<String> barangayNames = {};
+      Map<String, LatLng> centroids = {};
 
       for (var feature in geojson['features']) {
         final name = feature['properties']['name'];
-        if (name != null) {
+        if (name == null) continue;
+
+        final geometry = feature['geometry'];
+        if (geometry != null && geometry['type'] == 'Polygon') {
+          final coords = geometry['coordinates'][0];
+          double latSum = 0;
+          double lngSum = 0;
+          for (var point in coords) {
+            lngSum += point[0];
+            latSum += point[1];
+          }
+          final count = coords.length;
+          centroids[name] = LatLng(latSum / count, lngSum / count);
           barangayNames.add(name);
         }
       }
 
       setState(() {
         allBarangays = barangayNames.toList()..sort();
+        _barangayCentroids = centroids;
         isLoading = false;
       });
     } catch (e) {
@@ -270,7 +299,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 1),
                     _buildText(
-                      'Check Dengue Hotspots in Your Area:',
+                      'Check Dengue Reports in Your Area:',
                       style: TextStyle(
                         fontSize: 12.sp,
                         fontWeight: FontWeight.w900,
@@ -698,22 +727,20 @@ class _HomeScreenState extends State<HomeScreen> {
         onChanged: (value) {
           setState(() {
             selectedBarangay = value;
-            if (value != null) {
-              final coordinates = locationData[value];
-              if (coordinates != null) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => LocationDetailsScreen(
-                      location: value,
-                      streetName: value,
-                      latitude: coordinates.latitude,
-                      longitude: coordinates.longitude,
-                      district: null,
-                    ),
+            if (value != null && _barangayCentroids.containsKey(value)) {
+              final coordinates = _barangayCentroids[value]!;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => LocationDetailsScreen(
+                    location: value,
+                    streetName: value,
+                    latitude: coordinates.latitude,
+                    longitude: coordinates.longitude,
+                    district: null,
                   ),
-                );
-              }
+                ),
+              );
             }
           });
         },

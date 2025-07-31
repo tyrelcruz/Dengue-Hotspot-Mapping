@@ -31,28 +31,30 @@ dependencies:
   http: ^1.1.0
   flutter:
     sdk: flutter
-  flutter_svg: ^2.0.17
+  flutter_svg: ^2.1.0
   intl: ^0.18.0
   shared_preferences: ^2.2.2
   cached_network_image: ^3.4.1
   flutter_screenutil: ^5.9.0
   google_sign_in: ^6.3.0
   google_fonts: ^6.1.0
-  pinput: ^3.0.1
+  pin_code_fields: ^8.0.1
   fluttertoast: ^8.2.1
   google_maps_flutter: ^2.3.0
   permission_handler: ^12.0.0+1
   provider: ^6.1.5
   geolocator: ^14.0.0
   flutter_secure_storage: ^9.2.4
+  flutter_dotenv: ^5.1.0
+  google_maps_custom_marker: ^1.0.3
+  upgrader: ^8.4.0 # For handling app updates
+  package_info_plus: ^4.2.0 # For getting app version info
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
   latlong2: ^0.9.1
-  firebase_core: ^3.13.0
-  firebase_auth: ^5.5.2
   another_flushbar: ^1.10.0
   dropdown_search: ^5.0.6
   geocoding: ^2.1.0
@@ -61,6 +63,8 @@ dependencies:
   url_launcher: ^6.2.1
   auto_size_text: ^3.0.0
   google_maps_cluster_manager: ^3.1.0
+  connectivity_plus: ^6.1.4
+  carousel_slider: ^5.0.0
 
 dev_dependencies:
   flutter_launcher_icons: ^0.13.1
@@ -92,7 +96,9 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
+    - .env
     - assets/icons/
+    - assets/markers/
     - assets/images/
     - assets/team/
     - assets/bgarts/

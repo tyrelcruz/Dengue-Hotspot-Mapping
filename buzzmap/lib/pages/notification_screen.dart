@@ -1,12 +1,19 @@
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import 'package:buzzmap/config/config.dart';
 import 'package:buzzmap/services/notification_service.dart';
 import 'package:buzzmap/widgets/utils/notification_template.dart';
+import 'package:buzzmap/widgets/offline_posts_list.dart';
+import 'package:buzzmap/widgets/global_alert_overlay.dart';
+import 'package:buzzmap/services/alert_service.dart';
 import 'package:buzzmap/pages/mapping_screen.dart';
+import 'package:flutter/services.dart';
 
 class NotificationScreen extends StatefulWidget {
-  const NotificationScreen({Key? key}) : super(key: key);
+  const NotificationScreen({super.key});
 
   @override
   State<NotificationScreen> createState() => _NotificationScreenState();
@@ -15,33 +22,94 @@ class NotificationScreen extends StatefulWidget {
 class _NotificationScreenState extends State<NotificationScreen> {
   final NotificationService _notificationService = NotificationService();
   List<Map<String, dynamic>> _notifications = [];
+  List<Map<String, dynamic>> _adminAlerts = [];
+  List<Map<String, dynamic>> _adminAnnouncements = [];
   bool _isLoading = true;
-  bool _showAllToday = false;
-  bool _showAllWeek = false;
   String _selectedFilter = 'All';
+  int _displayCount = 10;
+  Timer? _refreshTimer;
+  List<Map<String, dynamic>>? _cachedFilteredNotifications;
+  String? _lastFilterKey;
+  Position? _currentPosition;
+  String? _currentBarangayId;
+
+  final List<String> _filters = [
+    'All',
+    'Admin Alerts',
+    'Pending',
+    'Approved',
+    'Rejected',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _loadNotifications();
+    _initializeNotifications();
   }
 
-  Future<void> _loadNotifications() async {
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initializeNotifications() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final notifications =
-          await NotificationService().fetchNotifications(context);
-      setState(() {
-        _notifications = notifications;
-        _isLoading = false;
-      });
+      _notificationService.initialize();
+      await Future.wait([
+        _loadNotifications(),
+        _getCurrentLocation(),
+        _loadAdminAlertsAndAnnouncements(),
+      ]);
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to initialize notifications'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadNotifications() async {
+    try {
+      final notifications =
+          await _notificationService.fetchNotifications(context);
+
+      // Filter notifications from the last week
+      final oneWeekAgo = DateTime.now().subtract(const Duration(days: 7));
+      final filteredNotifications = notifications.where((notification) {
+        final report = notification['report'] as Map<String, dynamic>?;
+        if (report == null) return false;
+
+        final createdAt = DateTime.parse(
+            report['createdAt'] ?? DateTime.now().toIso8601String());
+        return createdAt.isAfter(oneWeekAgo);
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _notifications = filteredNotifications;
+          _cachedFilteredNotifications = null;
+          print('Loaded notifications: ${_notifications.length}');
+          print(
+              'Notification statuses: ${_notifications.map((n) => n['report']?['status']).toList()}');
+        });
+      }
+    } catch (e) {
+      print('Error loading notifications: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -53,97 +121,681 @@ class _NotificationScreenState extends State<NotificationScreen> {
     }
   }
 
-  List<Map<String, dynamic>> _getFilteredNotifications() {
-    print('🔍 Filtering notifications with status: $_selectedFilter');
-    print('📱 Total notifications before filtering: ${_notifications.length}');
-
-    // Filter by status only
-    List<Map<String, dynamic>> statusFiltered =
-        _notifications.where((notification) {
-      final report = notification['report'] as Map<String, dynamic>?;
-      final status = report?['status']?.toString().toLowerCase();
-      print('📄 Notification status: $status');
-
-      // Skip notifications with unknown status
-      if (status == null || status == 'unknown') {
-        return false;
+  Future<void> _getCurrentLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        print('Location services are disabled');
+        return;
       }
 
-      // Handle "Reviewing" filter to match "pending" status
-      if (_selectedFilter.toLowerCase() == 'reviewing') {
-        return status == 'pending';
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          print('Location permission denied');
+          return;
+        }
       }
 
-      // For "All" filter, show all notifications
-      if (_selectedFilter.toLowerCase() == 'all') {
-        return true;
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      print('Current position: ${position.latitude}, ${position.longitude}');
+
+      setState(() {
+        _currentPosition = position;
+      });
+
+      // Reload alerts after getting location
+      await _loadAdminAlertsAndAnnouncements();
+    } catch (e) {
+      print('Error getting location: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Error getting location. Some alerts may not be shown.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
       }
-
-      // For other filters, do normal comparison
-      return status == _selectedFilter.toLowerCase();
-    }).toList();
-    print('✅ Notifications after status filter: ${statusFiltered.length}');
-
-    return statusFiltered;
+    }
   }
 
-  void _handleNotificationTap(Map<String, dynamic> notification) async {
+  // Helper function to check if a point is inside a polygon
+  bool _isPointInPolygon(List<List<double>> polygon, double lat, double lng) {
+    bool isInside = false;
+    int j = polygon.length - 1;
+
+    for (int i = 0; i < polygon.length; i++) {
+      if ((polygon[i][1] > lat) != (polygon[j][1] > lat) &&
+          (lng <
+              (polygon[j][0] - polygon[i][0]) *
+                      (lat - polygon[i][1]) /
+                      (polygon[j][1] - polygon[i][1]) +
+                  polygon[i][0])) {
+        isInside = !isInside;
+      }
+      j = i;
+    }
+
+    return isInside;
+  }
+
+  // Helper function to get current barangay name from coordinates using GeoJSON
+  Future<String?> _getCurrentBarangay(double latitude, double longitude) async {
+    try {
+      print('Getting barangay for coordinates: $latitude, $longitude');
+
+      // Load GeoJSON data from local assets
+      final String jsonString =
+          await rootBundle.loadString('assets/geojson/barangays.geojson');
+      final data = jsonDecode(jsonString);
+      print('GeoJSON data loaded successfully');
+
+      // The data is a GeoJSON FeatureCollection
+      final features = data['features'] as List;
+      print('Found ${features.length} barangays in GeoJSON data');
+
+      for (var feature in features) {
+        final properties = feature['properties'];
+        final geometry = feature['geometry'];
+
+        if (geometry['type'] == 'Polygon') {
+          final coordinates = geometry['coordinates'][0] as List;
+          final polygon = coordinates
+              .map((coord) => [
+                    double.parse(coord[0].toString()),
+                    double.parse(coord[1].toString())
+                  ])
+              .toList();
+
+          if (_isPointInPolygon(polygon, latitude, longitude)) {
+            final barangayName = properties['name'] as String;
+            print('Detected barangay: $barangayName');
+            return barangayName;
+          }
+        }
+      }
+
+      print('No barangay found for coordinates');
+      return null;
+    } catch (e) {
+      print('Error getting barangay name: $e');
+      return null;
+    }
+  }
+
+  Future<void> _loadAdminAlertsAndAnnouncements() async {
+    try {
+      // Calculate date 1 week ago
+      final oneWeekAgo = DateTime.now().subtract(const Duration(days: 7));
+
+      print('Fetching alerts from: ${Config.baseUrl}/api/v1/alerts');
+
+      // Fetch admin alerts with date filter
+      final alertsResponse = await http.get(
+        Uri.parse(
+            '${Config.baseUrl}/api/v1/alerts?startDate=${oneWeekAgo.toIso8601String()}'),
+      );
+
+      print('Alerts response status: ${alertsResponse.statusCode}');
+      print('Alerts response body: ${alertsResponse.body}');
+
+      if (alertsResponse.statusCode == 200) {
+        final body = jsonDecode(alertsResponse.body);
+
+        if (body['success'] == true && body['data'] != null) {
+          final List<dynamic> alertsData = body['data'];
+          print('Total alerts received: ${alertsData.length}');
+
+          // Get current barangay name
+          String? currentBarangayName;
+          if (_currentPosition != null) {
+            currentBarangayName = await _getCurrentBarangay(
+              _currentPosition!.latitude,
+              _currentPosition!.longitude,
+            );
+            print('Current barangay name: $currentBarangayName');
+          }
+
+          // First, sort all alerts by timestamp (newest first)
+          alertsData.sort((a, b) {
+            final timestampA = DateTime.parse(
+                a['timestamp'] ?? DateTime.now().toIso8601String());
+            final timestampB = DateTime.parse(
+                b['timestamp'] ?? DateTime.now().toIso8601String());
+            return timestampB.compareTo(timestampA);
+          });
+
+          // Filter alerts for current location only
+          List<Map<String, dynamic>> filteredAlerts = [];
+          Set<String> processedBarangays = {};
+
+          for (var alert in alertsData) {
+            final barangays = alert['barangays'] as List?;
+            final status = alert['status']?.toString();
+
+            print('\nProcessing alert: ${alert['_id']}');
+            print('Alert status: $status');
+            print('Alert barangays: $barangays');
+
+            // Only include active alerts
+            if (status != 'ACTIVE') {
+              print('Skipping non-active alert');
+              continue;
+            }
+
+            // If no barangays specified, it's a general alert for all areas
+            if (barangays == null || barangays.isEmpty) {
+              print('Adding general alert');
+              filteredAlerts.add(alert as Map<String, dynamic>);
+              continue;
+            }
+
+            // If we have current barangay name, check if it's in the affected barangays
+            if (currentBarangayName != null) {
+              print(
+                  'Checking if alert is for current barangay: $currentBarangayName');
+
+              final isCurrentBarangayAffected = barangays.any((b) {
+                final barangayName = b['name']?.toString().toLowerCase();
+                final currentBarangayLower =
+                    currentBarangayName?.toLowerCase() ?? '';
+                print(
+                    'Comparing alert barangay: $barangayName with current barangay: $currentBarangayLower');
+                return barangayName == currentBarangayLower;
+              });
+
+              print('Is current barangay affected: $isCurrentBarangayAffected');
+              if (isCurrentBarangayAffected) {
+                // Only add if we haven't processed an alert for this barangay yet
+                if (!processedBarangays
+                    .contains(currentBarangayName.toLowerCase())) {
+                  print(
+                      'Adding latest alert for current barangay: $currentBarangayName');
+                  filteredAlerts.add(alert as Map<String, dynamic>);
+                  processedBarangays.add(currentBarangayName.toLowerCase());
+                } else {
+                  print(
+                      'Skipping alert - already have a newer alert for this barangay');
+                }
+              } else {
+                print('Skipping alert - not for current barangay');
+              }
+            } else {
+              print('No current barangay name available');
+            }
+          }
+
+          print('\nFiltered alerts count: ${filteredAlerts.length}');
+          print(
+              'Filtered alerts: ${filteredAlerts.map((a) => a['_id']).join(', ')}');
+
+          setState(() {
+            _adminAlerts = filteredAlerts;
+          });
+        }
+      }
+
+      // Fetch important announcements (last week only)
+      final annResponse = await http.get(
+        Uri.parse(
+            '${Config.baseUrl}/api/v1/adminPosts?startDate=${oneWeekAgo.toIso8601String()}'),
+      );
+      if (annResponse.statusCode == 200) {
+        final List<dynamic> annData = jsonDecode(annResponse.body);
+        setState(() {
+          _adminAnnouncements = annData
+              .where((post) => post['category'] == 'announcement')
+              .take(3)
+              .map((e) => e as Map<String, dynamic>)
+              .toList();
+        });
+      }
+    } catch (e) {
+      print('Error loading admin alerts and announcements: $e');
+    }
+  }
+
+  void _toggleFilter(String filter) {
+    setState(() {
+      _selectedFilter = filter;
+      _displayCount = 10;
+      _cachedFilteredNotifications = null;
+    });
+  }
+
+  List<Map<String, dynamic>> _getFilteredNotifications() {
+    if (_cachedFilteredNotifications != null &&
+        _lastFilterKey == _selectedFilter) {
+      return _cachedFilteredNotifications!;
+    }
+
+    List<Map<String, dynamic>> filtered = [];
+
+    if (_selectedFilter == 'Admin Alerts') {
+      filtered = [..._adminAlerts, ..._adminAnnouncements];
+    } else {
+      print('Filtering notifications for: $_selectedFilter');
+      print('Total notifications before filtering: ${_notifications.length}');
+
+      filtered = _notifications.where((notification) {
+        final report = notification['report'] as Map<String, dynamic>?;
+        if (report == null) {
+          print('Notification has no report data: $notification');
+          return false;
+        }
+
+        final status = report['status']?.toString();
+        print('Notification status: $status');
+
+        bool shouldInclude = _selectedFilter == 'All' ||
+            (_selectedFilter == 'Pending' && status == 'Pending') ||
+            (_selectedFilter == 'Approved' &&
+                (status == 'Approved' || status == 'Validated')) ||
+            (_selectedFilter == 'Rejected' && status == 'Rejected');
+
+        print('Should include notification: $shouldInclude');
+        return shouldInclude;
+      }).toList();
+
+      print('Filtered notifications count: ${filtered.length}');
+    }
+
+    _cachedFilteredNotifications = filtered;
+    _lastFilterKey = _selectedFilter;
+    return filtered;
+  }
+
+  void _showMoreNotifications() {
+    setState(() {
+      _displayCount += 10;
+    });
+  }
+
+  String _formatAdminAlertTitle(Map<String, dynamic> alert) {
+    return alert['severity']?.toString().toUpperCase() ?? 'ALERT';
+  }
+
+  String _formatAdminAlertSubtitle(Map<String, dynamic> alert) {
+    final messages = alert['messages'] as List?;
+    return messages?.isNotEmpty == true ? messages!.first : 'Alert';
+  }
+
+  String _formatAdminAlertDetails(Map<String, dynamic> alert) {
+    final barangays = alert['barangays'] as List?;
+    final barangayNames = (barangays != null && barangays.isNotEmpty)
+        ? barangays.map((b) => b['name']).whereType<String>().join(', ')
+        : 'All Areas';
+    final timestamp =
+        DateTime.parse(alert['timestamp'] ?? DateTime.now().toIso8601String());
+    return '$barangayNames • ${_formatDate(timestamp)}';
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inDays == 0) {
+      if (difference.inHours == 0) {
+        return '${difference.inMinutes}m ago';
+      }
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays == 1) {
+      return 'Yesterday';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${date.day}/${date.month}/${date.year}';
+    }
+  }
+
+  Widget _buildShowMoreButton() {
+    final totalFiltered = _notifications.where((notification) {
+      final report = notification['report'] as Map<String, dynamic>?;
+      if (report == null) return false;
+
+      final status = report['status']?.toString();
+      return _selectedFilter == 'All' ||
+          (_selectedFilter == 'Pending' && status == 'Pending') ||
+          (_selectedFilter == 'Approved' &&
+              (status == 'Approved' || status == 'Validated')) ||
+          (_selectedFilter == 'Rejected' && status == 'Rejected');
+    }).length;
+
+    if (totalFiltered <= _displayCount) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Center(
+        child: TextButton(
+          onPressed: _showMoreNotifications,
+          child: Text(
+            'Show More (${totalFiltered - _displayCount} remaining)',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterBar() {
+    final primaryGreen = Theme.of(context).colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: _filters.map((filter) {
+            final isSelected = _selectedFilter == filter;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: GestureDetector(
+                onTap: () => _toggleFilter(filter),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected ? primaryGreen : Colors.grey[50],
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isSelected ? primaryGreen : Colors.grey[200]!,
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    filter,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.grey[700],
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAdminAlertItem(Map<String, dynamic> notification) {
+    final messages = notification['messages'] as List?;
+    final firstMessage =
+        messages?.isNotEmpty == true ? messages!.first : 'Alert';
+    final barangays = notification['barangays'] as List?;
+    final barangayNames = (barangays != null && barangays.isNotEmpty)
+        ? barangays.map((b) => b['name']).whereType<String>().join(', ')
+        : 'All Areas';
+
+    return NotificationTemplate(
+      message: firstMessage,
+      reportId: notification['_id']?.toString(),
+      barangay: barangayNames,
+      status: 'alert',
+      reportType: _formatAdminAlertTitle(notification),
+      isRead: false,
+      latitude: null,
+      longitude: null,
+      streetName: null,
+      createdAt: DateTime.parse(
+          notification['timestamp'] ?? DateTime.now().toIso8601String()),
+      onTap: () => _showAlertDetails(notification),
+    );
+  }
+
+  Widget _buildAdminAnnouncementItem(Map<String, dynamic> notification) {
+    return NotificationTemplate(
+      message: notification['title'] ?? 'No title available',
+      reportId: notification['_id']?.toString(),
+      barangay: 'All Areas',
+      status: 'announcement',
+      reportType: 'ANNOUNCEMENT',
+      isRead: false,
+      latitude: null,
+      longitude: null,
+      streetName: null,
+      createdAt: DateTime.parse(
+          notification['createdAt'] ?? DateTime.now().toIso8601String()),
+      onTap: () => _showAnnouncementDetails(notification),
+    );
+  }
+
+  Widget _buildNotificationItem(Map<String, dynamic> notification) {
+    final report = notification['report'] as Map<String, dynamic>?;
+    final status = report?['status']?.toString().toLowerCase() ?? 'pending';
+    final message = notification['message'] ?? 'No message';
+    final barangay = report?['barangay'] ?? 'Unknown Location';
+    final latitude =
+        report?['specific_location']?['coordinates']?[1] as double?;
+    final longitude =
+        report?['specific_location']?['coordinates']?[0] as double?;
+    final streetName = report?['specific_location']?['street_name'] as String?;
+    final createdAt = DateTime.parse(
+        notification['createdAt'] ?? DateTime.now().toIso8601String());
+
+    return NotificationTemplate(
+      message: message,
+      reportId: report?['_id']?.toString(),
+      barangay: barangay,
+      status: status,
+      reportType: report?['report_type'] ?? 'REPORT',
+      isRead: notification['isRead'] ?? false,
+      latitude: latitude,
+      longitude: longitude,
+      streetName: streetName,
+      createdAt: createdAt,
+      onTap: () => _showReportDetails(notification),
+    );
+  }
+
+  void _showAlertDetails(Map<String, dynamic> alert) {
+    AlertService().showAlert(alert);
+  }
+
+  void _showAnnouncementDetails(Map<String, dynamic> announcement) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.announcement,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Announcement',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      fontFamily: 'Inter',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                announcement['title'] ?? 'Announcement',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                announcement['content'] ?? 'No content available',
+                style: const TextStyle(
+                  fontSize: 14,
+                ),
+              ),
+              if (announcement['images'] != null &&
+                  (announcement['images'] as List).isNotEmpty) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 200,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: (announcement['images'] as List).length,
+                    itemBuilder: (context, index) {
+                      final imageUrl = announcement['images'][index];
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            imageUrl,
+                            width: 200,
+                            height: 200,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              print('Error loading image: $error');
+                              print('Image URL: $imageUrl');
+                              return Container(
+                                width: 200,
+                                height: 200,
+                                color: Colors.grey[200],
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.broken_image,
+                                    color: Colors.grey,
+                                    size: 40,
+                                  ),
+                                ),
+                              );
+                            },
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                width: 200,
+                                height: 200,
+                                color: Colors.grey[200],
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes !=
+                                            null
+                                        ? loadingProgress
+                                                .cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Text(
+                'Published: ${_formatDate(DateTime.parse(announcement['createdAt'] ?? DateTime.now().toIso8601String()))}',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showReportDetails(Map<String, dynamic> notification) async {
     final report = notification['report'] as Map<String, dynamic>?;
     if (report == null) {
-      print('❌ No report data found in notification');
+      print('No report data found in notification');
       return;
     }
 
-    print('🔍 Handling notification tap:');
-    print('📝 Report ID: ${report['_id']}');
-    print('📊 Status: ${report['status']}');
+    print('Handling notification tap for report ID: ${report['_id']}');
 
     // Fetch full report details
     final reportDetails =
         await _notificationService.fetchReportDetails(report['_id']);
     if (reportDetails == null) {
-      print('❌ Failed to fetch report details');
+      print('Failed to fetch report details');
       return;
     }
 
-    print('📄 Full report details:');
-    print(json.encode(reportDetails));
-
-    // Extract location data from the full report details
     double? latitude;
     double? longitude;
 
     if (reportDetails['specific_location'] != null) {
-      print('🗺️ Found specific_location in report');
       final location = reportDetails['specific_location'];
-      print('📍 Location data:');
-      print(json.encode(location));
-
       if (location['coordinates'] != null) {
-        print('🎯 Found coordinates in location');
         final coordinates = location['coordinates'];
-        print('📌 Raw coordinates: $coordinates');
-
         if (coordinates is List && coordinates.length >= 2) {
-          // Note: coordinates are in [longitude, latitude] format
           longitude = coordinates[0].toDouble();
           latitude = coordinates[1].toDouble();
-          print('✅ Successfully extracted coordinates: $latitude, $longitude');
-        } else {
-          print('❌ Invalid coordinates format: $coordinates');
         }
-      } else {
-        print('❌ No coordinates found in location data');
       }
-    } else {
-      print('❌ No specific_location found in report');
     }
 
-    if (reportDetails['status']?.toLowerCase() == 'validated' &&
+    final status = reportDetails['status']?.toString();
+    print('Report status: $status');
+    print('Latitude: $latitude');
+    print('Longitude: $longitude');
+
+    if ((status == 'Approved' || status == 'Validated') &&
         latitude != null &&
         longitude != null) {
-      print('✅ Validated report with location data, navigating to map...');
-      print('📍 Using coordinates: $latitude, $longitude');
+      print(
+          'Approved/Validated report with location data, navigating to map...');
+      print('Using coordinates: $latitude, $longitude');
 
       if (mounted) {
         Navigator.push(
@@ -152,15 +804,15 @@ class _NotificationScreenState extends State<NotificationScreen> {
             builder: (context) => MappingScreen(
               initialLatitude: latitude!,
               initialLongitude: longitude!,
-              initialZoom: 18.0, // Increased zoom level for better visibility
+              initialZoom: 18.0,
               reportId: reportDetails['_id'],
             ),
           ),
         );
       }
     } else {
-      print('❌ Cannot navigate: Invalid status or missing location data');
-      print('Status: ${reportDetails['status']}');
+      print('Cannot navigate: Invalid status or missing location data');
+      print('Status: $status');
       print('Latitude: $latitude');
       print('Longitude: $longitude');
     }
@@ -168,6 +820,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filteredNotifications = _getFilteredNotifications();
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -188,177 +842,90 @@ class _NotificationScreenState extends State<NotificationScreen> {
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
-      body: Column(
-        children: [
-          // Filter Section
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildFilterChip('All'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Validated'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Rejected'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Reviewing'),
-                ],
+      body: CustomScrollView(
+        slivers: [
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                'Pending Offline Reports',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
-          // Notifications List
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _getFilteredNotifications().isEmpty
-                    ? const Center(child: Text('No notifications yet'))
-                    : RefreshIndicator(
-                        onRefresh: _loadNotifications,
-                        child: ListView.builder(
-                          itemCount: _getFilteredNotifications().length,
-                          itemBuilder: (context, index) {
-                            final notification =
-                                _getFilteredNotifications()[index];
-                            final report =
-                                notification['report'] as Map<String, dynamic>?;
-
-                            // Extract location data from the report
-                            double? latitude;
-                            double? longitude;
-
-                            if (report != null &&
-                                report['specific_location'] != null) {
-                              final location = report['specific_location'];
-                              print('📄 Raw location data:');
-                              print(json.encode(location));
-
-                              if (location['coordinates'] != null) {
-                                final coordinates = location['coordinates'];
-                                print('📌 Raw coordinates: $coordinates');
-
-                                if (coordinates is List &&
-                                    coordinates.length >= 2) {
-                                  // Note: coordinates are in [longitude, latitude] format
-                                  longitude = coordinates[0].toDouble();
-                                  latitude = coordinates[1].toDouble();
-                                  print(
-                                      '✅ Extracted coordinates: $latitude, $longitude');
-                                }
-                              }
-                            }
-
-                            return NotificationTemplate(
-                              message: _formatNotificationMessage(notification),
-                              reportId: report?['_id'] as String?,
-                              barangay: report?['barangay'] as String?,
-                              status: report?['status'] as String?,
-                              reportType: report?['report_type'] as String?,
-                              isRead: notification['isRead'] as bool? ?? false,
-                              latitude: latitude,
-                              longitude: longitude,
-                              streetName: report?['street_name'] as String?,
-                            );
-                          },
-                        ),
-                      ),
+          const SliverToBoxAdapter(
+            child: OfflinePostsList(),
           ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Container(
+                height: 2,
+                width: double.infinity,
+                color: Color(0xFFE3F0FA),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: _buildFilterBar(),
+          ),
+          if (_isLoading)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_selectedFilter == 'Admin Alerts')
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final notification = filteredNotifications[index];
+                  final isAlert = notification.containsKey('messages');
+                  return isAlert
+                      ? _buildAdminAlertItem(notification)
+                      : _buildAdminAnnouncementItem(notification);
+                },
+                childCount: filteredNotifications.length,
+              ),
+            )
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final notification = filteredNotifications[index];
+                  return _buildNotificationItem(notification);
+                },
+                childCount: filteredNotifications.length,
+              ),
+            ),
+          if (filteredNotifications.length >= _displayCount)
+            SliverToBoxAdapter(
+              child: _buildShowMoreButton(),
+            ),
         ],
       ),
     );
   }
+}
 
-  String _formatNotificationMessage(Map<String, dynamic> notification) {
-    final report = notification['report'] as Map<String, dynamic>?;
-    if (report == null) {
-      return notification['message'] as String? ?? 'No message';
-    }
+class _CurvedDividerPainter extends CustomPainter {
+  final Color color;
+  _CurvedDividerPainter({required this.color});
 
-    final reportType = report['report_type'] as String? ?? 'Report';
-    final barangay = report['barangay'] as String? ?? 'Unknown Location';
-    final status = report['status'] as String? ?? 'Pending';
-
-    if (status == 'Validated') {
-      return 'Your $reportType report in $barangay has been validated.';
-    } else if (status == 'Rejected') {
-      return 'Your $reportType report in $barangay has been rejected.';
-    } else {
-      return 'Your $reportType report in $barangay is being reviewed.';
-    }
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final path = Path();
+    path.moveTo(size.width / 2, 8);
+    path.quadraticBezierTo(
+        size.width / 2, size.height / 2, size.width / 2, size.height - 8);
+    canvas.drawPath(path, paint);
   }
 
-  Widget _buildSeeAllButton(bool isToday) {
-    final totalCount = _notifications.where((notification) {
-      final notificationDate = DateTime.parse(notification['createdAt']);
-      final now = DateTime.now();
-      if (isToday) {
-        return notificationDate.isAfter(now.subtract(Duration(days: 1)));
-      } else {
-        final oneDayAgo = now.subtract(Duration(days: 1));
-        final sevenDaysAgo = now.subtract(Duration(days: 7));
-        return notificationDate.isAfter(sevenDaysAgo) &&
-            notificationDate.isBefore(oneDayAgo);
-      }
-    }).length;
-
-    print('🔢 ${isToday ? "Today" : "This Week"} total count: $totalCount');
-
-    if (totalCount <= 10) return SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Center(
-        child: TextButton(
-          onPressed: () {
-            setState(() {
-              if (isToday) {
-                _showAllToday = !_showAllToday;
-              } else {
-                _showAllWeek = !_showAllWeek;
-              }
-            });
-          },
-          child: Text(
-            (isToday ? _showAllToday : _showAllWeek) ? 'Show Less' : 'See All',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label) {
-    final isSelected = _selectedFilter == label;
-    return FilterChip(
-      label: Text(
-        label,
-        style: TextStyle(
-          color:
-              isSelected ? Colors.white : Theme.of(context).colorScheme.primary,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-        ),
-      ),
-      selected: isSelected,
-      onSelected: (bool selected) {
-        print('🔘 Filter chip selected: $label');
-        setState(() {
-          _selectedFilter = selected ? label : 'All';
-        });
-      },
-      backgroundColor: Colors.white,
-      selectedColor: Theme.of(context).colorScheme.primary,
-      checkmarkColor: Colors.white,
-      side: BorderSide(
-        color: Theme.of(context).colorScheme.primary,
-        width: 1,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
-    );
-  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

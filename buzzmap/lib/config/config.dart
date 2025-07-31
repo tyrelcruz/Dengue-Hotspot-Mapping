@@ -1,26 +1,25 @@
 import 'dart:io' show Platform;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class Config {
-  static String get baseUrl {
-    if (Platform.isAndroid) {
-      // Check if running on emulator or physical device
-      if (Platform.environment.containsKey('ANDROID_EMULATOR')) {
-        return 'http://10.0.2.2:4000'; // Android emulator
-      }
-      return 'http://192.168.1.45:4000'; // Physical Android device
-    } else if (Platform.isIOS) {
-      if (Platform.environment.containsKey('SIMULATOR_DEVICE_NAME')) {
-        return 'http://localhost:4000'; // iOS simulator
-      }
-      return 'http://192.168.1.45:4000'; // Physical iOS device
-    }
-    return 'http://localhost:4000'; // Default fallback
-  }
+  static String get baseUrl =>
+      dotenv.env['API_BASE_URL_ANDROID_EMULATOR'] ??
+      'https://buzzmap-server.vercel.app';
 
   // HTTP request timeout duration
-  static const Duration timeoutDuration = Duration(seconds: 10);
+  static Duration get timeoutDuration => Duration(
+        seconds: int.parse(
+          dotenv.env['API_TIMEOUT_SECONDS'] ?? '10',
+        ),
+      );
 
   // Retry configuration
-  static const int maxRetries = 3;
-  static const Duration retryDelay = Duration(seconds: 2);
+  static int get maxRetries => int.parse(
+        dotenv.env['API_MAX_RETRIES'] ?? '3',
+      );
+  static Duration get retryDelay => Duration(
+        seconds: int.parse(
+          dotenv.env['API_RETRY_DELAY_SECONDS'] ?? '2',
+        ),
+      );
 }

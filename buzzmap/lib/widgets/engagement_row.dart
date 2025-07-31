@@ -7,200 +7,129 @@ import 'package:buzzmap/auth/config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:buzzmap/providers/vote_provider.dart';
+import 'package:buzzmap/providers/comment_provider.dart';
+import 'package:buzzmap/providers/user_provider.dart';
 import 'package:buzzmap/widgets/post_detail_screen.dart';
+import 'package:buzzmap/widgets/admin_post_detail_screen.dart';
 
 class EngagementRow extends StatefulWidget {
   const EngagementRow({
     super.key,
-    required this.numUpvotes,
-    required this.numDownvotes,
     required this.postId,
-    this.themeMode = 'dark',
     required this.post,
+    this.initialUpvotes = 0,
+    this.initialDownvotes = 0,
+    this.isAdminPost = false,
+    this.themeMode = 'dark',
     this.disableCommentButton = false,
+    this.forceWhiteIcons = false,
   });
 
-  final int numUpvotes;
-  final int numDownvotes;
   final String postId;
-  final String themeMode;
   final Map<String, dynamic> post;
+  final int initialUpvotes;
+  final int initialDownvotes;
+  final bool isAdminPost;
+  final String themeMode;
   final bool disableCommentButton;
+  final bool forceWhiteIcons;
 
   @override
   _EngagementRowState createState() => _EngagementRowState();
 }
 
 class _EngagementRowState extends State<EngagementRow> {
-  bool isLoading = false;
-  late SharedPreferences _prefs;
-  List<Map<String, dynamic>> comments = [];
-  bool isLoadingComments = false;
-  int commentCount = 0;
-  final TextEditingController _commentController = TextEditingController();
-  bool _isInitialized = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _initializePrefs();
-    _fetchCommentsCount();
-  }
-
-  @override
-  void dispose() {
-    _commentController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _initializePrefs() async {
-    try {
-      _prefs = await SharedPreferences.getInstance();
-      _isInitialized = true;
+    // Schedule both operations for the next frame to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
         final voteProvider = Provider.of<VoteProvider>(context, listen: false);
         await voteProvider.checkVoteStatus(widget.postId);
+        await voteProvider.refreshAllVotes();
       }
-    } catch (e) {
-      print('Error initializing SharedPreferences: $e');
-    }
+    });
   }
 
   @override
   void didUpdateWidget(EngagementRow oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.postId != widget.postId && _isInitialized) {
-      final voteProvider = Provider.of<VoteProvider>(context, listen: false);
-      voteProvider.checkVoteStatus(widget.postId);
+    if (oldWidget.postId != widget.postId) {
+      // Schedule the load for the next frame
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (mounted) {
+          final voteProvider =
+              Provider.of<VoteProvider>(context, listen: false);
+          await voteProvider.checkVoteStatus(widget.postId);
+        }
+      });
     }
   }
 
-  Future<void> _fetchComments() async {
-    if (!_isInitialized) {
-      await _initializePrefs();
-    }
+  Future<void> _handleVote(String voteType) async {
+    if (_isLoading) return;
 
-    if (!mounted) return;
+    final voteProvider = Provider.of<VoteProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-    setState(() => isLoadingComments = true);
-    try {
-      final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/${widget.postId}/comments'),
-        headers: {
-          'Authorization': 'Bearer ${_prefs.getString('authToken')}',
-          'Content-Type': 'application/json',
-        },
-      );
+    // Refresh login state before checking
+    await userProvider.refreshLoginState();
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        if (mounted) {
-          setState(() {
-            comments = data
-                .map((comment) => {
-                      'id': comment['_id'],
-                      'content': comment['content'],
-                      'user': comment['user'],
-                      'createdAt': comment['createdAt'],
-                    })
-                .toList();
-          });
-        }
-      } else {
-        throw Exception('Failed to fetch comments');
-      }
-    } catch (e) {
-      print('Error fetching comments: $e');
+    if (!userProvider.isLoggedIn) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to load comments'),
+          const SnackBar(content: Text('Please log in to vote')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Check if the auth token is still valid
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken');
+
+      if (token == null) {
+        throw Exception('Authentication token not found');
+      }
+
+      if (voteType == 'upvote') {
+        if (voteProvider.isUpvoted(widget.postId)) {
+          await voteProvider.removeUpvote(widget.postId,
+              isAdminPost: widget.isAdminPost);
+        } else {
+          await voteProvider.upvotePost(widget.postId,
+              isAdminPost: widget.isAdminPost);
+        }
+      } else if (voteType == 'downvote') {
+        if (voteProvider.isDownvoted(widget.postId)) {
+          await voteProvider.removeDownvote(widget.postId,
+              isAdminPost: widget.isAdminPost);
+        } else {
+          await voteProvider.downvotePost(widget.postId,
+              isAdminPost: widget.isAdminPost);
+        }
+      }
+      // Refresh vote status after voting
+      await voteProvider.checkVoteStatus(widget.postId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error voting: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
       }
     } finally {
       if (mounted) {
-        setState(() => isLoadingComments = false);
+        setState(() => _isLoading = false);
       }
-    }
-  }
-
-  Future<void> _postComment(String content) async {
-    if (content.trim().isEmpty) return;
-    if (!_isInitialized) {
-      await _initializePrefs();
-    }
-
-    if (!mounted) return;
-
-    try {
-      final response = await http.post(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/${widget.postId}/comments'),
-        headers: {
-          'Authorization': 'Bearer ${_prefs.getString('authToken')}',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'content': content,
-        }),
-      );
-
-      if (response.statusCode == 201) {
-        _commentController.clear();
-        await _fetchComments();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Comment posted successfully'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        throw Exception('Failed to post comment');
-      }
-    } catch (e) {
-      print('Error posting comment: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to post comment'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _fetchCommentsCount() async {
-    if (!_isInitialized) {
-      await _initializePrefs();
-    }
-    if (!mounted) return;
-    setState(() => isLoadingComments = true);
-    try {
-      final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/reports/${widget.postId}/comments'),
-        headers: {
-          'Authorization': 'Bearer ${_prefs.getString('authToken')}',
-          'Content-Type': 'application/json',
-        },
-      );
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        if (mounted) {
-          setState(() {
-            commentCount = data.length;
-          });
-        }
-      } else {
-        if (mounted) setState(() => commentCount = 0);
-      }
-    } catch (e) {
-      if (mounted) setState(() => commentCount = 0);
-    } finally {
-      if (mounted) setState(() => isLoadingComments = false);
     }
   }
 
@@ -212,12 +141,33 @@ class _EngagementRowState extends State<EngagementRow> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final customColors = Theme.of(context).extension<CustomColors>();
-    final iconColor = widget.themeMode == 'dark' ? Colors.white : Colors.black;
+    final isDark = widget.themeMode == 'dark';
+    final iconColor = widget.forceWhiteIcons
+        ? Colors.white
+        : (isDark ? Colors.white : Colors.black);
     final voteProvider = Provider.of<VoteProvider>(context);
+    final commentProvider = Provider.of<CommentProvider>(context);
+
+    // Get vote states - VoteProvider now guarantees non-null values
     final isUpvoted = voteProvider.isUpvoted(widget.postId);
     final isDownvoted = voteProvider.isDownvoted(widget.postId);
     final upvoteCount = voteProvider.getUpvoteCount(widget.postId);
     final downvoteCount = voteProvider.getDownvoteCount(widget.postId);
+
+    // Get comment count from provider
+    int commentCount = 0;
+    if (widget.isAdminPost) {
+      commentCount = commentProvider.getCommentCount(widget.postId) ?? 0;
+    } else {
+      commentCount = widget.post['_commentCount'] ?? 0;
+    }
+
+    print('Building EngagementRow for post ${widget.postId}:');
+    print('Upvoted: $isUpvoted');
+    print('Downvoted: $isDownvoted');
+    print('Upvote count: $upvoteCount');
+    print('Downvote count: $downvoteCount');
+    print('Comment count: $commentCount');
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
@@ -226,108 +176,78 @@ class _EngagementRowState extends State<EngagementRow> {
         children: [
           Row(
             children: [
-              IconButton(
-                onPressed: isLoading || !_isInitialized
-                    ? null
-                    : () async {
-                        setState(() => isLoading = true);
-                        try {
-                          if (isUpvoted) {
-                            await voteProvider.removeUpvote(widget.postId);
-                          } else {
-                            await voteProvider.upvotePost(widget.postId);
-                          }
-                        } finally {
-                          if (mounted) {
-                            setState(() => isLoading = false);
-                          }
-                        }
-                      },
+              // Upvote Button
+              TextButton.icon(
+                onPressed: () => _handleVote('upvote'),
                 icon: Icon(
-                  Icons.arrow_upward_outlined,
+                  isUpvoted ? Icons.arrow_upward : Icons.arrow_upward_outlined,
                   color: isUpvoted ? Colors.green : iconColor,
-                  size: 28,
+                  size: 20,
+                ),
+                label: Text(
+                  formatCount(upvoteCount),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: isUpvoted ? Colors.green : iconColor,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
-              Text(
-                formatCount(upvoteCount),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isUpvoted ? Colors.green : iconColor,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 12),
-              IconButton(
-                onPressed: isLoading || !_isInitialized
-                    ? null
-                    : () async {
-                        setState(() => isLoading = true);
-                        try {
-                          if (isDownvoted) {
-                            await voteProvider.removeDownvote(widget.postId);
-                          } else {
-                            await voteProvider.downvotePost(widget.postId);
-                          }
-                        } finally {
-                          if (mounted) {
-                            setState(() => isLoading = false);
-                          }
-                        }
-                      },
+              const SizedBox(width: 8),
+              // Downvote Button
+              TextButton.icon(
+                onPressed: () => _handleVote('downvote'),
                 icon: Icon(
-                  Icons.arrow_downward_outlined,
+                  isDownvoted
+                      ? Icons.arrow_downward
+                      : Icons.arrow_downward_outlined,
                   color: isDownvoted ? Colors.red : iconColor,
-                  size: 28,
+                  size: 20,
+                ),
+                label: Text(
+                  formatCount(downvoteCount),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: isDownvoted ? Colors.red : iconColor,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
-              Text(
-                formatCount(downvoteCount),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isDownvoted ? Colors.red : iconColor,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 15),
-              GestureDetector(
-                onTap: !_isInitialized
-                    ? null
-                    : widget.disableCommentButton
-                        ? null
-                        : () async {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    PostDetailScreen(post: widget.post),
-                              ),
-                            );
-                          },
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.chat_bubble_outline,
-                      color: iconColor,
-                      size: 24,
+              const SizedBox(width: 8),
+              // Comment Button
+              TextButton.icon(
+                onPressed: () {
+                  print('DEBUG: Opening post details for post: ${widget.post}');
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => widget.isAdminPost
+                          ? AdminPostDetailScreen(post: widget.post)
+                          : PostDetailScreen(post: widget.post),
                     ),
-                    const SizedBox(width: 6),
-                    isLoadingComments
-                        ? SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(iconColor),
-                            ),
-                          )
-                        : Text(
-                            commentCount.toString(),
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: iconColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                  ],
+                  );
+                },
+                icon: Icon(
+                  Icons.chat_bubble_outline,
+                  color: iconColor,
+                  size: 20,
+                ),
+                label: Text(
+                  formatCount(commentCount),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: iconColor,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
             ],

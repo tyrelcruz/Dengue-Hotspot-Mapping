@@ -11,8 +11,6 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:buzzmap/pages/login_screen.dart';
-//Firebase Imports
-import 'package:firebase_core/firebase_core.dart';
 
 import 'package:provider/provider.dart';
 
@@ -20,15 +18,51 @@ import 'package:buzzmap/services/notification_service.dart';
 import 'package:buzzmap/services/alert_service.dart';
 import 'package:buzzmap/widgets/global_alert_overlay.dart';
 import 'package:buzzmap/providers/vote_provider.dart';
+import 'package:buzzmap/providers/comment_provider.dart';
+import 'package:buzzmap/providers/user_provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:buzzmap/config/config.dart';
+import 'package:buzzmap/providers/post_provider.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:buzzmap/services/update_service.dart';
 
 void main() async {
+  // Ensure Flutter is initialized
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+
+  // Load environment variables
+  await dotenv.load(fileName: ".env");
+
+  // Initialize connectivity_plus after Flutter is initialized
+  try {
+    // Initialize connectivity
+    final connectivity = Connectivity();
+    // Set up a listener for connectivity changes
+    connectivity.onConnectivityChanged
+        .listen((List<ConnectivityResult> results) {
+      print('Connectivity changed: $results');
+    });
+    // Check initial connectivity
+    final connectivityResult = await connectivity.checkConnectivity();
+    print('Initial connectivity status: $connectivityResult');
+  } catch (e) {
+    print('Connectivity initialization error: $e');
+    // Continue even if connectivity check fails
+  }
+
+  // Initialize providers
+  final voteProvider = VoteProvider();
+  await voteProvider
+      .initializePrefs(); // Initialize vote provider before app starts
+
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => VoteProvider()),
+        ChangeNotifierProvider.value(value: voteProvider),
+        ChangeNotifierProvider(create: (_) => CommentProvider()),
+        ChangeNotifierProvider(create: (_) => PostProvider()),
         ChangeNotifierProvider(create: (_) => NotificationService()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
       ],
       child: const MyApp(),
     ),
@@ -87,6 +121,7 @@ class MyApp extends StatelessWidget {
         builder: (context, child) {
           return MaterialApp(
             title: 'BuzzMap App',
+            debugShowCheckedModeBanner: false,
             theme: ThemeData(
               colorScheme: const ColorScheme(
                 primary: primaryColor,
@@ -174,7 +209,15 @@ class MyApp extends StatelessWidget {
             ),
             builder: (context, child) {
               return GlobalAlertOverlay(
-                child: child!,
+                child: Builder(
+                  builder: (context) {
+                    // Check for updates when the app starts
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      UpdateService.checkForUpdates(context);
+                    });
+                    return child!;
+                  },
+                ),
               );
             },
             initialRoute: '/',

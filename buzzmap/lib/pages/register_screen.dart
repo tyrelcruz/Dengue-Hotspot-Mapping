@@ -7,10 +7,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:buzzmap/errors/flushbar.dart';
-
-//Firebase Imports
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:buzzmap/auth/config.dart';
+import 'package:buzzmap/auth/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -94,69 +94,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _handleGoogleSignIn() async {
     try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        clientId: Config.googleClientId,
+        scopes: ['email', 'profile'],
+      );
 
-      if (googleUser == null) return; // User canceled
+      final GoogleSignInAccount? account = await googleSignIn.signIn();
+      if (account == null) return;
 
       final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+          await account.authentication;
+      final String? idToken = googleAuth.idToken;
 
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
+      if (idToken == null) {
+        throw Exception('Failed to get ID token');
+      }
 
-      final UserCredential userCredential =
-          await FirebaseAuth.instance.signInWithCredential(credential);
-
-      final User? user = userCredential.user;
-
-      if (user != null) {
-        // Check if user already exists on your server
-        final baseUrl = Platform.isAndroid
-            ? 'http://10.0.2.2:4000'
-            : 'http://localhost:4000';
-
-        final checkEmailUrl = Uri.parse('$baseUrl/api/v1/auth/check-email');
-
-        final response = await http.post(
-          checkEmailUrl,
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode({"email": user.email}),
-        );
-
-        if (response.statusCode == 200 && response.body == 'false') {
-          // Register the user if not yet registered in your backend
-          final registerUrl = Uri.parse('$baseUrl/api/v1/auth/register');
-
-          await http.post(
-            registerUrl,
-            headers: {"Content-Type": "application/json"},
-            body: jsonEncode({
-              "username": user.displayName ?? 'Google User',
-              "email": user.email,
-              "password":
-                  'google_oauth', // Placeholder or handle differently in backend
-            }),
+      final bool success = await AuthService.googleLogin(idToken: idToken);
+      if (success) {
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/home');
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Google sign in failed')),
           );
         }
-
-        // Navigate to login or home screen
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-              builder: (context) => OTPScreen(email: _emailController.text)),
-        );
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Google Sign-In failed. Try again.';
-      });
-      AppFlushBar.showError(
-        context,
-        title: 'Authentication Failed',
-        message: 'Google Sign-In failed. Please try again.',
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
     }
   }
 
@@ -808,9 +779,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       return;
                                     }
 
-                                    final baseUrl = Platform.isAndroid
-                                        ? 'http://10.0.2.2:4000'
-                                        : 'http://localhost:4000';
+                                    final baseUrl = Config.baseUrl;
                                     final checkEmailUrl = Uri.parse(
                                         '$baseUrl/api/v1/auth/check-email');
 

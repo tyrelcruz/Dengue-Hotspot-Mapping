@@ -23,12 +23,12 @@ class _CustomTabBarState extends State<CustomTabBar> {
 
     return Expanded(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2.0),
+        padding: const EdgeInsets.symmetric(horizontal: 1.0),
         child: GestureDetector(
           onTap: widget.onTap,
           child: Chip(
-            visualDensity: VisualDensity(horizontal: 0, vertical: -2),
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+            visualDensity: VisualDensity(horizontal: 0, vertical: -4),
+            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
             backgroundColor: widget.isSelected
                 ? theme.colorScheme.primary
                 : theme.colorScheme.surface,
@@ -40,6 +40,7 @@ class _CustomTabBarState extends State<CustomTabBar> {
                       ? Colors.white
                       : theme.colorScheme.primary,
                   fontWeight: FontWeight.bold,
+                  fontSize: 11,
                 ),
               ),
             ),

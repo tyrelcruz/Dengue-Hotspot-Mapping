@@ -423,7 +423,7 @@ class _PreventionScreenState extends State<PreventionScreen> {
                                               title: 'MGA SINTOMAS',
                                               content: '',
                                               images: [
-                                                'assets/images/symptoms.png',
+                                                'assets/images/symptoms.png'
                                               ],
                                               publishDate: DateTime.now(),
                                               category: 'symptoms',
@@ -501,13 +501,13 @@ class _PreventionScreenState extends State<PreventionScreen> {
                             final post = filteredNewsPosts[index];
                             final List<dynamic> imagesList =
                                 post['images'] ?? [];
-                            final String articleImage = (imagesList
-                                        .isNotEmpty &&
-                                    imagesList[0] != null &&
-                                    imagesList[0] is String &&
-                                    imagesList[0].isNotEmpty)
-                                ? imagesList[0]
-                                : 'assets/images/latestnews.png'; // Use a local asset as fallback
+                            final String articleImage =
+                                (imagesList.isNotEmpty &&
+                                        imagesList[0] != null &&
+                                        imagesList[0] is String &&
+                                        imagesList[0].isNotEmpty)
+                                    ? imagesList[0]
+                                    : 'assets/images/latestnews.png';
                             final article = {
                               'articleImage': articleImage,
                               'articleTitle': post['title']?.toString() ?? '',

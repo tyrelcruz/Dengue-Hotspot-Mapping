@@ -27,7 +27,8 @@ class TipDetailsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const SizedBox(height: 15),
-            if (tip.id == '4s-against-dengue') ...[
+            if (tip.id == '4s-against-dengue' ||
+                tip.id == '5s-against-dengue') ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10.0),
                 child: Text(

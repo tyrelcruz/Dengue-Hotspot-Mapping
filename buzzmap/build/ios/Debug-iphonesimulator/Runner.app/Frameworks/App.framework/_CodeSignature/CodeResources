@@ -8,13 +8,17 @@
 		<data>
 		h5OB7aKzS5WR9SemvZAyN6FEkJs=
 		</data>
+		<key>flutter_assets/.env</key>
+		<data>
+		j5UOEzfgZbkhZGKuquBQuGrDajc=
+		</data>
 		<key>flutter_assets/AssetManifest.bin</key>
 		<data>
-		3sW5UHZ6Zlj/7Nf/H3tyTZ/K7Bo=
+		b5fsuJxROwj7Y8uNRN83KB9S29g=
 		</data>
 		<key>flutter_assets/AssetManifest.json</key>
 		<data>
-		/jV7tUSdnUIPu5QKKJWYvIG9HAQ=
+		yRAG/Kt61jWaFi9Fjx6zIx+Cg2Q=
 		</data>
 		<key>flutter_assets/FontManifest.json</key>
 		<data>
@@ -22,7 +26,7 @@
 		</data>
 		<key>flutter_assets/NOTICES.Z</key>
 		<data>
-		L17leDk8T87km24uNepj/h02d5k=
+		ScoYVbZVlk8+34NZwiAAjxDI3o0=
 		</data>
 		<key>flutter_assets/NativeAssetsManifest.json</key>
 		<data>
@@ -104,6 +108,10 @@
 		<data>
 		qd/2Q0ezrae5Oq+Xca0R3WGrGjM=
 		</data>
+		<key>flutter_assets/assets/icons/cleanup.png</key>
+		<data>
+		13rIBUUioPpn0pNczNs95uX6iL8=
+		</data>
 		<key>flutter_assets/assets/icons/close.svg</key>
 		<data>
 		/sHKc7FtxpLoWGroPMYuiwLZogU=
@@ -111,6 +119,18 @@
 		<key>flutter_assets/assets/icons/comment.svg</key>
 		<data>
 		JnRq4d6kIyXYk7zcObA0TSmoPD0=
+		</data>
+		<key>flutter_assets/assets/icons/default.png</key>
+		<data>
+		Fu+x5lRNsLYvFb8a3ejuCcVeObo=
+		</data>
+		<key>flutter_assets/assets/icons/education.png</key>
+		<data>
+		Z++eYcRzYwPlHNKucC1Q+soiqz8=
+		</data>
+		<key>flutter_assets/assets/icons/fogging.png</key>
+		<data>
+		yBjnMRgS+rWQf8OO7Zn9oFMP1Wk=
 		</data>
 		<key>flutter_assets/assets/icons/google_logo.png</key>
 		<data>
@@ -176,6 +196,10 @@
 		<data>
 		uSFBq86f4AQjfj8x+1iL3aQjfe0=
 		</data>
+		<key>flutter_assets/assets/icons/trapping.png</key>
+		<data>
+		3bTKZ4fd4ib0+bor5Z11kwuSHJI=
+		</data>
 		<key>flutter_assets/assets/images/1S.png</key>
 		<data>
 		yrjtQDnGYOPlEPlMBntj4gbnoPw=
@@ -195,6 +219,10 @@
 		<key>flutter_assets/assets/images/5S.png</key>
 		<data>
 		HJPscfhrqQIT4cId4EI5eOgnQMg=
+		</data>
+		<key>flutter_assets/assets/images/BreedingPots.jpg</key>
+		<data>
+		P7tcacXApeWJ1dqXCRA87RXlKQQ=
 		</data>
 		<key>flutter_assets/assets/images/DGPattern.png</key>
 		<data>
@@ -244,6 +272,10 @@
 		<data>
 		xwR2GnDjD3VPEtXm7m/xTR/7ZXM=
 		</data>
+		<key>flutter_assets/assets/images/infestation.jpg</key>
+		<data>
+		L3tKoYfIZuRSF50RSoUtV7K4J3E=
+		</data>
 		<key>flutter_assets/assets/images/latestnews.png</key>
 		<data>
 		QXTm7uw+NJ3O/MMaqFLQN+xsZls=
@@ -260,6 +292,10 @@
 		<data>
 		66vfLVcBu2aHDJG+ckAUbwH/ygs=
 		</data>
+		<key>flutter_assets/assets/images/pattern_overlay.png</key>
+		<data>
+		JanzV0infO9jHrTkU0NNSjMQwmo=
+		</data>
 		<key>flutter_assets/assets/images/polluted_water_1.jpg</key>
 		<data>
 		3AVIh++DZFCgCeOUFZs4oDb8Blo=
@@ -268,9 +304,25 @@
 		<data>
 		Qm8rcs7+niTUiAmwnpI2KPDNmXg=
 		</data>
+		<key>flutter_assets/assets/images/standingwater.jpg</key>
+		<data>
+		62jkjL45e2cD4WGkXx1BAKmkM+Y=
+		</data>
 		<key>flutter_assets/assets/images/welcome_character.png</key>
 		<data>
 		r1OUsCuQHZXpBx9sQU9CB0pR4cg=
+		</data>
+		<key>flutter_assets/assets/markers/others.png</key>
+		<data>
+		8xJ1atokKTiYH3lTPyErZGyC/HI=
+		</data>
+		<key>flutter_assets/assets/markers/stagnantwater.png</key>
+		<data>
+		P+bExH7WHWQaeqiWi8WlD5l7Nhw=
+		</data>
+		<key>flutter_assets/assets/markers/trash.png</key>
+		<data>
+		JzRPheuXJKeBeceBo89AHaNshbk=
 		</data>
 		<key>flutter_assets/assets/notifications/breedingground.png</key>
 		<data>
@@ -318,11 +370,11 @@
 		</data>
 		<key>flutter_assets/isolate_snapshot_data</key>
 		<data>
-		gRDbYzMNgtJeT9rLZDdiOJ0RXMg=
+		w9WcwIYVRl07EMLuLi7qukruhIs=
 		</data>
 		<key>flutter_assets/kernel_blob.bin</key>
 		<data>
-		8KqEJJNj7MFeZOSFokS9WQgUR7M=
+		J7ONcvyr1V0yW6XMvRZHSBEZeQ4=
 		</data>
 		<key>flutter_assets/packages/cupertino_icons/assets/CupertinoIcons.ttf</key>
 		<data>
@@ -338,27 +390,34 @@
 		</data>
 		<key>flutter_assets/shaders/ink_sparkle.frag</key>
 		<data>
-		VoVnsu58hN7wrwazX0nyAopiB0Q=
+		VvTF10G1gIeea4aI0DhJjCjHgXQ=
 		</data>
 		<key>flutter_assets/vm_snapshot_data</key>
 		<data>
-		6f33nJbLQOxwLNQ7Pq7TZR9ENuo=
+		SoHnDHqzNKozN7o/zhsvOoXVErY=
 		</data>
 	</dict>
 	<key>files2</key>
 	<dict>
+		<key>flutter_assets/.env</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			KkGTfrtC+oQcPW8yMPQreyS1gRwPR7Wqw9PhSZr9ZzQ=
+			</data>
+		</dict>
 		<key>flutter_assets/AssetManifest.bin</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			V29fGKNOsh6ZW8e5OY8yIaUxNKH1r+qFNnOkLV7Gh/w=
+			AT5r9s5TbSXIxJQUJL1aYy1bxrT/N9n6H5a7UgxRHmM=
 			</data>
 		</dict>
 		<key>flutter_assets/AssetManifest.json</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			CLTR8/MDZhU6Ov1gcxNmlwNkWy9mpN73424hjDAL1BQ=
+			q0gDxQ0IQabNR5KhEg7AiyllqLZmxCzX66HvH+aoLuA=
 			</data>
 		</dict>
 		<key>flutter_assets/FontManifest.json</key>
@@ -372,7 +431,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			16Yu/7hAnBJmviP8TkP8nND//qrwAS7UstD4tdKvZ9Q=
+			QAbd18g+VIiUPv6QKf/6KtPPSpqwD9YxjlFlQ3STvZQ=
 			</data>
 		</dict>
 		<key>flutter_assets/NativeAssetsManifest.json</key>
@@ -515,6 +574,13 @@
 			Feu0uaYESp9KoDRH+TNdmsctmf6P5lEvsBoKWawN8TY=
 			</data>
 		</dict>
+		<key>flutter_assets/assets/icons/cleanup.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			9lSkBadDS1mVGBKMf36eiQELlEdVjJDaamQRVgHEyKs=
+			</data>
+		</dict>
 		<key>flutter_assets/assets/icons/close.svg</key>
 		<dict>
 			<key>hash2</key>
@@ -527,6 +593,27 @@
 			<key>hash2</key>
 			<data>
 			hmjGOj6YK/azBe6i8sAfb/GQ98erDOJ3/xXVkdCXqbM=
+			</data>
+		</dict>
+		<key>flutter_assets/assets/icons/default.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			ZJLrm+lQDFTp3/T/zL7F8Jeojph416VvIz30iSuBwss=
+			</data>
+		</dict>
+		<key>flutter_assets/assets/icons/education.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			J7/i5yHsCof3qoaZw8pHYDPmpVTbCM6GShIe6r7Cl0A=
+			</data>
+		</dict>
+		<key>flutter_assets/assets/icons/fogging.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			4LqG469wqqYmX7ipvbKEUopQ68ZW5ehO9Ldt8ZZCTJk=
 			</data>
 		</dict>
 		<key>flutter_assets/assets/icons/google_logo.png</key>
@@ -641,6 +728,13 @@
 			WMzysrZWVwDyPVklj8P0yABGU2Jg4sq5eLiNknd68Lw=
 			</data>
 		</dict>
+		<key>flutter_assets/assets/icons/trapping.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			WedcELBr30wYnqRo6qrk90S0a9vhe2bWU5nOE3Tc23c=
+			</data>
+		</dict>
 		<key>flutter_assets/assets/images/1S.png</key>
 		<dict>
 			<key>hash2</key>
@@ -674,6 +768,13 @@
 			<key>hash2</key>
 			<data>
 			UHT7IYv4LGWkwNMmyZM3VPtlUuV6j/ASsXWqpAuN130=
+			</data>
+		</dict>
+		<key>flutter_assets/assets/images/BreedingPots.jpg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			/14wxfq09zeLvhl/S5wlCbCkjNa8+C7kJnNlmbJ5NBA=
 			</data>
 		</dict>
 		<key>flutter_assets/assets/images/DGPattern.png</key>
@@ -760,6 +861,13 @@
 			3KwS+7jBUxgK8TMTGpkb0eDxNg7GtPiem6WVd1Kklb8=
 			</data>
 		</dict>
+		<key>flutter_assets/assets/images/infestation.jpg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			OTLGWc+pVa3IhHFaXObSggTNyxru1K5evai1pgBq2MY=
+			</data>
+		</dict>
 		<key>flutter_assets/assets/images/latestnews.png</key>
 		<dict>
 			<key>hash2</key>
@@ -788,6 +896,13 @@
 			r+G27ZPNopEDfiP7zYlK3cFIKx3zSICea7nBncyU4Zo=
 			</data>
 		</dict>
+		<key>flutter_assets/assets/images/pattern_overlay.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			nGlPNhRnr7Qof1Nx3wc44m95iBqQsglnFbWwjN3fhR8=
+			</data>
+		</dict>
 		<key>flutter_assets/assets/images/polluted_water_1.jpg</key>
 		<dict>
 			<key>hash2</key>
@@ -802,11 +917,39 @@
 			aeg+FKv8wIgv/CGxGpTENyJ2EfTkXgchpLnBrpsDXqY=
 			</data>
 		</dict>
+		<key>flutter_assets/assets/images/standingwater.jpg</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			qpfi4tdBWrwzQaFDjrYb1+cye07MmdAlDHMK9b9CZFU=
+			</data>
+		</dict>
 		<key>flutter_assets/assets/images/welcome_character.png</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			j9/Hn2sMDIoSLJOH8XF0esREUc7rcU74F79+XBsqrnE=
+			</data>
+		</dict>
+		<key>flutter_assets/assets/markers/others.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			p+Yvb9FEnwhdtINXV4YVkBU9vma3zlY1oz940NMJXmk=
+			</data>
+		</dict>
+		<key>flutter_assets/assets/markers/stagnantwater.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			iEiZ2qNfXqqT/rU9L9x9ejlSM9+7UO+8MBL/Ksi04K0=
+			</data>
+		</dict>
+		<key>flutter_assets/assets/markers/trash.png</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Vhaz97qbC4rQSNXwqd8P9d2nZjYjh+DVu656Wyu0LrE=
 			</data>
 		</dict>
 		<key>flutter_assets/assets/notifications/breedingground.png</key>
@@ -890,14 +1033,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			Ut/uEhc6+hUf6S/IpyxQydpXSJV0AmyYEkKu13s4D6o=
+			PBOAqqWi5ujK3/k/uWcKrZyOam5QktQ5MqxZKes8MBY=
 			</data>
 		</dict>
 		<key>flutter_assets/kernel_blob.bin</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			LKkCZMozolDUCkeeepNFVsw5slOwaxveK+enbAP8ITY=
+			hzhmBvqGVLYFeIJ05YOgdUYLr6HsRwfyocYDxyrFy8E=
 			</data>
 		</dict>
 		<key>flutter_assets/packages/cupertino_icons/assets/CupertinoIcons.ttf</key>
@@ -925,14 +1068,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			4PC1vOWKHlNOnW4dGwFfD4TPwBCllniPCsOy7+1X5co=
+			TGVjYgE+Oyl6guvhhPPrWfynkxkJeFjSzSLsQqn7Q3M=
 			</data>
 		</dict>
 		<key>flutter_assets/vm_snapshot_data</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			EkAQI7At/OAUaTSQUy3t6/4PpHWrvbPs+YdJHmzJ978=
+			RTqty/gYjcrXxgR3QLjNukvL8gGpfV6MdaYktQJaIa8=
 			</data>
 		</dict>
 	</dict>

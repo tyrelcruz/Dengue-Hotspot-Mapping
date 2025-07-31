@@ -10,6 +10,7 @@ class PatternRecognitionData {
   final String? lastAnalysisTime;
   final String? triggeredPattern;
   final Map<String, dynamic>? statusAndRecommendation;
+  final String? userRecommendation;
 
   PatternRecognitionData({
     required this.name,
@@ -18,6 +19,7 @@ class PatternRecognitionData {
     this.lastAnalysisTime,
     this.triggeredPattern,
     this.statusAndRecommendation,
+    this.userRecommendation,
   });
 
   factory PatternRecognitionData.fromJson(Map<String, dynamic> json) {
@@ -30,6 +32,9 @@ class PatternRecognitionData {
       triggeredPattern:
           json['status_and_recommendation']?['pattern_based']?['status'] ?? '',
       statusAndRecommendation: json['status_and_recommendation'],
+      userRecommendation: json['status_and_recommendation']?['pattern_based']
+              ?['user_recommendation'] ??
+          '',
     );
   }
 }
@@ -134,6 +139,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
                     'recommendation': ''
                   }
                 },
+                userRecommendation: '',
               );
             });
           }
@@ -156,6 +162,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
               'recommendation': ''
             }
           },
+          userRecommendation: '',
         );
       });
     }
@@ -173,8 +180,9 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
       return Colors.grey.shade700;
     }
     switch (pattern.toLowerCase()) {
+      case 'stable':
       case 'stability':
-      case 'stability_pattern':
+      case 'stable_pattern':
         return Colors.lightBlue.shade600;
       case 'spike':
       case 'spike_pattern':
@@ -188,6 +196,12 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
       default:
         return Colors.grey.shade700;
     }
+  }
+
+  String displayPattern(String pattern) {
+    if (pattern.toLowerCase() == 'stability') return 'Stable';
+    if (pattern.isEmpty) return '';
+    return pattern[0].toUpperCase() + pattern.substring(1);
   }
 
   Widget _buildPatternCard() {
@@ -225,6 +239,9 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
       );
     }
 
+    // Use displayPattern for user-facing text
+    String displayPatternText = displayPattern(_patternData!.triggeredPattern!);
+
     return Card(
       elevation: 0,
       color: Colors.grey.shade50,
@@ -246,7 +263,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
             ),
             const SizedBox(width: 8),
             Text(
-              'Pattern: ${_patternData!.triggeredPattern!.toUpperCase()}',
+              'Pattern: $displayPatternText',
               style: TextStyle(
                 color: _getPatternColor(_patternData!.triggeredPattern!),
                 fontWeight: FontWeight.w500,
@@ -434,44 +451,57 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
   List<Widget> _getPreventiveActions(String riskLevel) {
     final actions = <Widget>[];
 
-    switch (riskLevel.toLowerCase()) {
-      case 'high':
-        actions.addAll([
-          _buildActionItem(
-              '1. Conduct daily inspection and elimination of mosquito breeding sites'),
-          _buildActionItem(
-              '2. Use mosquito repellent and wear protective clothing'),
-          _buildActionItem('3. Install window and door screens'),
-          _buildActionItem(
-              '4. Seek immediate medical attention if symptoms appear'),
-          _buildActionItem('5. Support community-wide fogging operations'),
-        ]);
-        break;
-      case 'moderate':
-        actions.addAll([
-          _buildActionItem(
-              '1. Check and clean potential breeding sites weekly'),
-          _buildActionItem('2. Use mosquito repellent when outdoors'),
-          _buildActionItem(
-              '3. Keep doors and windows closed during peak mosquito hours'),
-          _buildActionItem('4. Monitor for dengue symptoms'),
-          _buildActionItem('5. Participate in community clean-up drives'),
-        ]);
-        break;
-      case 'low':
-        actions.addAll([
-          _buildActionItem('1. Maintain regular cleaning of surroundings'),
-          _buildActionItem('2. Keep water containers covered'),
-          _buildActionItem('3. Use mosquito nets if needed'),
-          _buildActionItem('4. Stay informed about dengue prevention'),
-          _buildActionItem('5. Report any potential breeding sites'),
-        ]);
-        break;
-      default:
-        actions.add(
-          _buildActionItem(
-              'No specific preventive actions available for this risk level'),
-        );
+    if (_patternData?.userRecommendation != null &&
+        _patternData!.userRecommendation!.isNotEmpty) {
+      // Split the recommendations by newline and create action items
+      final recommendations = _patternData!.userRecommendation!.split('\n');
+      for (var i = 0; i < recommendations.length; i++) {
+        final recommendation = recommendations[i].trim();
+        if (recommendation.isNotEmpty) {
+          actions.add(_buildActionItem('${i + 1}. $recommendation'));
+        }
+      }
+    } else {
+      // Fallback to default recommendations if no user recommendations are available
+      switch (riskLevel.toLowerCase()) {
+        case 'high':
+          actions.addAll([
+            _buildActionItem(
+                '1. Conduct daily inspection and elimination of mosquito breeding sites'),
+            _buildActionItem(
+                '2. Use mosquito repellent and wear protective clothing'),
+            _buildActionItem('3. Install window and door screens'),
+            _buildActionItem(
+                '4. Seek immediate medical attention if symptoms appear'),
+            _buildActionItem('5. Support community-wide fogging operations'),
+          ]);
+          break;
+        case 'moderate':
+          actions.addAll([
+            _buildActionItem(
+                '1. Check and clean potential breeding sites weekly'),
+            _buildActionItem('2. Use mosquito repellent when outdoors'),
+            _buildActionItem(
+                '3. Keep doors and windows closed during peak mosquito hours'),
+            _buildActionItem('4. Monitor for dengue symptoms'),
+            _buildActionItem('5. Participate in community clean-up drives'),
+          ]);
+          break;
+        case 'low':
+          actions.addAll([
+            _buildActionItem('1. Maintain regular cleaning of surroundings'),
+            _buildActionItem('2. Keep water containers covered'),
+            _buildActionItem('3. Use mosquito nets if needed'),
+            _buildActionItem('4. Stay informed about dengue prevention'),
+            _buildActionItem('5. Report any potential breeding sites'),
+          ]);
+          break;
+        default:
+          actions.add(
+            _buildActionItem(
+                'No specific preventive actions available for this risk level'),
+          );
+      }
     }
 
     return actions;
@@ -607,48 +637,61 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
                       ),
                       if (_isDengueExpanded) ...[
                         const SizedBox(height: 16),
-                        if (_patternData!.triggeredPattern != null)
-                          _buildPatternCard(),
-                        if (_patternData!.alert != null) _buildAlertCard(),
-                        if (_patternData!.lastAnalysisTime != null)
-                          _buildLastAnalyzedCard(),
-                        const SizedBox(height: 16),
-                        // Add preventive actions based on risk level
-                        Card(
-                          elevation: 0,
-                          color: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            side: BorderSide(
-                              color: Colors.grey.shade300,
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
+                        SizedBox(
+                          height:
+                              300, // Fixed height for the scrollable content
+                          child: SingleChildScrollView(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.shield_outlined,
-                                      size: 20,
-                                      color: Colors.grey.shade700,
+                                if (_patternData!.triggeredPattern != null)
+                                  _buildPatternCard(),
+                                if (_patternData!.alert != null)
+                                  _buildAlertCard(),
+                                if (_patternData!.lastAnalysisTime != null)
+                                  _buildLastAnalyzedCard(),
+                                const SizedBox(height: 16),
+                                // Add preventive actions based on risk level
+                                Card(
+                                  elevation: 0,
+                                  color: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: BorderSide(
+                                      color: Colors.grey.shade300,
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Preventive Actions',
-                                      style: TextStyle(
-                                        color: Colors.grey.shade700,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.shield_outlined,
+                                              size: 20,
+                                              color: Colors.grey.shade700,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Preventive Actions',
+                                              style: TextStyle(
+                                                color: Colors.grey.shade700,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+                                        ..._getPreventiveActions(
+                                            _patternData!.riskLevel),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
-                                const SizedBox(height: 12),
-                                ..._getPreventiveActions(
-                                    _patternData!.riskLevel),
                               ],
                             ),
                           ),
@@ -662,72 +705,6 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
           ),
         ),
         const SizedBox(height: 12),
-        // Add notes about using tabs and clicking barangays
-        Card(
-          elevation: 0,
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(
-              color: Colors.grey.shade300,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.tips_and_updates_outlined,
-                  size: 20,
-                  color: Colors.grey.shade700,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'For a comprehensive dengue risk assessment, check the risk levels and patterns above.',
-                    style: TextStyle(
-                      color: Colors.grey.shade700,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Card(
-          elevation: 0,
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(
-              color: Colors.grey.shade300,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.touch_app_outlined,
-                  size: 20,
-                  color: Colors.grey.shade700,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Click on any barangay on the map to view its detailed risk assessment and recommendations.',
-                    style: TextStyle(
-                      color: Colors.grey.shade700,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }

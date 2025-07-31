@@ -186,19 +186,19 @@
 		</data>
 		<key>Headers/GoogleMapsUtils-Swift.h</key>
 		<data>
-		hvhvyhNdsoNOV/DmpqRkceYukPk=
+		RyIR0vmuwH1Ir6xTnhvB+dKPGG0=
 		</data>
 		<key>Info.plist</key>
 		<data>
-		Q41oAtBsvTb7UlQUSEZjdkkf9Yg=
+		yCh6YAQYiNl9fUgJppGwtAstFyw=
 		</data>
 		<key>Modules/GoogleMapsUtils.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo</key>
 		<data>
-		phc7gAwwJOCWPJadxlMMg+Fw8zQ=
+		LTw06NkVdxoYbdZYmgcHLwn6VuE=
 		</data>
 		<key>Modules/GoogleMapsUtils.swiftmodule/Project/x86_64-apple-ios-simulator.swiftsourceinfo</key>
 		<data>
-		uxgh2gXWNiodlXdejOGC4GzVNgY=
+		c641sRgk+HAvlZOq10Xey2t9ltg=
 		</data>
 		<key>Modules/GoogleMapsUtils.swiftmodule/arm64-apple-ios-simulator.abi.json</key>
 		<data>
@@ -206,11 +206,11 @@
 		</data>
 		<key>Modules/GoogleMapsUtils.swiftmodule/arm64-apple-ios-simulator.swiftdoc</key>
 		<data>
-		ENAvRLUhPWSumo6Xgd8ZMg06yI4=
+		wcq3se7e83sVTYhdiu+HAlcSyzU=
 		</data>
 		<key>Modules/GoogleMapsUtils.swiftmodule/arm64-apple-ios-simulator.swiftmodule</key>
 		<data>
-		2NXXEuGYDPwN44ok7k/kzXxRr4s=
+		6IBvtPCnPfammnjD3YPEgG3zT48=
 		</data>
 		<key>Modules/GoogleMapsUtils.swiftmodule/x86_64-apple-ios-simulator.abi.json</key>
 		<data>
@@ -218,11 +218,11 @@
 		</data>
 		<key>Modules/GoogleMapsUtils.swiftmodule/x86_64-apple-ios-simulator.swiftdoc</key>
 		<data>
-		gvkn+d8EhxPyPvIAIWec9lOuZOE=
+		0hvKaKxi8ln4NDFR3sd+nOpx1NY=
 		</data>
 		<key>Modules/GoogleMapsUtils.swiftmodule/x86_64-apple-ios-simulator.swiftmodule</key>
 		<data>
-		PjYLAodtLeLtlxXoiO18gkfjJCk=
+		1lPlMFYMXs3Lx2smUjh4GBV4tDM=
 		</data>
 		<key>Modules/module.modulemap</key>
 		<data>
@@ -730,33 +730,33 @@
 		<dict>
 			<key>hash</key>
 			<data>
-			hvhvyhNdsoNOV/DmpqRkceYukPk=
+			RyIR0vmuwH1Ir6xTnhvB+dKPGG0=
 			</data>
 			<key>hash2</key>
 			<data>
-			zJlFVsE/TW2wqA3cIUHAD+j0eEv1xAWLvAFrXI45WQc=
+			YINrx6emjTGx/OtxkQs0axOmP2V6QMgJ2hJaKfGBSFw=
 			</data>
 		</dict>
 		<key>Modules/GoogleMapsUtils.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo</key>
 		<dict>
 			<key>hash</key>
 			<data>
-			phc7gAwwJOCWPJadxlMMg+Fw8zQ=
+			LTw06NkVdxoYbdZYmgcHLwn6VuE=
 			</data>
 			<key>hash2</key>
 			<data>
-			1Iv+KuWrv6cTiZB2NlMk64Pr1VMtpmZLP9+SdHZ6HeY=
+			frIkg8lHJvNu5skudvKE+CLg/dppF1U8UyJUJcKbDuo=
 			</data>
 		</dict>
 		<key>Modules/GoogleMapsUtils.swiftmodule/Project/x86_64-apple-ios-simulator.swiftsourceinfo</key>
 		<dict>
 			<key>hash</key>
 			<data>
-			uxgh2gXWNiodlXdejOGC4GzVNgY=
+			c641sRgk+HAvlZOq10Xey2t9ltg=
 			</data>
 			<key>hash2</key>
 			<data>
-			2d8hdBxIfQB0/iaPdI/FZrWRkLqIf6oldGjQSrLpeeo=
+			wKETc8ZPNBOHK6wzO9MD0GHwKx12DGitnZ8KpAAJVN0=
 			</data>
 		</dict>
 		<key>Modules/GoogleMapsUtils.swiftmodule/arm64-apple-ios-simulator.abi.json</key>
@@ -774,22 +774,22 @@
 		<dict>
 			<key>hash</key>
 			<data>
-			ENAvRLUhPWSumo6Xgd8ZMg06yI4=
+			wcq3se7e83sVTYhdiu+HAlcSyzU=
 			</data>
 			<key>hash2</key>
 			<data>
-			5CL1mfksfm4TN2i/ROS3YmN2RWkdfTALIIpqhNmVk08=
+			vHF0v/z051IK1ECjiZ2h34WaFG1dA75VQipdkadl6rw=
 			</data>
 		</dict>
 		<key>Modules/GoogleMapsUtils.swiftmodule/arm64-apple-ios-simulator.swiftmodule</key>
 		<dict>
 			<key>hash</key>
 			<data>
-			2NXXEuGYDPwN44ok7k/kzXxRr4s=
+			6IBvtPCnPfammnjD3YPEgG3zT48=
 			</data>
 			<key>hash2</key>
 			<data>
-			nYo0/NsR05SYXOeJYnDPMR3oWykSHSvvZzqnnhcyx6A=
+			iOVuZA8YlnIE90KgZFoFLDCVAslKm8saieF0avKUyjA=
 			</data>
 		</dict>
 		<key>Modules/GoogleMapsUtils.swiftmodule/x86_64-apple-ios-simulator.abi.json</key>
@@ -807,22 +807,22 @@
 		<dict>
 			<key>hash</key>
 			<data>
-			gvkn+d8EhxPyPvIAIWec9lOuZOE=
+			0hvKaKxi8ln4NDFR3sd+nOpx1NY=
 			</data>
 			<key>hash2</key>
 			<data>
-			gyP47nqbqsmQHG6ux8i3pbjvmckT0j+ywdTKUyTlGqA=
+			QjMjJFWIMw5UvTg0uFj1ukvhAE29hDkTpc+f6GXHJCU=
 			</data>
 		</dict>
 		<key>Modules/GoogleMapsUtils.swiftmodule/x86_64-apple-ios-simulator.swiftmodule</key>
 		<dict>
 			<key>hash</key>
 			<data>
-			PjYLAodtLeLtlxXoiO18gkfjJCk=
+			1lPlMFYMXs3Lx2smUjh4GBV4tDM=
 			</data>
 			<key>hash2</key>
 			<data>
-			MKoz2WfWX0MX/y1lD+uN9MTxxsqXV4459F1xGhwjJQ4=
+			UDvIq/Oh67MC+ZRh8Vcvi9OmNMxcNRsU8kWHxw79e34=
 			</data>
 		</dict>
 		<key>Modules/module.modulemap</key>

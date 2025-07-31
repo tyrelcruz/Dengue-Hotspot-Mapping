@@ -23,7 +23,7 @@
   <key>MinimumOSVersion</key>
   <string>12.0</string>
   <key>FlutterEngine</key>
-  <string>cf56914b326edb0ccb123ffdc60f00060bd513fa</string>
+  <string>109150893958777c8f2215f6cfd3e89e984e8dea</string>
   <key>ClangVersion</key>
   <string>b'Fuchsia clang version 18.0.0 (https://llvm.googlesource.com/llvm-project 725656bdd885483c39f482a01ea25d67acf39c46)'</string>
 </dict>

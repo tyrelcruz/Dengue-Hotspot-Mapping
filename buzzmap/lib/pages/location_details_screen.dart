@@ -6,30 +6,39 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:buzzmap/data/dengue_data.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'dart:convert';
+import 'dart:math' show min, max;
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:http/http.dart' as http;
-
 import 'package:buzzmap/auth/config.dart';
+import 'package:provider/provider.dart';
+import 'package:buzzmap/providers/vote_provider.dart';
+import 'package:buzzmap/providers/post_provider.dart';
+import 'package:flutter/services.dart';
+import 'dart:async';
+import 'package:buzzmap/widgets/post_detail_screen.dart';
 
 class LocationDetailsScreen extends StatefulWidget {
   final String location;
   final String? district;
   final double latitude;
   final double longitude;
-  final int? cases; // 🔥 ADD THIS
-  final String? severity; // 🔥 ADD THIS
-  final String? streetName; // 🔥 Made optional
+  final int? cases;
+  final String? severity;
+  final String? streetName;
+  final Color? barangayColor;
+  final String? reportType;
 
   const LocationDetailsScreen({
     Key? key,
     required this.location,
     required this.latitude,
     required this.longitude,
-    this.cases, // 🔥 not required anymore
-    this.severity, // 🔥 not required anymore
-    this.streetName, // 🔥 Made optional
+    this.cases,
+    this.severity,
+    this.streetName,
     this.district,
+    this.barangayColor,
+    this.reportType,
   }) : super(key: key);
 
   @override
@@ -38,21 +47,47 @@ class LocationDetailsScreen extends StatefulWidget {
 
 class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
   GoogleMapController? _mapController;
-
   int cases = 0;
   String severity = 'Unknown';
-
-  List<Map<String, dynamic>> _barangayPosts = [];
   bool _isLoadingPosts = true;
-
   String? _currentUsername;
+  Set<Polygon> _barangayPolygons = {};
+  Set<Marker> _markers = {};
+  Set<Polyline> _polylines = {};
+  LatLng? _currentLocation;
+  GoogleMapController? _controller;
+  final Completer<GoogleMapController> _controllerCompleter = Completer();
+  bool _isMapReady = false;
+  bool _customIconsLoaded = false;
+  BitmapDescriptor? othersIcon;
+  BitmapDescriptor? stagnantWaterIcon;
+  BitmapDescriptor? trashIcon;
 
   @override
   void initState() {
     super.initState();
-    _loadDengueData();
-    _loadReports();
+    print('DEBUG: initState called');
     _loadCurrentUsername();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _initializeScreen();
+    });
+  }
+
+  Future<void> _initializeScreen() async {
+    print('DEBUG: Starting screen initialization');
+    // Load posts first
+    await Provider.of<PostProvider>(context, listen: false).fetchPosts();
+    // Initialize VoteProvider and refresh votes
+    final voteProvider = Provider.of<VoteProvider>(context, listen: false);
+    print('DEBUG: VoteProvider initialized');
+    await voteProvider.refreshAllVotes();
+    print('DEBUG: All votes refreshed');
+    await _loadCustomMarkerIcons();
+    print('DEBUG: Custom icons loaded, proceeding with data load');
+    await _loadDengueData();
+    print('DEBUG: Data loaded, proceeding with polygon load');
+    await _loadBarangayPolygon();
+    print('DEBUG: Screen initialization complete');
   }
 
   Future<void> _loadCurrentUsername() async {
@@ -64,6 +99,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
   Future<void> _loadDengueData() async {
     try {
+      print('DEBUG: Starting _loadDengueData');
       final response = await http.get(
         Uri.parse('${Config.baseUrl}/api/v1/barangays/get-all-barangays'),
       );
@@ -77,14 +113,33 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
 
         if (barangayData != null) {
           setState(() {
-            // Use the length of _barangayPosts for cases count
-            cases = _barangayPosts.length;
+            cases = Provider.of<PostProvider>(context, listen: false)
+                .posts
+                .where((post) => post['barangay'] == widget.location)
+                .length;
             severity = barangayData['status_and_recommendation']
                         ?['pattern_based']?['status']
                     ?.toString()
                     .toLowerCase() ??
                 'Unknown';
+            print('DEBUG: Severity loaded from API: $severity');
           });
+
+          print('DEBUG: About to create report marker');
+          print('DEBUG: Report type from widget: ${widget.reportType}');
+          print('DEBUG: Custom icons loaded: $_customIconsLoaded');
+
+          // Add the report marker
+          final reportMarker = await _createReportMarker();
+          if (reportMarker != null) {
+            print('DEBUG: Report marker created successfully');
+            setState(() {
+              _markers = {reportMarker};
+              print('DEBUG: Report marker added to map');
+            });
+          } else {
+            print('DEBUG: Failed to create report marker');
+          }
         }
       }
     } catch (e) {
@@ -92,115 +147,257 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     }
   }
 
-  Color _getSeverityColor(String severity) {
-    switch (severity.toLowerCase()) {
-      case 'spike':
-        return Colors.red;
-      case 'gradual_rise':
-        return Colors.orange;
-      case 'decline':
-        return Colors.green;
-      case 'stability':
-        return Colors.blue;
-      default:
-        return Colors.grey;
+  Future<void> _loadCustomMarkerIcons() async {
+    print('DEBUG: Starting to load custom marker icons');
+    try {
+      othersIcon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/markers/others.png',
+      );
+      print('DEBUG: Others icon loaded');
+
+      stagnantWaterIcon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/markers/stagnantwater.png',
+      );
+      print('DEBUG: Stagnant water icon loaded');
+
+      trashIcon = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/markers/trash.png',
+      );
+      print('DEBUG: Trash icon loaded');
+
+      if (mounted) {
+        setState(() {
+          _customIconsLoaded = true;
+          print('DEBUG: All custom icons loaded successfully');
+        });
+      }
+    } catch (e) {
+      print('Error loading custom marker icons: $e');
+      // Fallback to default markers if loading fails
+      othersIcon =
+          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+      stagnantWaterIcon =
+          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+      trashIcon =
+          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+
+      if (mounted) {
+        setState(() {
+          _customIconsLoaded = true;
+          print('DEBUG: Using fallback default markers');
+        });
+      }
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchReports() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('authToken');
+  Future<Marker?> _createReportMarker() async {
+    try {
+      if (!_customIconsLoaded) {
+        print('DEBUG: Waiting for custom icons to load...');
+        return null;
+      }
 
-    final response = await http.get(
-      Uri.parse('${Config.baseUrl}/api/v1/reports'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-    print('🔍 Raw response body: ${response.body}');
+      // Get the report type from the widget or default to 'others'
+      final reportType = widget.reportType?.toLowerCase() ?? 'others';
+      print('DEBUG: Creating marker for report type: $reportType');
 
-    if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-      return data.map<Map<String, dynamic>>((report) {
-        final DateTime reportDate = DateTime.parse(report['date_and_time']);
-        final DateTime now = DateTime.now();
-        final Duration difference = now.difference(reportDate);
+      // Get the appropriate icon
+      BitmapDescriptor icon;
+      switch (reportType) {
+        case 'stagnant water':
+        case 'stagnantwater':
+          icon = stagnantWaterIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+          print('DEBUG: Using stagnant water icon');
+          break;
+        case 'uncollected garbage or trash':
+        case 'garbage':
+        case 'trash':
+          icon = trashIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+          print('DEBUG: Using trash icon');
+          break;
+        case 'others':
+        default:
+          icon = othersIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+          print('DEBUG: Using others icon');
+      }
 
-        String whenPosted;
-        if (difference.inDays > 0) {
-          whenPosted = '${difference.inDays} days ago';
-        } else if (difference.inHours > 0) {
-          whenPosted = '${difference.inHours} hours ago';
-        } else if (difference.inMinutes > 0) {
-          whenPosted = '${difference.inMinutes} minutes ago';
-        } else {
-          whenPosted = 'Just now';
+      print('DEBUG: Marker icon selected successfully');
+      print(
+          'DEBUG: Creating marker at position: ${widget.latitude}, ${widget.longitude}');
+
+      final marker = Marker(
+        markerId: const MarkerId('report_location'),
+        position: LatLng(widget.latitude, widget.longitude),
+        icon: icon,
+        anchor: const Offset(0.5, 0.5),
+        zIndex: 2,
+      );
+
+      print('DEBUG: Marker created with icon: ${marker.icon}');
+      return marker;
+    } catch (e) {
+      print('Error creating report marker: $e');
+      return null;
+    }
+  }
+
+  Color _getColorForPattern(String pattern) {
+    switch (pattern.toLowerCase()) {
+      case 'spike':
+        return Colors.red.shade700;
+      case 'gradual_rise':
+        return Colors.orange.shade500;
+      case 'decline':
+        return Colors.green.shade600;
+      case 'stable':
+      case 'stability':
+        return Colors.lightBlue.shade600;
+      case 'low_level_activity':
+        return Colors.grey.shade400;
+      default:
+        return Colors.grey.shade700;
+    }
+  }
+
+  Future<void> _loadBarangayPolygon() async {
+    try {
+      final String jsonString =
+          await rootBundle.loadString('assets/geojson/barangays.geojson');
+      final Map<String, dynamic> jsonData = jsonDecode(jsonString);
+      final List<dynamic> features = jsonData['features'];
+
+      for (var feature in features) {
+        final properties = feature['properties'];
+        final geometry = feature['geometry'];
+
+        if (properties == null ||
+            geometry == null ||
+            geometry['type'] != 'Polygon') continue;
+
+        final name = properties['name'] ?? properties['NAME_3'];
+        if (name == null || name != widget.location) continue;
+
+        final coords = geometry['coordinates'][0]
+            .map<LatLng>(
+                (coord) => LatLng(coord[1].toDouble(), coord[0].toDouble()))
+            .toList();
+
+        // Use the current severity status that's displayed in the screen
+        final pattern = severity.toLowerCase();
+        print('DEBUG: Current severity pattern: $pattern');
+        Color borderColor;
+        Color fillColor;
+
+        // Set colors based on pattern
+        switch (pattern) {
+          case 'spike':
+            borderColor = Colors.red.shade800;
+            fillColor = Colors.red.shade700.withOpacity(0.5);
+            print('DEBUG: Setting spike colors - Red');
+            break;
+          case 'gradual_rise':
+            borderColor = Colors.orange.shade800;
+            fillColor = Colors.orange.shade500.withOpacity(0.5);
+            print('DEBUG: Setting gradual_rise colors - Orange');
+            break;
+          case 'decline':
+            borderColor = Colors.green.shade800;
+            fillColor = Colors.green.shade600.withOpacity(0.5);
+            print('DEBUG: Setting decline colors - Green');
+            break;
+          case 'stable':
+          case 'stability':
+            borderColor = Colors.lightBlue.shade800;
+            fillColor = Colors.lightBlue.shade600.withOpacity(0.5);
+            print('DEBUG: Setting stable colors - Light Blue');
+            break;
+          default:
+            borderColor = Colors.grey.shade800;
+            fillColor = Colors.grey.shade700.withOpacity(0.5);
+            print('DEBUG: Setting default colors - Grey');
         }
 
-        return {
-          'username': report['user']?['username'] ?? 'Anonymous',
-          'whenPosted': whenPosted,
-          'location': report['barangay'] ?? 'Unknown Location',
-          'barangay': report['barangay'],
-          'date': '${reportDate.month}/${reportDate.day}/${reportDate.year}',
-          'time':
-              '${reportDate.hour.toString().padLeft(2, '0')}:${reportDate.minute.toString().padLeft(2, '0')}',
-          'reportType': report['report_type'],
-          'description': report['description'],
-          'images': report['images'] != null
-              ? List<String>.from(report['images'])
-              : <String>[],
-          'iconUrl': 'assets/icons/person_1.svg',
-          'status': report['status'],
-          'id': report['id'],
-        };
-      }).toList();
+        setState(() {
+          _barangayPolygons = {
+            Polygon(
+              polygonId: PolygonId(name),
+              points: coords,
+              strokeColor: borderColor,
+              strokeWidth: 2,
+              fillColor: fillColor,
+            ),
+          };
+        });
+        print(
+            'DEBUG: Polygon updated with colors - Border: $borderColor, Fill: $fillColor');
+        break;
+      }
+    } catch (e) {
+      print('Error loading barangay polygon: $e');
     }
-    throw Exception('Failed to fetch reports');
   }
 
-  Future<void> _loadReports() async {
-    try {
-      final reports = await fetchReports();
-      print('All reports: ${reports.length}');
-      print('Target barangay: ${widget.location}');
+  List<Map<String, dynamic>> get _barangayPosts {
+    final posts = Provider.of<PostProvider>(context).posts;
+    print('DEBUG: Total posts available: ${posts.length}');
+    final filteredPosts = posts
+        .where((post) {
+          final postLocation = post['barangay']?.toString().toLowerCase() ?? '';
+          final targetLocation = widget.location.toLowerCase();
+          final status = post['status']?.toString().toLowerCase() ?? '';
+          final isVerified = status == 'validated';
+          final matches = postLocation == targetLocation && isVerified;
+          print(
+              'DEBUG: Comparing post location: $postLocation with target: $targetLocation - Match: $matches');
+          print('DEBUG: Post status: $status, isVerified: $isVerified');
+          if (matches) {
+            print('DEBUG: Post data for matched post: $post');
+            print('DEBUG: Post ID: ${post['id'] ?? post['_id']}');
+            print('DEBUG: Upvotes: ${post['numUpvotes']}');
+            print('DEBUG: Downvotes: ${post['numDownvotes']}');
+          }
+          return matches;
+        })
+        .map((post) {
+          // Ensure all required fields are present and valid
+          final Map<String, dynamic> enhancedPost =
+              Map<String, dynamic>.from(post);
 
-      setState(() {
-        _barangayPosts = reports.where((report) {
-          // Debug print
-          print('Checking report: ${report['barangay']} vs ${widget.location}');
-
-          // Check status first (remove or modify this if you want to show all)
-          if (report['status']?.toString().toLowerCase() != 'validated') {
-            return false;
+          // Ensure post ID is present and valid - check both 'id' and '_id' fields
+          final postId = post['id']?.toString() ?? post['_id']?.toString();
+          if (postId == null || postId.isEmpty) {
+            print('WARNING: Post has no ID: $post');
+            return null;
           }
 
-          // Compare barangay names
-          final reportBarangay =
-              report['barangay']?.toString().trim().toLowerCase();
-          final targetBarangay = widget.location.trim().toLowerCase();
+          enhancedPost['_id'] = postId; // Use _id consistently
+          enhancedPost['numUpvotes'] = post['numUpvotes'] ?? 0;
+          enhancedPost['numDownvotes'] = post['numDownvotes'] ?? 0;
+          enhancedPost['upvotes'] = post['upvotes'] ?? [];
+          enhancedPost['downvotes'] = post['downvotes'] ?? [];
+          enhancedPost['_commentCount'] = post['commentCount'] ?? 0;
+          return enhancedPost;
+        })
+        .where((post) => post != null)
+        .cast<Map<String, dynamic>>()
+        .toList();
 
-          return reportBarangay == targetBarangay;
-        }).toList();
-
-        print('Filtered reports: ${_barangayPosts.length}');
-        _isLoadingPosts = false;
-
-        // Update cases count after loading reports
-        _loadDengueData();
-      });
-    } catch (e) {
-      print('❌ Error filtering reports: $e');
-      setState(() => _isLoadingPosts = false);
-    }
+    print(
+        'DEBUG: Filtered verified posts for ${widget.location}: ${filteredPosts.length}');
+    return filteredPosts;
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context);
-
     final LatLng targetLocation = LatLng(widget.latitude, widget.longitude);
+    final postProvider = Provider.of<PostProvider>(context);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -213,10 +410,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Colored background (taller to cover card + map)
+            // Colored background
             Container(
-              height:
-                  MediaQuery.of(context).size.height * 0.44, // Increased height
+              height: MediaQuery.of(context).size.height * 0.44,
               decoration: BoxDecoration(
                 color: const Color.fromRGBO(36, 82, 97, 1),
                 boxShadow: [
@@ -231,11 +427,10 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
             // Foreground content
             Column(
               children: [
-                SizedBox(height: 32), // Top spacing
+                SizedBox(height: 32),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Container(
-                    // 📦 Main white container with badges inside
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 20),
                     decoration: BoxDecoration(
@@ -253,7 +448,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Barangay name (small gray)
                         AutoSizeText(
                           widget.location,
                           textAlign: TextAlign.center,
@@ -266,7 +460,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                             color: Color.fromARGB(255, 69, 69, 69),
                           ),
                         ),
-                        // Street name (big bold)
                         AutoSizeText(
                           widget.streetName ?? '',
                           textAlign: TextAlign.center,
@@ -280,7 +473,6 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        // Badges Row
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -351,11 +543,11 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                     ),
                   ),
                 ),
-                SizedBox(height: 16), // Space between card and map
+                SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: SizedBox(
-                    height: 220, // Adjust as needed
+                    height: 220,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(15),
                       child: GoogleMap(
@@ -372,6 +564,7 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                             ),
                           ),
                         },
+                        polygons: _barangayPolygons,
                         onMapCreated: (controller) {
                           _mapController = controller;
                         },
@@ -384,11 +577,14 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                   ),
                 ),
                 const SizedBox(height: 29),
-
-                // Scrollable section
                 Expanded(
                   child: RefreshIndicator(
-                    onRefresh: _loadReports,
+                    onRefresh: () async {
+                      await Provider.of<PostProvider>(context, listen: false)
+                          .fetchPosts(forceRefresh: true);
+                      await Provider.of<VoteProvider>(context, listen: false)
+                          .refreshAllVotes();
+                    },
                     edgeOffset: 70,
                     child: SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
@@ -405,57 +601,119 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            if (_isLoadingPosts)
+                            if (postProvider.isLoading)
                               const Center(child: CircularProgressIndicator())
                             else if (_barangayPosts.isEmpty)
-                              const Center(
-                                  child:
-                                      Text('No reports for this barangay yet.'))
+                              Center(
+                                child: Text(
+                                  'No reports yet for this location',
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                ),
+                              )
                             else
-                              ..._barangayPosts.map((report) => Container(
-                                    margin: const EdgeInsets.only(bottom: 16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(20),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.05),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 3),
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _barangayPosts.length,
+                                itemBuilder: (context, index) {
+                                  final report = _barangayPosts[index];
+                                  // Ensure the post data includes the comment count
+                                  final postData =
+                                      Map<String, dynamic>.from(report);
+                                  postData['_commentCount'] =
+                                      report['commentCount'] ?? 0;
+
+                                  // Debug logging
+                                  print(
+                                      'DEBUG: Post ID in location details: ${postData['_id']}');
+                                  print('DEBUG: Full post data: $postData');
+                                  print(
+                                      'DEBUG: Post ID type: ${postData['_id']?.runtimeType}');
+                                  print(
+                                      'DEBUG: Post ID string value: ${postData['_id']?.toString()}');
+
+                                  // Validate post ID
+                                  final postId = postData['_id']?.toString();
+                                  if (postId == null || postId.isEmpty) {
+                                    print('ERROR: Invalid post ID in PostCard');
+                                    return const SizedBox
+                                        .shrink(); // Don't show posts without IDs
+                                  }
+
+                                  return GestureDetector(
+                                    onTap: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              PostDetailScreen(post: postData),
                                         ),
-                                      ],
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 16, horizontal: 16),
+                                      );
+                                      setState(
+                                          () {}); // Refresh EngagementRow/comment count
+                                    },
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.08),
+                                            blurRadius: 12,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
                                       child: PostCard(
+                                        key: ValueKey(postId),
+                                        post: postData,
                                         username:
-                                            report['username'] ?? 'Anonymous',
-                                        whenPosted:
-                                            report['whenPosted'] ?? 'Just now',
-                                        location: report['location'] ??
-                                            'Unknown Location',
-                                        date: report['date'] ?? 'N/A',
-                                        time: report['time'] ?? 'N/A',
-                                        reportType:
-                                            report['reportType'] ?? 'General',
-                                        description: report['description'] ??
+                                            postData['username']?.toString() ??
+                                                'Anonymous',
+                                        whenPosted: postData['whenPosted']
+                                                ?.toString() ??
+                                            'Just now',
+                                        location:
+                                            postData['location']?.toString() ??
+                                                'Unknown Location',
+                                        date: postData['date']?.toString() ??
+                                            'N/A',
+                                        time: postData['time']?.toString() ??
+                                            'N/A',
+                                        reportType: postData['reportType']
+                                                ?.toString() ??
+                                            'General',
+                                        description: postData['description']
+                                                ?.toString() ??
                                             'No description provided',
-                                        numUpvotes: report['numUpvotes'] ?? 0,
-                                        numDownvotes:
-                                            report['numDownvotes'] ?? 0,
-                                        images: List<String>.from(
-                                            report['images'] ?? []),
-                                        iconUrl: report['iconUrl'] ??
+                                        numUpvotes:
+                                            (postData['numUpvotes'] as int?) ??
+                                                0,
+                                        numDownvotes: (postData['numDownvotes']
+                                                as int?) ??
+                                            0,
+                                        images: (postData['images']
+                                                    as List<dynamic>?)
+                                                ?.map((e) => e.toString())
+                                                .toList() ??
+                                            [],
+                                        iconUrl: postData['iconUrl'] ??
                                             'assets/icons/person_1.svg',
                                         type: 'bordered',
-                                        postId: report['id'] ?? '',
+                                        postId: postId,
                                         isOwner:
-                                            report['email'] == _currentUsername,
-                                        post: report,
+                                            postData['userId']?.toString() ==
+                                                _currentUsername,
+                                        showDistance: false,
+                                        onReport: () => _reportPost(postData),
+                                        onDelete: () => _deletePost(postData),
                                       ),
                                     ),
-                                  )),
+                                  );
+                                },
+                              ),
                           ],
                         ),
                       ),
@@ -464,11 +722,9 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
                 ),
               ],
             ),
-            // Back to Maps button (bottom left over the map)
             Positioned(
               left: 34,
-              bottom:
-                  MediaQuery.of(context).size.height * 0.43, // Adjust as needed
+              bottom: MediaQuery.of(context).size.height * 0.43,
               child: SizedBox(
                 width: 116,
                 height: 31,
@@ -535,9 +791,454 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     );
   }
 
+  Color _getSeverityColor(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'spike':
+        return Colors.red;
+      case 'gradual_rise':
+        return Colors.orange;
+      case 'decline':
+        return Colors.green;
+      case 'stable':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
+  }
+
   @override
   void dispose() {
     _mapController?.dispose();
     super.dispose();
+  }
+
+  void _showDengueDetails(String barangay, String severity, LatLng location) {
+    // Set current location when showing details
+    setState(() {
+      _currentLocation = location;
+    });
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          barangay,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                _getColorForSeverity(severity).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            severity,
+                            style: TextStyle(
+                              color: _getColorForSeverity(severity),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            // Content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Cases and Coordinates
+                    Card(
+                      elevation: 0,
+                      color: Colors.grey.shade50,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on,
+                                  size: 20,
+                                  color: Colors.grey.shade700,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Coordinates: ${location.latitude.toStringAsFixed(6)}, ${location.longitude.toStringAsFixed(6)}',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade700,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Recommendations Section
+                    const Text(
+                      'Recommendations:',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      constraints: const BoxConstraints(
+                        maxHeight: 300,
+                      ),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Recommendations based on severity level:',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: _getColorForSeverity(severity),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _getRecommendationsForSeverity(severity),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    // Health Facilities Section
+                    const Text(
+                      'Health Care Facilities Nearby:',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    FutureBuilder<List<Map<String, dynamic>>>(
+                      future: fetchNearbyHealthFacilities(
+                        location.latitude,
+                        location.longitude,
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Text(
+                              'Error loading facilities: ${snapshot.error}',
+                              style: TextStyle(color: Colors.red.shade700),
+                            ),
+                          );
+                        }
+
+                        final facilities = snapshot.data ?? [];
+                        if (facilities.isEmpty) {
+                          return const Center(
+                            child: Text('No health facilities found nearby'),
+                          );
+                        }
+
+                        return SizedBox(
+                          height: 200,
+                          child: PageView.builder(
+                            itemCount: facilities.length,
+                            itemBuilder: (context, index) {
+                              final facility = facilities[index];
+                              return Card(
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: InkWell(
+                                  onTap: () {
+                                    // Show facility on map
+                                    final facilityLatLng = LatLng(
+                                      facility['lat'] as double,
+                                      facility['lng'] as double,
+                                    );
+                                    _showFacilityOnMap(
+                                        facilityLatLng, facility);
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.local_hospital,
+                                              size: 24,
+                                              color: Colors.blue.shade700,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                facility['name'] as String,
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          facility['vicinity'] as String,
+                                          style: TextStyle(
+                                            color: Colors.grey.shade700,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${(facility['distance_km'] as double).toStringAsFixed(1)} km away',
+                                          style: TextStyle(
+                                            color: Colors.blue.shade700,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getRecommendationsForSeverity(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'spike':
+        return '''
+• Immediate action required
+• Conduct intensive vector control measures
+• Increase public awareness campaigns
+• Deploy additional health workers
+• Consider temporary closure of affected areas
+• Coordinate with local health authorities
+''';
+      case 'gradual_rise':
+        return '''
+• Monitor situation closely
+• Implement preventive measures
+• Conduct regular vector control
+• Increase public awareness
+• Prepare response plan
+''';
+      case 'decline':
+        return '''
+• Continue monitoring
+• Maintain preventive measures
+• Document successful interventions
+• Keep public informed
+''';
+      case 'stable':
+        return '''
+• Regular monitoring
+• Maintain preventive measures
+• Continue public awareness
+• Document status
+''';
+      default:
+        return 'No specific recommendations available for this severity level.';
+    }
+  }
+
+  void _showFacilityOnMap(
+      LatLng facilityLocation, Map<String, dynamic> facility) {
+    // Add marker for the facility
+    final facilityMarker = Marker(
+      markerId: MarkerId('facility_${facility['name']}'),
+      position: facilityLocation,
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      infoWindow: InfoWindow(
+        title: facility['name'] as String,
+        snippet: facility['vicinity'] as String,
+      ),
+    );
+
+    // Add route polyline
+    final polyline = Polyline(
+      polylineId: const PolylineId('route_to_facility'),
+      points: [
+        _currentLocation!,
+        facilityLocation,
+      ],
+      color: Colors.blue,
+      width: 3,
+    );
+
+    setState(() {
+      _markers.add(facilityMarker);
+      _polylines.add(polyline);
+    });
+
+    // Move camera to show both locations
+    _controller?.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(
+            min(_currentLocation!.latitude, facilityLocation.latitude),
+            min(_currentLocation!.longitude, facilityLocation.longitude),
+          ),
+          northeast: LatLng(
+            max(_currentLocation!.latitude, facilityLocation.latitude),
+            max(_currentLocation!.longitude, facilityLocation.longitude),
+          ),
+        ),
+        100, // padding
+      ),
+    );
+
+    // Show snackbar with facility info
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Showing route to ${facility['name']}',
+        ),
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Close',
+          onPressed: () {
+            setState(() {
+              _markers.remove(facilityMarker);
+              _polylines.remove(polyline);
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> fetchNearbyHealthFacilities(
+    double latitude,
+    double longitude,
+  ) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+            '${Config.baseUrl}/api/v1/health-facilities/nearby?lat=$latitude&lng=$longitude'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data
+            .map((facility) => {
+                  'name': facility['name'],
+                  'address': facility['address'],
+                  'distance': facility['distance'],
+                })
+            .toList();
+      } else {
+        throw Exception('Failed to load health facilities');
+      }
+    } catch (e) {
+      print('Error fetching health facilities: $e');
+      return [];
+    }
+  }
+
+  Color _getColorForSeverity(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'spike':
+        return Colors.red;
+      case 'gradual_rise':
+        return Colors.orange;
+      case 'decline':
+        return Colors.green;
+      case 'stable':
+        return Colors.blue;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  void _reportPost(Map<String, dynamic> post) {
+    // Implement report functionality
+    print('Report post: ${post['_id']}');
+  }
+
+  void _deletePost(Map<String, dynamic> post) {
+    // Implement delete functionality
+    print('Delete post: ${post['_id']}');
   }
 }

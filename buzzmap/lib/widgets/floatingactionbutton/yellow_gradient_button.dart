@@ -11,6 +11,7 @@ class YellowGradientButton extends StatelessWidget {
   final double? right;
   final double? height;
   final double? width;
+  final String? heroTag;
 
   const YellowGradientButton({
     super.key,
@@ -23,6 +24,7 @@ class YellowGradientButton extends StatelessWidget {
     this.right,
     this.height,
     this.width,
+    this.heroTag,
   });
 
   @override
@@ -58,6 +60,7 @@ class YellowGradientButton extends StatelessWidget {
           height: height,
           width: width,
           child: FloatingActionButton.extended(
+            heroTag: heroTag,
             onPressed: () {
               Navigator.pushNamed(context, route);
             },
