@@ -2243,7 +2243,7 @@ class _MappingScreenState extends State<MappingScreen>
         dropdownDecoratorProps: DropDownDecoratorProps(
           dropdownSearchDecoration: InputDecoration(
             labelText: "Select Barangay",
-            labelStyle: const TextStyle(color: Colors.white, fontSize: 12),
+            labelStyle: const TextStyle(color: Colors.white, fontSize: 10),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             border: OutlineInputBorder(
@@ -2328,7 +2328,7 @@ class _MappingScreenState extends State<MappingScreen>
         dropdownBuilder: (context, selectedItem) {
           return Text(
             selectedItem ?? 'Quezon City',
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Colors.white, fontSize: 16),
           );
         },
       ),

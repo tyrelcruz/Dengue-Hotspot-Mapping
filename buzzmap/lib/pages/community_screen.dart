@@ -742,8 +742,8 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                 ],
               ),
               child: SizedBox(
-                height: 40,
-                width: 160,
+                height: MediaQuery.of(context).size.width > 600 ? 50 : 40,
+                width: MediaQuery.of(context).size.width > 600 ? 200 : 160,
                 child: FloatingActionButton.extended(
                   onPressed: () {
                     Navigator.pushNamed(context, '/prevention');
@@ -762,13 +762,18 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                             fontWeight: FontWeight.w600,
                             color: theme.colorScheme.primary,
                             fontStyle: FontStyle.italic,
+                            fontSize: MediaQuery.of(context).size.width > 600
+                                ? 16
+                                : null,
                           ),
                         ),
                         const SizedBox(width: 8),
                         SvgPicture.asset(
                           'assets/icons/right_arrow.svg',
-                          width: 20,
-                          height: 20,
+                          width:
+                              MediaQuery.of(context).size.width > 600 ? 24 : 20,
+                          height:
+                              MediaQuery.of(context).size.width > 600 ? 24 : 20,
                           colorFilter: ColorFilter.mode(
                             theme.colorScheme.primary,
                             BlendMode.srcIn,
@@ -782,11 +787,11 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
             ),
           ),
           Positioned(
-            bottom: 55,
+            bottom: MediaQuery.of(context).size.width > 600 ? 65 : 55,
             right: 3,
             child: Container(
-              width: 160,
-              height: 40,
+              width: MediaQuery.of(context).size.width > 600 ? 200 : 160,
+              height: MediaQuery.of(context).size.width > 600 ? 50 : 40,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -828,13 +833,18 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                           fontWeight: FontWeight.w600,
                           color: theme.colorScheme.primary,
                           fontStyle: FontStyle.italic,
+                          fontSize: MediaQuery.of(context).size.width > 600
+                              ? 16
+                              : null,
                         ),
                       ),
                       const SizedBox(width: 8),
                       SvgPicture.asset(
                         'assets/icons/add.svg',
-                        width: 18,
-                        height: 18,
+                        width:
+                            MediaQuery.of(context).size.width > 600 ? 22 : 18,
+                        height:
+                            MediaQuery.of(context).size.width > 600 ? 22 : 18,
                         colorFilter: ColorFilter.mode(
                           theme.colorScheme.primary,
                           BlendMode.srcIn,
