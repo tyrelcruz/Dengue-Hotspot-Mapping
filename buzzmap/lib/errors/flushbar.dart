@@ -76,7 +76,7 @@ class AppFlushBar {
         ),
       ],
       icon: Padding(
-        padding: const EdgeInsets.only(right: 15),
+        padding: const EdgeInsets.all(12),
         child: Container(
           width: 40,
           height: 40,
