@@ -2,17 +2,13 @@ import 'package:buzzmap/pages/otp_screen.dart';
 import 'package:buzzmap/pages/register_screen.dart';
 import 'package:buzzmap/pages/welcome_screen.dart';
 import 'package:buzzmap/pages/home_screen.dart';
+import 'package:buzzmap/pages/forgot_password_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
-import 'package:buzzmap/widgets/webs/street_view_screen.dart';
 import 'package:buzzmap/errors/flushbar.dart'; // Import the new AppFlushBar utility
-
-//Firebase Imports
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 //Share preferences for saving local instances
 import 'package:shared_preferences/shared_preferences.dart';
@@ -32,15 +28,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscureText = true;
   bool _rememberMe = false;
   bool _isLoading = false;
-
-  // Google Sign-In instance
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  // Button Dimensions
-  static const double buttonWidth = 200;
-  static const double buttonHeight = 45;
-  static const double buttonRadius = 30;
 
   @override
   void initState() {
@@ -67,12 +54,12 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('password', _passwordController.text);
     } else {
       await prefs.setBool('remember_me', false);
-      await prefs.remove('email');
       await prefs.remove('password');
     }
   }
 
   Future<void> _handleLogin() async {
+    print('DEBUG: _handleLogin called');
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
@@ -84,6 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
         body: jsonEncode({
           'email': _emailController.text.trim(),
           'password': _passwordController.text,
+          'role': 'user',
         }),
       );
 
@@ -93,6 +81,20 @@ class _LoginScreenState extends State<LoginScreen> {
       // Check if there is an error in the response
       if (responseData['status'] == 'error') {
         String errorMessage = responseData['message'] ?? 'Login failed';
+
+        // Check if the error is about pending activation
+        if (errorMessage.contains('pending activation') ||
+            errorMessage.contains('check your email to activate')) {
+          print('⚠️ Account pending activation, redirecting to OTP screen');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OTPScreen(email: _emailController.text),
+            ),
+          );
+          return;
+        }
+
         if (errorMessage.contains('Incorrect password')) {
           _showError('Incorrect email or password');
         } else {
@@ -104,8 +106,12 @@ class _LoginScreenState extends State<LoginScreen> {
       final token = responseData['accessToken']; // ✅ FIXED KEY
       final userRole =
           responseData['user']?['role']; // Assuming role is returned
+      final isVerified = responseData['user']?['verified'] ?? false;
+      final status = responseData['user']?['status'] ?? '';
 
       print('🔑 Token received: $token');
+      print('✅ Verification status: $isVerified');
+      print('✅ Account status: $status');
 
       if (response.statusCode == 200 &&
           token != null &&
@@ -117,25 +123,81 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
 
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('authToken', token);
-        print('✅ Token saved to SharedPreferences');
-
-        await _saveCredentials();
-
-        if (responseData['user']?['verified'] == false) {
+        // If not verified and status is not active, redirect to OTP screen
+        if (!isVerified && status != 'active') {
+          print('⚠️ User is not verified, redirecting to OTP screen');
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (context) => OTPScreen(email: _emailController.text),
             ),
           );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => HomeScreen()),
-          );
+          return;
         }
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('authToken', token);
+        print('✅ Token saved to SharedPreferences');
+
+        // Save username and name to SharedPreferences
+        final username = responseData['user']?['username'] ?? '';
+        final name = responseData['user']?['name'] ?? '';
+        await prefs.setString('username', username);
+        await prefs.setString('name', name);
+        print('👤 Username saved to SharedPreferences: $username');
+        print('👤 Name saved to SharedPreferences: $name');
+
+        // Save email to SharedPreferences
+        final email = responseData['user']?['email'] ?? '';
+        await prefs.setString('email', email);
+        print('📧 Email saved to SharedPreferences: $email');
+
+        // Save user ID to SharedPreferences
+        final userId = responseData['user']?['_id'] ?? '';
+        if (userId.isNotEmpty) {
+          await prefs.setString('userId', userId);
+          print('👤 User ID saved to SharedPreferences: $userId');
+        }
+
+        // Save profile photo URL to SharedPreferences
+        final profilePhotoUrl = responseData['user']?['profilePhotoUrl'];
+        if (profilePhotoUrl != null && profilePhotoUrl.isNotEmpty) {
+          await prefs.setString('profilePhotoUrl', profilePhotoUrl);
+          print(
+              '📸 Profile photo URL saved to SharedPreferences: $profilePhotoUrl');
+        } else {
+          // If profile photo URL is not in login response, fetch it from the server
+          try {
+            final profileResponse = await http.get(
+              Uri.parse('${Config.baseUrl}/api/v1/auth/me'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+              },
+            );
+
+            if (profileResponse.statusCode == 200) {
+              final profileData = jsonDecode(profileResponse.body);
+              final fetchedPhotoUrl = profileData['user']?['profilePhotoUrl'];
+
+              if (fetchedPhotoUrl != null && fetchedPhotoUrl.isNotEmpty) {
+                print(
+                    '📸 Fetched profile photo URL from server: $fetchedPhotoUrl');
+                await prefs.setString('profilePhotoUrl', fetchedPhotoUrl);
+              }
+            }
+          } catch (e) {
+            print('❌ Error fetching profile photo URL: $e');
+          }
+        }
+
+        await _saveCredentials();
+
+        print('✅ User is verified, proceeding to home screen');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => HomeScreen()),
+        );
       } else {
         print('❌ Token not saved or missing in response');
         _showError('Login failed: No valid token received');
@@ -143,72 +205,6 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       print('❌ Login error: $e');
       _showError('Network error. Please check your connection.');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  // Handle Google Sign-In
-  Future<void> _signInWithGoogle() async {
-    try {
-      setState(() => _isLoading = true);
-
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return;
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in with Firebase first
-      final UserCredential userCredential =
-          await _auth.signInWithCredential(credential);
-
-      // Then send to your backend
-      final response = await http.post(
-        Uri.parse('${Config.baseUrl}/api/v1/auth/google-login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': userCredential.user?.email,
-          'name': userCredential.user?.displayName,
-          'googleId': userCredential.user?.uid,
-          'idToken': googleAuth.idToken,
-        }),
-      );
-      print('🔐 Raw login response: ${response.body}');
-      final responseData = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-
-        if (responseData['user']?['verified'] == false) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  OTPScreen(email: userCredential.user?.email ?? ''),
-            ),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => HomeScreen()),
-          );
-        }
-      } else {
-        await _auth.signOut(); // Sign out from Firebase if backend fails
-        await _googleSignIn.signOut();
-        final errorData = jsonDecode(response.body);
-        _showError(errorData['message'] ?? 'Google login failed');
-      }
-    } catch (e) {
-      _showError('Google sign-in failed. Please try again.');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -366,10 +362,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                     });
                                   },
                                   fillColor:
-                                      MaterialStateProperty.resolveWith<Color>(
-                                          (Set<MaterialState> states) {
-                                    if (states
-                                        .contains(MaterialState.selected)) {
+                                      WidgetStateProperty.resolveWith<Color>(
+                                          (Set<WidgetState> states) {
+                                    if (states.contains(WidgetState.selected)) {
                                       return Colors.blue;
                                     }
                                     return const Color.fromARGB(
@@ -392,14 +387,20 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           TextButton(
                             onPressed: () {
-                              // Implement forgot password
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const ForgotPasswordScreen(),
+                                ),
+                              );
                             },
                             child: const Text(
                               "Forgot Password?",
                               style: TextStyle(
-                                fontFamily: 'Inter-Regular',
-                                fontSize: 14.0,
-                                fontWeight: FontWeight.w400,
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                color: const Color(0xFF1D4C5E),
                               ),
                             ),
                           ),
@@ -408,8 +409,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 20),
                       Center(
                         child: SizedBox(
-                          width: buttonWidth,
-                          height: buttonHeight,
+                          width: 200,
+                          height: 45,
                           child: _isLoading
                               ? const Center(
                                   child: CircularProgressIndicator(
@@ -418,8 +419,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 )
                               : Material(
-                                  borderRadius:
-                                      BorderRadius.circular(buttonRadius),
+                                  borderRadius: BorderRadius.circular(30),
                                   color: Colors.transparent,
                                   child: Ink(
                                     decoration: BoxDecoration(
@@ -431,8 +431,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           begin: Alignment.centerLeft,
                                           end: Alignment.centerRight,
                                         ),
-                                        borderRadius:
-                                            BorderRadius.circular(buttonRadius),
+                                        borderRadius: BorderRadius.circular(30),
                                         boxShadow: [
                                           BoxShadow(
                                             color:
@@ -444,8 +443,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ]),
                                     child: InkWell(
                                       onTap: _handleLogin,
-                                      borderRadius:
-                                          BorderRadius.circular(buttonRadius),
+                                      borderRadius: BorderRadius.circular(30),
                                       child: const Center(
                                         child: Text(
                                           "Login",
@@ -459,45 +457,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                 ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: Colors.grey[400])),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 10),
-                            child: Text("or Login with"),
-                          ),
-                          Expanded(child: Divider(color: Colors.grey[400])),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Center(
-                        child: SizedBox(
-                          width: buttonWidth,
-                          height: buttonHeight,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(buttonRadius),
-                                side: const BorderSide(color: Colors.grey),
-                              ),
-                            ),
-                            onPressed: _isLoading ? null : _signInWithGoogle,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Image.asset(
-                                  'assets/icons/google_logo.png',
-                                  height: buttonHeight * 1.7,
-                                ),
-                                const SizedBox(width: 10),
-                              ],
-                            ),
-                          ),
                         ),
                       ),
                       const SizedBox(height: 20),

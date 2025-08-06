@@ -7,19 +7,27 @@ class UserInfoRow extends StatelessWidget {
   final String title;
   final String subtitle;
   final String iconUrl;
+  final VoidCallback? onReport;
+  final VoidCallback? onDelete;
+  final bool isOwner;
 
-  const UserInfoRow(
-      {super.key,
-      this.type = 'announcement',
-      required this.title,
-      required this.subtitle,
-      required this.iconUrl});
+  const UserInfoRow({
+    super.key,
+    this.type = 'announcement',
+    required this.title,
+    required this.subtitle,
+    required this.iconUrl,
+    this.onReport,
+    this.onDelete,
+    this.isOwner = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final customColors = Theme.of(context).extension<CustomColors>();
-
     final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -35,10 +43,17 @@ class UserInfoRow extends StatelessWidget {
                   color: Colors.grey.shade200,
                 ),
                 child: ClipOval(
-                  child: SvgPicture.asset(
-                    iconUrl,
-                    fit: BoxFit.cover,
-                  ),
+                  child: iconUrl.startsWith('http')
+                      ? Image.network(
+                          iconUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Icon(Icons.person, color: Colors.grey),
+                        )
+                      : SvgPicture.asset(
+                          iconUrl,
+                          fit: BoxFit.cover,
+                        ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -89,15 +104,38 @@ class UserInfoRow extends StatelessWidget {
             ],
           ),
         ),
-        Padding(
-          padding: EdgeInsets.symmetric(vertical: 3),
-          child: Icon(
-            Icons.more_horiz,
-            color: type == 'announcement'
-                ? Colors.white
-                : theme.colorScheme.primary,
+        if (type != 'announcement' &&
+            isOwner) // Only show menu for posts that user owns
+          Builder(
+            builder: (context) => PopupMenuButton<String>(
+              icon: Icon(
+                Icons.more_horiz,
+                color: primaryColor,
+              ),
+              onSelected: (value) {
+                switch (value) {
+                  case 'delete':
+                    if (onDelete != null) onDelete!();
+                    break;
+                }
+              },
+              itemBuilder: (BuildContext context) {
+                return <PopupMenuEntry<String>>[
+                  PopupMenuItem<String>(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline,
+                            size: 20, color: primaryColor),
+                        const SizedBox(width: 8),
+                        const Text('Delete Post'),
+                      ],
+                    ),
+                  ),
+                ];
+              },
+            ),
           ),
-        )
       ],
     );
   }

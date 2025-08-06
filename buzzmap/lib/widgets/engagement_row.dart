@@ -1,65 +1,136 @@
 import 'package:buzzmap/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:buzzmap/auth/config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import 'package:buzzmap/providers/vote_provider.dart';
+import 'package:buzzmap/providers/comment_provider.dart';
+import 'package:buzzmap/providers/user_provider.dart';
+import 'package:buzzmap/widgets/post_detail_screen.dart';
+import 'package:buzzmap/widgets/admin_post_detail_screen.dart';
 
 class EngagementRow extends StatefulWidget {
   const EngagementRow({
     super.key,
-    required this.numUpvotes,
-    required this.numDownvotes,
+    required this.postId,
+    required this.post,
+    this.initialUpvotes = 0,
+    this.initialDownvotes = 0,
+    this.isAdminPost = false,
     this.themeMode = 'dark',
+    this.disableCommentButton = false,
+    this.forceWhiteIcons = false,
   });
 
-  final int numUpvotes;
-  final int numDownvotes;
-
+  final String postId;
+  final Map<String, dynamic> post;
+  final int initialUpvotes;
+  final int initialDownvotes;
+  final bool isAdminPost;
   final String themeMode;
+  final bool disableCommentButton;
+  final bool forceWhiteIcons;
 
   @override
   _EngagementRowState createState() => _EngagementRowState();
 }
 
 class _EngagementRowState extends State<EngagementRow> {
-  int upvotes = 0;
-  int downvotes = 0;
-  bool isUpvoted = false;
-  bool isDownvoted = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    upvotes = widget.numUpvotes;
-    downvotes = widget.numDownvotes;
-  }
-
-  void toggleUpvote() {
-    setState(() {
-      if (isUpvoted) {
-        upvotes--;
-      } else {
-        upvotes++;
-        if (isDownvoted) {
-          downvotes--;
-          isDownvoted = false;
-        }
+    // Schedule both operations for the next frame to avoid setState during build
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (mounted) {
+        final voteProvider = Provider.of<VoteProvider>(context, listen: false);
+        await voteProvider.checkVoteStatus(widget.postId);
+        await voteProvider.refreshAllVotes();
       }
-      isUpvoted = !isUpvoted;
     });
   }
 
-  void toggleDownvote() {
-    setState(() {
-      if (isDownvoted) {
-        downvotes--;
-      } else {
-        downvotes++;
-        if (isUpvoted) {
-          upvotes--;
-          isUpvoted = false;
+  @override
+  void didUpdateWidget(EngagementRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.postId != widget.postId) {
+      // Schedule the load for the next frame
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (mounted) {
+          final voteProvider =
+              Provider.of<VoteProvider>(context, listen: false);
+          await voteProvider.checkVoteStatus(widget.postId);
+        }
+      });
+    }
+  }
+
+  Future<void> _handleVote(String voteType) async {
+    if (_isLoading) return;
+
+    final voteProvider = Provider.of<VoteProvider>(context, listen: false);
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+
+    // Refresh login state before checking
+    await userProvider.refreshLoginState();
+
+    if (!userProvider.isLoggedIn) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please log in to vote')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Check if the auth token is still valid
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken');
+
+      if (token == null) {
+        throw Exception('Authentication token not found');
+      }
+
+      if (voteType == 'upvote') {
+        if (voteProvider.isUpvoted(widget.postId)) {
+          await voteProvider.removeUpvote(widget.postId,
+              isAdminPost: widget.isAdminPost);
+        } else {
+          await voteProvider.upvotePost(widget.postId,
+              isAdminPost: widget.isAdminPost);
+        }
+      } else if (voteType == 'downvote') {
+        if (voteProvider.isDownvoted(widget.postId)) {
+          await voteProvider.removeDownvote(widget.postId,
+              isAdminPost: widget.isAdminPost);
+        } else {
+          await voteProvider.downvotePost(widget.postId,
+              isAdminPost: widget.isAdminPost);
         }
       }
-      isDownvoted = !isDownvoted;
-    });
+      // Refresh vote status after voting
+      await voteProvider.checkVoteStatus(widget.postId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error voting: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   String formatCount(int count) {
@@ -69,65 +140,120 @@ class _EngagementRowState extends State<EngagementRow> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final iconColor =
-        widget.themeMode == 'dark' ? Colors.white : theme.colorScheme.primary;
+    final customColors = Theme.of(context).extension<CustomColors>();
+    final isDark = widget.themeMode == 'dark';
+    final iconColor = widget.forceWhiteIcons
+        ? Colors.white
+        : (isDark ? Colors.white : Colors.black);
+    final voteProvider = Provider.of<VoteProvider>(context);
+    final commentProvider = Provider.of<CommentProvider>(context);
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  onPressed: toggleUpvote,
-                  icon: Icon(
-                    Icons.arrow_upward,
+    // Get vote states - VoteProvider now guarantees non-null values
+    final isUpvoted = voteProvider.isUpvoted(widget.postId);
+    final isDownvoted = voteProvider.isDownvoted(widget.postId);
+    final upvoteCount = voteProvider.getUpvoteCount(widget.postId);
+    final downvoteCount = voteProvider.getDownvoteCount(widget.postId);
+
+    // Get comment count from provider
+    int commentCount = 0;
+    if (widget.isAdminPost) {
+      commentCount = commentProvider.getCommentCount(widget.postId) ?? 0;
+    } else {
+      commentCount = widget.post['_commentCount'] ?? 0;
+    }
+
+    print('Building EngagementRow for post ${widget.postId}:');
+    print('Upvoted: $isUpvoted');
+    print('Downvoted: $isDownvoted');
+    print('Upvote count: $upvoteCount');
+    print('Downvote count: $downvoteCount');
+    print('Comment count: $commentCount');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              // Upvote Button
+              TextButton.icon(
+                onPressed: () => _handleVote('upvote'),
+                icon: Icon(
+                  isUpvoted ? Icons.arrow_upward : Icons.arrow_upward_outlined,
+                  color: isUpvoted ? Colors.green : iconColor,
+                  size: 20,
+                ),
+                label: Text(
+                  formatCount(upvoteCount),
+                  style: theme.textTheme.bodyMedium?.copyWith(
                     color: isUpvoted ? Colors.green : iconColor,
                   ),
                 ),
-                Text(
-                  formatCount(upvotes),
-                  style: theme.textTheme.bodyMedium?.copyWith(color: iconColor),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                const SizedBox(width: 6),
-                IconButton(
-                  onPressed: toggleDownvote,
-                  icon: Icon(
-                    Icons.arrow_downward,
+              ),
+              const SizedBox(width: 8),
+              // Downvote Button
+              TextButton.icon(
+                onPressed: () => _handleVote('downvote'),
+                icon: Icon(
+                  isDownvoted
+                      ? Icons.arrow_downward
+                      : Icons.arrow_downward_outlined,
+                  color: isDownvoted ? Colors.red : iconColor,
+                  size: 20,
+                ),
+                label: Text(
+                  formatCount(downvoteCount),
+                  style: theme.textTheme.bodyMedium?.copyWith(
                     color: isDownvoted ? Colors.red : iconColor,
                   ),
                 ),
-                Text(
-                  formatCount(downvotes),
-                  style: theme.textTheme.bodyMedium?.copyWith(color: iconColor),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-              ],
-            ),
-            const SizedBox(width: 15),
-            Row(
-              children: [
-                SvgPicture.asset(
-                  'assets/icons/comment.svg',
-                  height: 20,
+              ),
+              const SizedBox(width: 8),
+              // Comment Button
+              TextButton.icon(
+                onPressed: () {
+                  print('DEBUG: Opening post details for post: ${widget.post}');
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => widget.isAdminPost
+                          ? AdminPostDetailScreen(post: widget.post)
+                          : PostDetailScreen(post: widget.post),
+                    ),
+                  );
+                },
+                icon: Icon(
+                  Icons.chat_bubble_outline,
                   color: iconColor,
+                  size: 20,
                 ),
-                const SizedBox(width: 6),
-              ],
-            ),
-          ],
-        ),
-        Row(
-          children: [
-            SvgPicture.asset(
-              'assets/icons/share.svg',
-              height: 20,
-              color: iconColor,
-            ),
-            const SizedBox(width: 4),
-          ],
-        ),
-      ],
+                label: Text(
+                  formatCount(commentCount),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: iconColor,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

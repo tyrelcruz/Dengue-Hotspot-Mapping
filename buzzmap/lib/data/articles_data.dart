@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ArticlesData {
   static final List<Map<String, dynamic>> articles = [
@@ -11,10 +12,10 @@ class ArticlesData {
           'Philippine Health department flags worrisome uptick in dengue cases in Luzon',
       'dateAndTime': 'February 17, 2025 | 9:17 pm',
       'sampleText':
-          'PHILIPPINE health authorities on Monday flagged a “concerning rise” in dengue cases in Luzon, with eight more local governments there likely to declare an outbreak after Quezon City.',
+          'PHILIPPINE health authorities on Monday flagged a "concerning rise" in dengue cases in Luzon, with eight more local governments there likely to declare an outbreak after Quezon City.',
       'maxLines': 1,
       'fullContent':
-          'PHILIPPINE health authorities on Monday flagged a “concerning rise” in dengue cases in Luzon, with eight more local governments there likely to declare an outbreak after Quezon City.\n\nIn a statement, the Department of Health (DoH) cited an uptick in dengue cases in nine local government units across  Metro Manila, Calabarzon and Central Luzon. It did not disclose the names of the cities and the number of infections.\n\nThis comes after Quezon City Mayor Maria Josefina “Joy” Tanya G. Belmonte declared a dengue outbreak in the country\’s largest city, where at least 10 people have died from the disease spread by mosquitoes and more than 1,700 cases have been posted this year.\n\nThe Health department has reported 28,384 dengue cases as of Feb. 1, a 40% increase from a year earlier.\n\nThe agency said regional epidemiology and surveillance units have been advising their local government counterparts about the cases, adding that the declaration of a local dengue outbreak may only be done by a local government official.\n\nThe Philippine Health department last declared a national dengue epidemic in 2019.\n\nThe eight localities other than Quezon City are likely to declare a dengue outbreak due to an uptick in cases, DoH spokesman Albert Francis E. Domingo told DZBB radio.\n\nDengue is the most common mosquito-borne disease worldwide, typically found in tropical and sub-tropical climates.\n\nCommon symptoms include high fever, severe headaches, nausea, vomiting, rashes and muscle pain, according to the World Health Organization\’s website.\n\nIf left untreated, dengue can progress to a severe stage, which may involve intense stomach pain, vomiting, bleeding of the gums or nose, blood in urine or stools, difficulty breathing and bleeding under the skin. — John Victor D. Ordoñez',
+          'PHILIPPINE health authorities on Monday flagged a "concerning rise" in dengue cases in Luzon, with eight more local governments there likely to declare an outbreak after Quezon City.\n\nIn a statement, the Department of Health (DoH) cited an uptick in dengue cases in nine local government units across  Metro Manila, Calabarzon and Central Luzon. It did not disclose the names of the cities and the number of infections.\n\nThis comes after Quezon City Mayor Maria Josefina "Joy" Tanya G. Belmonte declared a dengue outbreak in the country\'s largest city, where at least 10 people have died from the disease spread by mosquitoes and more than 1,700 cases have been posted this year.\n\nThe Health department has reported 28,384 dengue cases as of Feb. 1, a 40% increase from a year earlier.\n\nThe agency said regional epidemiology and surveillance units have been advising their local government counterparts about the cases, adding that the declaration of a local dengue outbreak may only be done by a local government official.\n\nThe Philippine Health department last declared a national dengue epidemic in 2019.\n\nThe eight localities other than Quezon City are likely to declare a dengue outbreak due to an uptick in cases, DoH spokesman Albert Francis E. Domingo told DZBB radio.\n\nDengue is the most common mosquito-borne disease worldwide, typically found in tropical and sub-tropical climates.\n\nCommon symptoms include high fever, severe headaches, nausea, vomiting, rashes and muscle pain, according to the World Health Organization\'s website.\n\nIf left untreated, dengue can progress to a severe stage, which may involve intense stomach pain, vomiting, bleeding of the gums or nose, blood in urine or stools, difficulty breathing and bleeding under the skin. — John Victor D. Ordoñez',
     },
     {
       'articleImage':
@@ -28,7 +29,7 @@ class ArticlesData {
           'MANILA (UPDATE) — The Department of Health (DOH) on Monday said it saw a "concerning rise in the number of Dengue cases" in at least 9 localities in the Philippines.',
       'maxLines': 2,
       'fullContent':
-          'PHILIPPINE health authorities on Monday flagged a “concerning rise” in dengue cases in Luzon, with eight more local governments there likely to declare an outbreak after Quezon City.\n\nIn a statement, the Department of Health (DoH) cited an uptick in dengue cases in nine local government units across  Metro Manila, Calabarzon and Central Luzon. It did not disclose the names of the cities and the number of infections.\n\nThis comes after Quezon City Mayor Maria Josefina “Joy” Tanya G. Belmonte declared a dengue outbreak in the country\’s largest city, where at least 10 people have died from the disease spread by mosquitoes and more than 1,700 cases have been posted this year.\n\nThe Health department has reported 28,384 dengue cases as of Feb. 1, a 40% increase from a year earlier.\n\nThe agency said regional epidemiology and surveillance units have been advising their local government counterparts about the cases, adding that the declaration of a local dengue outbreak may only be done by a local government official.\n\nThe Philippine Health department last declared a national dengue epidemic in 2019.\n\nThe eight localities other than Quezon City are likely to declare a dengue outbreak due to an uptick in cases, DoH spokesman Albert Francis E. Domingo told DZBB radio.\n\nDengue is the most common mosquito-borne disease worldwide, typically found in tropical and sub-tropical climates.\n\nCommon symptoms include high fever, severe headaches, nausea, vomiting, rashes and muscle pain, according to the World Health Organization\’s website.\n\nIf left untreated, dengue can progress to a severe stage, which may involve intense stomach pain, vomiting, bleeding of the gums or nose, blood in urine or stools, difficulty breathing and bleeding under the skin. — John Victor D. Ordoñez',
+          'PHILIPPINE health authorities on Monday flagged a "concerning rise" in dengue cases in Luzon, with eight more local governments there likely to declare an outbreak after Quezon City.\n\nIn a statement, the Department of Health (DoH) cited an uptick in dengue cases in nine local government units across  Metro Manila, Calabarzon and Central Luzon. It did not disclose the names of the cities and the number of infections.\n\nThis comes after Quezon City Mayor Maria Josefina "Joy" Tanya G. Belmonte declared a dengue outbreak in the country\'s largest city, where at least 10 people have died from the disease spread by mosquitoes and more than 1,700 cases have been posted this year.\n\nThe Health department has reported 28,384 dengue cases as of Feb. 1, a 40% increase from a year earlier.\n\nThe agency said regional epidemiology and surveillance units have been advising their local government counterparts about the cases, adding that the declaration of a local dengue outbreak may only be done by a local government official.\n\nThe Philippine Health department last declared a national dengue epidemic in 2019.\n\nThe eight localities other than Quezon City are likely to declare a dengue outbreak due to an uptick in cases, DoH spokesman Albert Francis E. Domingo told DZBB radio.\n\nDengue is the most common mosquito-borne disease worldwide, typically found in tropical and sub-tropical climates.\n\nCommon symptoms include high fever, severe headaches, nausea, vomiting, rashes and muscle pain, according to the World Health Organization\'s website.\n\nIf left untreated, dengue can progress to a severe stage, which may involve intense stomach pain, vomiting, bleeding of the gums or nose, blood in urine or stools, difficulty breathing and bleeding under the skin. — John Victor D. Ordoñez',
     },
     {
       'articleImage':
@@ -42,7 +43,7 @@ class ArticlesData {
           'Aside from Quezon City, the Department of Health says there are eight other local government units that have logged \'a concerning rise\' in the number of patients with dengue',
       'maxLines': 2,
       'fullContent':
-          'PHILIPPINE health authorities on Monday flagged a “concerning rise” in dengue cases in Luzon, with eight more local governments there likely to declare an outbreak after Quezon City.\n\nIn a statement, the Department of Health (DoH) cited an uptick in dengue cases in nine local government units across  Metro Manila, Calabarzon and Central Luzon. It did not disclose the names of the cities and the number of infections.\n\nThis comes after Quezon City Mayor Maria Josefina “Joy” Tanya G. Belmonte declared a dengue outbreak in the country\’s largest city, where at least 10 people have died from the disease spread by mosquitoes and more than 1,700 cases have been posted this year.\n\nThe Health department has reported 28,384 dengue cases as of Feb. 1, a 40% increase from a year earlier.\n\nThe agency said regional epidemiology and surveillance units have been advising their local government counterparts about the cases, adding that the declaration of a local dengue outbreak may only be done by a local government official.\n\nThe Philippine Health department last declared a national dengue epidemic in 2019.\n\nThe eight localities other than Quezon City are likely to declare a dengue outbreak due to an uptick in cases, DoH spokesman Albert Francis E. Domingo told DZBB radio.\n\nDengue is the most common mosquito-borne disease worldwide, typically found in tropical and sub-tropical climates.\n\nCommon symptoms include high fever, severe headaches, nausea, vomiting, rashes and muscle pain, according to the World Health Organization\’s website.\n\nIf left untreated, dengue can progress to a severe stage, which may involve intense stomach pain, vomiting, bleeding of the gums or nose, blood in urine or stools, difficulty breathing and bleeding under the skin. — John Victor D. Ordoñez',
+          'PHILIPPINE health authorities on Monday flagged a "concerning rise" in dengue cases in Luzon, with eight more local governments there likely to declare an outbreak after Quezon City.\n\nIn a statement, the Department of Health (DoH) cited an uptick in dengue cases in nine local government units across  Metro Manila, Calabarzon and Central Luzon. It did not disclose the names of the cities and the number of infections.\n\nThis comes after Quezon City Mayor Maria Josefina "Joy" Tanya G. Belmonte declared a dengue outbreak in the country\'s largest city, where at least 10 people have died from the disease spread by mosquitoes and more than 1,700 cases have been posted this year.\n\nThe Health department has reported 28,384 dengue cases as of Feb. 1, a 40% increase from a year earlier.\n\nThe agency said regional epidemiology and surveillance units have been advising their local government counterparts about the cases, adding that the declaration of a local dengue outbreak may only be done by a local government official.\n\nThe Philippine Health department last declared a national dengue epidemic in 2019.\n\nThe eight localities other than Quezon City are likely to declare a dengue outbreak due to an uptick in cases, DoH spokesman Albert Francis E. Domingo told DZBB radio.\n\nDengue is the most common mosquito-borne disease worldwide, typically found in tropical and sub-tropical climates.\n\nCommon symptoms include high fever, severe headaches, nausea, vomiting, rashes and muscle pain, according to the World Health Organization\'s website.\n\nIf left untreated, dengue can progress to a severe stage, which may involve intense stomach pain, vomiting, bleeding of the gums or nose, blood in urine or stools, difficulty breathing and bleeding under the skin. — John Victor D. Ordoñez',
     },
   ];
   static final List<Map<String, dynamic>> interestsArticles = [
@@ -79,7 +80,7 @@ class ArticlesData {
       'articleTitle': 'Five Effective Ways to Protect Yourself Against Dengue',
       'dateAndTime': 'Takaful Tips',
       'sampleText':
-          'You\’ve probably heard the joke about Malaysia\’s four seasons: we experience the dry season, the durian season, the haze season and the Dengue season. All jokes aside though, while Dengue is at its peak during our country\’s monsoon period, which typically falls between October to February, transmission can and does occur all year round.',
+          'You\'ve probably heard the joke about Malaysia\'s four seasons: we experience the dry season, the durian season, the haze season and the Dengue season. All jokes aside though, while Dengue is at its peak during our country\'s monsoon period, which typically falls between October to February, transmission can and does occur all year round.',
       'maxLines': 3,
       'fullContent': 'Test'
     },
@@ -104,7 +105,7 @@ class ArticlesData {
       'articleTitle': 'Dengue: How to keep children safe',
       'dateAndTime': 'UNICEF South Asia',
       'sampleText':
-          'It\’s rainy season in South Asia, an ideal time for disease outbreaks from stagnant and contaminated water — including dengue that can be passed on by mosquitoes.',
+          'It\'s rainy season in South Asia, an ideal time for disease outbreaks from stagnant and contaminated water — including dengue that can be passed on by mosquitoes.',
       'maxLines': 3,
       'fullContent': 'Test'
     },
@@ -118,22 +119,21 @@ class ArticleImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.network(
-      imageUrl,
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
       fit: BoxFit.cover,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child; // Image is fully loaded
-        }
-        return Center(
-          child: CircularProgressIndicator(), // Show loading animation
-        );
-      },
-      errorBuilder: (context, error, stackTrace) {
-        return Center(
-          child: Icon(Icons.error, color: Colors.red), // Error handling
-        );
-      },
+      placeholder: (context, url) => Container(
+        color: Colors.grey[200],
+        child: const Center(
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+          ),
+        ),
+      ),
+      errorWidget: (context, url, error) => Container(
+        color: Colors.grey[200],
+        child: const Icon(Icons.error, color: Colors.red),
+      ),
     );
   }
 }

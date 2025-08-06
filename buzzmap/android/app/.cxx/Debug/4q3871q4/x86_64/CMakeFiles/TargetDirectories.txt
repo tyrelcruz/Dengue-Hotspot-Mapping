@@ -1,2 +1,0 @@
-C:/Users/tyrel/OneDrive/Documents/ONGOING PROJECT BUZZMAP/buzzmap/android/app/.cxx/Debug/4q3871q4/x86_64/CMakeFiles/edit_cache.dir
-C:/Users/tyrel/OneDrive/Documents/ONGOING PROJECT BUZZMAP/buzzmap/android/app/.cxx/Debug/4q3871q4/x86_64/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,23 @@
+{
+  "name": "BuzzMap",
+  "displayName": "BuzzMap",
+  "expo": {
+    "name": "BuzzMap",
+    "slug": "buzzmap",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/your-project-id"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
+  }
+}

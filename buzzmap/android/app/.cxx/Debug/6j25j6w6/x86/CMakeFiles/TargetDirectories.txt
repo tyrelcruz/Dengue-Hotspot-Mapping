@@ -1,2 +1,0 @@
-C:/Users/vanessa/Documents/BUZZMAP/buzzmap/android/app/.cxx/Debug/6j25j6w6/x86/CMakeFiles/edit_cache.dir
-C:/Users/vanessa/Documents/BUZZMAP/buzzmap/android/app/.cxx/Debug/6j25j6w6/x86/CMakeFiles/rebuild_cache.dir

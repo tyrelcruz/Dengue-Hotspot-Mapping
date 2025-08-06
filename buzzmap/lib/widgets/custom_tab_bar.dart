@@ -20,15 +20,18 @@ class _CustomTabBarState extends State<CustomTabBar> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isTablet = MediaQuery.of(context).size.width > 600;
 
     return Expanded(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2.0),
+        padding: EdgeInsets.symmetric(horizontal: isTablet ? 2.0 : 1.0),
         child: GestureDetector(
           onTap: widget.onTap,
           child: Chip(
-            visualDensity: VisualDensity(horizontal: 0, vertical: -2),
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+            visualDensity: VisualDensity(
+                horizontal: isTablet ? 2 : 0, vertical: isTablet ? -2 : -4),
+            padding: EdgeInsets.symmetric(
+                vertical: isTablet ? 6 : 2, horizontal: isTablet ? 12 : 8),
             backgroundColor: widget.isSelected
                 ? theme.colorScheme.primary
                 : theme.colorScheme.surface,
@@ -40,11 +43,12 @@ class _CustomTabBarState extends State<CustomTabBar> {
                       ? Colors.white
                       : theme.colorScheme.primary,
                   fontWeight: FontWeight.bold,
+                  fontSize: isTablet ? 14 : 11,
                 ),
               ),
             ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(isTablet ? 24 : 20),
               side: BorderSide(color: theme.colorScheme.surface),
             ),
           ),

@@ -19,7 +19,8 @@ class WelcomeScreen extends StatelessWidget {
     double buttonPaddingHorizontal = screenWidth * 0.14;
     double buttonPaddingVertical = screenHeight * 0.01;
     double titleFontSize = 70 * MediaQuery.of(context).textScaleFactor;
-    double subtitleFontSize = 20 * MediaQuery.of(context).textScaleFactor;
+    double subtitleFontSize = 25 * MediaQuery.of(context).textScaleFactor;
+    double textContent = 12 * MediaQuery.of(context).textScaleFactor;
 
     return Scaffold(
       backgroundColor: const Color(0xFF1D4C5E),
@@ -146,7 +147,9 @@ class WelcomeScreen extends StatelessWidget {
                               ),
                             ),
                           ),
-                          SizedBox(width: screenWidth * 0.04),
+                          SizedBox(
+                              width: screenWidth * 0.04,
+                              height: screenWidth * 0.06),
                           // Sign Up Button Section
                           Container(
                             decoration: BoxDecoration(

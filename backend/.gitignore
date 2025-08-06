@@ -1,0 +1,7 @@
+.env
+node_modules/
+.vscode/
+text.todo
+uploads/
+test/
+controllers/spare/

@@ -8,6 +8,7 @@ const {
   sendOTPVerificationEmail,
   sendForgotPasswordEmail,
 } = require("../services/emailService");
+const { canResendOTP, updateResendAttempts } = require("../services/otpService");
 
 const requestOTP = asyncErrorHandler(async (req, res) => {
   const { email, purpose } = req.body;
@@ -96,6 +97,7 @@ const verifyOTP = asyncErrorHandler(async (req, res) => {
 
   if (purpose === "account-verification") {
     account.verified = true;
+    account.status = "active";
     await account.save();
 
     return res.status(200).json({
@@ -120,7 +122,67 @@ const verifyOTP = asyncErrorHandler(async (req, res) => {
   }
 });
 
+const resendOTP = asyncErrorHandler(async (req, res) => {
+  const { email, purpose } = req.body;
+
+  if (!email) {
+    throw new BadRequestError("Please provide an email input.");
+  }
+
+  if (!purpose || !["account-verification", "password-reset"].includes(purpose)) {
+    throw new BadRequestError("Invalid purpose for OTP.");
+  }
+
+  const account = await Account.findOne({ email });
+  if (!account) {
+    throw new BadRequestError("Account with this email does not exist.");
+  }
+
+  if (purpose === "account-verification" && account.verified) {
+    return res.status(200).json({
+      message: "This account is already verified!",
+    });
+  }
+
+  console.log('Checking resend capability for user:', account._id);
+  
+  // Check if user can resend OTP
+  const resendCheck = await canResendOTP(account._id);
+  console.log('Resend check result:', resendCheck);
+  
+  if (!resendCheck.canResend) {
+    return res.status(429).json({
+      success: false,
+      message: resendCheck.error
+    });
+  }
+
+  // Update resend attempts before sending new OTP
+  await updateResendAttempts(account._id);
+
+  let result;
+  if (purpose === "account-verification") {
+    result = await sendOTPVerificationEmail(account);
+  } else {
+    result = await sendForgotPasswordEmail(account);
+  }
+
+  if (result.status === "Failed") {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send OTP email.",
+      error: result.error
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    message: `A new OTP for ${purpose} has been sent to your email.`
+  });
+});
+
 module.exports = {
   requestOTP,
   verifyOTP,
+  resendOTP
 };

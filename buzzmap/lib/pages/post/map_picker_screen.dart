@@ -17,8 +17,8 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       appBar: AppBar(title: const Text('Pick Location')),
       body: GoogleMap(
         initialCameraPosition: const CameraPosition(
-          target: LatLng(14.5995, 120.9842), // Default to Manila
-          zoom: 12,
+          target: LatLng(14.6760, 121.0437), // Center of Quezon City
+          zoom: 11.4,
         ),
         onTap: (LatLng position) {
           setState(() {

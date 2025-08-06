@@ -11,6 +11,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
+import 'package:buzzmap/widgets/post_detail_screen.dart';
+import 'package:buzzmap/errors/flushbar.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:math';
+import 'package:buzzmap/providers/post_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter/widgets.dart';
+import 'package:buzzmap/providers/vote_provider.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -19,13 +27,20 @@ class CommunityScreen extends StatefulWidget {
   State<CommunityScreen> createState() => _CommunityScreenState();
 }
 
-class _CommunityScreenState extends State<CommunityScreen> {
+class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
   int selectedIndex = 0;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _showSuggestions = false;
-  List<Map<String, dynamic>> _allPosts = [];
-  bool _isLoading = true;
+  bool _isUsernameLoading = true;
+  late SharedPreferences _prefs;
+  String? _currentUsername;
+  Position? _currentPosition;
+  bool _isLocationLoading = false;
+  RouteObserver<PageRoute>? _routeObserver;
+
+  // Add a map to store userId -> profilePhotoUrl
+  Map<String, String> _userProfilePhotos = {};
 
   void _onTabSelected(int index) {
     setState(() {
@@ -36,78 +51,403 @@ class _CommunityScreenState extends State<CommunityScreen> {
   @override
   void initState() {
     super.initState();
-    _loadReports();
+    _initializePrefs();
+    _getCurrentLocation();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _ensureProfilePhotoLoaded();
+      await _fetchUserProfiles();
+      await Provider.of<PostProvider>(context, listen: false).fetchPosts();
+      await Provider.of<VoteProvider>(context, listen: false).refreshAllVotes();
+    });
   }
 
-  Future<List<Map<String, dynamic>>> fetchReports() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('authToken');
-
-    final response = await http.get(
-      Uri.parse('${Config.baseUrl}/api/v1/reports'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-
-      return data
-          .where((report) => report['status'] == 'Validated')
-          .map<Map<String, dynamic>>((report) {
-        return {
-          'username': report['user']?['username'] ?? 'Anonymous',
-          'whenPosted': 'Just now',
-          'location': '${report['barangay']}, Quezon City',
-          'barangay': report['barangay'],
-          'date': report['date_and_time'].split('T').first,
-          'time':
-              TimeOfDay.fromDateTime(DateTime.parse(report['date_and_time']))
-                  .format(context),
-          'reportType': report['report_type'],
-          'description': report['description'],
-          'images': report['images'] != null
-              ? List<String>.from(report['images'])
-              : <String>[],
-          'iconUrl': 'assets/icons/person_1.svg',
-          'status': report['status'],
-        };
-      }).toList();
-    } else {
-      throw Exception('Failed to fetch reports');
-    }
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe to route changes
+    _routeObserver = ModalRoute.of(context)
+        ?.navigator
+        ?.widget
+        .observers
+        .whereType<RouteObserver<PageRoute>>()
+        .firstOrNull;
+    _routeObserver?.subscribe(this, ModalRoute.of(context)! as PageRoute);
   }
 
-  Future<void> _loadReports() async {
+  Future<void> _initializePrefs() async {
     try {
-      final reports = await fetchReports();
-      setState(() {
-        _allPosts = reports;
-        _isLoading = false;
-      });
+      _prefs = await SharedPreferences.getInstance();
+      String? username = _prefs.getString('username');
+      String? email = _prefs.getString('email');
+      String? userId = _prefs.getString('userId');
+      print(
+          '👤 Loading username from SharedPreferences: $username'); // Debug log
+      print('📧 Loading email from SharedPreferences: $email'); // Debug log
+      print('👤 Loading userId from SharedPreferences: $userId'); // Debug log
+
+      if (username == null ||
+          username.isEmpty ||
+          email == null ||
+          email.isEmpty ||
+          userId == null ||
+          userId.isEmpty) {
+        // Fetch from backend if missing
+        final token = _prefs.getString('authToken');
+        if (token != null && token.isNotEmpty) {
+          try {
+            final response = await http.get(
+              Uri.parse(Config.userProfileUrl),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+              },
+            );
+            if (response.statusCode == 200) {
+              final data = jsonDecode(response.body);
+              // Try both 'username' and 'name' keys
+              final fetchedUsername = data['username'] ?? data['name'] ?? '';
+              final fetchedEmail = data['email'] ?? '';
+              final fetchedUserId = data['_id'] ?? '';
+              if (fetchedUsername.isNotEmpty) {
+                username = fetchedUsername;
+                await _prefs.setString('username', fetchedUsername);
+                print(
+                    '👤 Username fetched from backend and saved: $fetchedUsername');
+              }
+              if (fetchedEmail.isNotEmpty) {
+                email = fetchedEmail;
+                await _prefs.setString('email', fetchedEmail);
+                print('📧 Email fetched from backend and saved: $fetchedEmail');
+              }
+              if (fetchedUserId.isNotEmpty) {
+                userId = fetchedUserId;
+                await _prefs.setString('userId', fetchedUserId);
+                print(
+                    '👤 User ID fetched from backend and saved: $fetchedUserId');
+              }
+            } else {
+              print('❌ Failed to fetch user profile: ${response.body}');
+            }
+          } catch (e) {
+            print('❌ Error fetching user profile: $e');
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _currentUsername = username;
+          _isUsernameLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
+      print('❌ Error loading username: $e');
+      if (mounted) {
+        setState(() {
+          _isUsernameLoading = false;
+        });
+      }
     }
+  }
+
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isLocationLoading = true;
+    });
+
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Location services are disabled. Please enable them to use the "Near Me" feature.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Location permissions are required to use the "Near Me" feature.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Location permissions are permanently denied. Please enable them in app settings.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      print('📍 Current Location: ${position.latitude}, ${position.longitude}');
+
+      if (mounted) {
+        setState(() {
+          _currentPosition = position;
+          _isLocationLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error getting location: $e');
+      if (mounted) {
+        setState(() {
+          _isLocationLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to get your location. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  double _calculateDistance(
+      double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 6371; // km
+    final dLat = (lat2 - lat1) * pi / 180.0;
+    final dLon = (lon2 - lon1) * pi / 180.0;
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1 * pi / 180.0) *
+            cos(lat2 * pi / 180.0) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return earthRadius * c;
   }
 
   List<Map<String, dynamic>> get _currentPosts {
+    final posts = Provider.of<PostProvider>(context).posts;
     final query = _searchQuery.toLowerCase();
-    final filtered = _allPosts.where((post) {
-      return post['username'].toLowerCase().contains(query) ||
-          post['description'].toLowerCase().contains(query) ||
-          post['reportType'].toLowerCase().contains(query) ||
-          post['barangay'].toLowerCase().contains(query);
+    var filtered = posts.where((post) {
+      final username = post['username']?.toString().toLowerCase() ?? '';
+      final description = post['description']?.toString().toLowerCase() ?? '';
+      final reportType = post['reportType']?.toString().toLowerCase() ?? '';
+      final barangay = post['barangay']?.toString().toLowerCase() ?? '';
+
+      return username.contains(query) ||
+          description.contains(query) ||
+          reportType.contains(query) ||
+          barangay.contains(query);
     }).toList();
 
-    return selectedIndex == 2 ? filtered : filtered;
+    // Apply sorting based on selected tab
+    if (selectedIndex == 0) {
+      // Popular tab - Sort by total engagement (upvotes + comments - downvotes)
+      filtered.sort((a, b) {
+        final aUpvotes = (a['numUpvotes'] as int?) ?? 0;
+        final aDownvotes = (a['numDownvotes'] as int?) ?? 0;
+        final aComments = (a['_commentCount'] as int?) ?? 0;
+        final bUpvotes = (b['numUpvotes'] as int?) ?? 0;
+        final bDownvotes = (b['numDownvotes'] as int?) ?? 0;
+        final bComments = (b['_commentCount'] as int?) ?? 0;
+
+        // Calculate total engagement score (upvotes + comments - downvotes)
+        final aScore = aUpvotes + aComments - aDownvotes;
+        final bScore = bUpvotes + bComments - bDownvotes;
+
+        // If scores are equal, sort by most recent
+        if (aScore == bScore) {
+          final aDate = DateTime.parse(a['date_and_time'] ?? '');
+          final bDate = DateTime.parse(b['date_and_time'] ?? '');
+          return bDate.compareTo(aDate);
+        }
+
+        return bScore.compareTo(aScore);
+      });
+    } else if (selectedIndex == 1) {
+      // Latest tab
+      filtered.sort((a, b) => (b['date_and_time']?.toString() ?? '')
+          .compareTo(a['date_and_time']?.toString() ?? ''));
+    } else if (selectedIndex == 2) {
+      // My Posts tab
+      final currentUserId = _prefs.getString('userId');
+      if (currentUserId == null || currentUserId.isEmpty) {
+        return [];
+      }
+      filtered = posts
+          .where((post) => post['userId']?.toString() == currentUserId)
+          .toList();
+      filtered.sort((a, b) => (b['date_and_time']?.toString() ?? '')
+          .compareTo(a['date_and_time']?.toString() ?? ''));
+    } else if (selectedIndex == 3) {
+      // Near Me tab
+      if (_currentPosition == null) {
+        return [];
+      }
+
+      // Add distance to each post and filter by radius
+      filtered = filtered.map((post) {
+        final coords = post['specific_location']?['coordinates'];
+        if (coords != null && coords.length == 2) {
+          final distance = _calculateDistance(
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+            coords[1],
+            coords[0],
+          );
+          return {...post, 'distance': distance};
+        }
+        return {...post, 'distance': double.infinity};
+      }).toList();
+
+      // Sort by distance
+      filtered.sort((a, b) =>
+          (a['distance'] as double).compareTo(b['distance'] as double));
+
+      // Filter out posts that are too far (more than 2km radius)
+      filtered = filtered
+          .where((post) => (post['distance'] as double) <= 2.0)
+          .toList();
+    }
+
+    return filtered;
+  }
+
+  Future<void> _reportPost(Map<String, dynamic> post) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${Config.baseUrl}/api/v1/reports/${post['id']}/report'),
+        headers: {
+          'Authorization': 'Bearer ${_prefs.getString('authToken')}',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Post reported successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception('Failed to report post');
+      }
+    } catch (e) {
+      print('Error reporting post: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to report post'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deletePost(Map<String, dynamic> post) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('${Config.baseUrl}/api/v1/reports/${post['id']}'),
+        headers: {
+          'Authorization': 'Bearer ${_prefs.getString('authToken')}',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          // Assuming the post is removed from the provider's posts
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Post deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception('Failed to delete post');
+      }
+    } catch (e) {
+      print('Error deleting post: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to delete post'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _ensureProfilePhotoLoaded() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? profilePhotoUrl = prefs.getString('profilePhotoUrl');
+    final token = prefs.getString('authToken');
+    if ((profilePhotoUrl == null || profilePhotoUrl.isEmpty) && token != null) {
+      try {
+        final response = await http.get(
+          Uri.parse('${Config.baseUrl}/api/v1/auth/me'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        );
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final photoUrl = data['user']?['profilePhotoUrl'];
+          if (photoUrl != null && photoUrl.isNotEmpty) {
+            await prefs.setString('profilePhotoUrl', photoUrl);
+          }
+        }
+      } catch (e) {
+        print('Error fetching profile photo URL: $e');
+      }
+    }
+  }
+
+  // Fetch all user profiles and map userId to profilePhotoUrl
+  Future<void> _fetchUserProfiles() async {
+    try {
+      final response =
+          await http.get(Uri.parse('${Config.baseUrl}/api/v1/accounts/basic'));
+      if (response.statusCode == 200) {
+        final List<dynamic> users = jsonDecode(response.body);
+        setState(() {
+          _userProfilePhotos = {
+            for (var user in users)
+              if (user['_id'] != null && user['profilePhotoUrl'] != null)
+                user['_id']: user['profilePhotoUrl'] ?? ''
+          };
+        });
+      } else {
+        print('Failed to fetch user profiles: \\${response.body}');
+      }
+    } catch (e) {
+      print('Error fetching user profiles: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final customColors = Theme.of(context).extension<CustomColors>();
     final theme = Theme.of(context);
+    final postProvider = Provider.of<PostProvider>(context);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -118,8 +458,16 @@ class _CommunityScreenState extends State<CommunityScreen> {
       body: Stack(
         children: [
           RefreshIndicator(
-            onRefresh: _loadReports,
-            edgeOffset: 80,
+            onRefresh: () async {
+              await _initializePrefs();
+              await _ensureProfilePhotoLoaded();
+              await _fetchUserProfiles();
+              await postProvider.fetchPosts(forceRefresh: true);
+              await Provider.of<VoteProvider>(context, listen: false)
+                  .refreshAllVotes();
+              await _getCurrentLocation();
+            },
+            edgeOffset: 10,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
@@ -158,6 +506,16 @@ class _CommunityScreenState extends State<CommunityScreen> {
                           isSelected: selectedIndex == 2,
                           onTap: () => _onTabSelected(2),
                         ),
+                        CustomTabBar(
+                          label: 'Near Me',
+                          isSelected: selectedIndex == 3,
+                          onTap: () {
+                            if (_currentPosition == null) {
+                              _getCurrentLocation();
+                            }
+                            _onTabSelected(3);
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -190,9 +548,16 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       style: theme.textTheme.titleSmall,
                     ),
                     const SizedBox(height: 18),
-                    const AnnouncementCard(),
+                    AnnouncementCard(
+                      onRefresh: () {
+                        // Refresh the reports when announcement is refreshed
+                        // Assuming _loadReports() is called elsewhere in the code
+                      },
+                    ),
                   ],
-                  if (_isLoading)
+                  if (postProvider.isLoading ||
+                      _isUsernameLoading ||
+                      _isLocationLoading)
                     const Padding(
                       padding: EdgeInsets.all(16),
                       child: Center(child: CircularProgressIndicator()),
@@ -203,28 +568,91 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       child: Text("No reports available yet."),
                     )
                   else
-                    ..._currentPosts.map((post) => PostCard(
-                          username: post['username'],
-                          whenPosted: post['whenPosted'],
-                          location: post['location'],
-                          date: post['date'],
-                          time: post['time'],
-                          reportType: post['reportType'],
-                          description: post['description'],
-                          numUpvotes: post['numUpvotes'] ?? 0,
-                          numDownvotes: post['numDownvotes'] ?? 0,
-                          images: List<String>.from(
-                              post['images']), // Pass the images here
-                          iconUrl: post['iconUrl'],
-                          type: 'bordered',
-                        )),
+                    ..._currentPosts.map((post) {
+                      // Ensure both 'id' and '_id' are present
+                      final postWithId = Map<String, dynamic>.from(post);
+                      if (postWithId['_id'] == null &&
+                          postWithId['id'] != null) {
+                        postWithId['_id'] = postWithId['id'];
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        child: GestureDetector(
+                          onTap: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    PostDetailScreen(post: postWithId),
+                              ),
+                            );
+                            setState(
+                                () {}); // Refresh EngagementRow/comment count
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.08),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: PostCard(
+                              key:
+                                  ValueKey(postWithId['_id']?.toString() ?? ''),
+                              post: postWithId,
+                              username: postWithId['username']?.toString() ??
+                                  'Anonymous',
+                              whenPosted:
+                                  postWithId['whenPosted']?.toString() ??
+                                      'Just now',
+                              location: postWithId['location']?.toString() ??
+                                  'Unknown location',
+                              date: postWithId['date']?.toString() ?? '',
+                              time: postWithId['time']?.toString() ?? '',
+                              reportType:
+                                  postWithId['reportType']?.toString() ??
+                                      'Unknown',
+                              description:
+                                  postWithId['description']?.toString() ?? '',
+                              numUpvotes:
+                                  (postWithId['numUpvotes'] as int?) ?? 0,
+                              numDownvotes:
+                                  (postWithId['numDownvotes'] as int?) ?? 0,
+                              images: (postWithId['images'] as List<dynamic>?)
+                                      ?.map((e) => e.toString())
+                                      .toList() ??
+                                  [],
+                              iconUrl: _userProfilePhotos[postWithId['userId']]
+                                          ?.isNotEmpty ==
+                                      true
+                                  ? _userProfilePhotos[postWithId['userId']]!
+                                  : 'assets/icons/person_1.svg',
+                              type: 'bordered',
+                              onReport: () => _reportPost(postWithId),
+                              onDelete: () => _deletePost(postWithId),
+                              isOwner: postWithId['userId']?.toString() ==
+                                  _prefs.getString('userId'),
+                              postId: postWithId['_id']?.toString() ?? '',
+                              showDistance: selectedIndex == 3,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
                 ],
               ),
             ),
           ),
           if (_showSuggestions)
             Positioned(
-              top: 100,
+              top: 70,
               left: 16,
               right: 16,
               child: Material(
@@ -239,7 +667,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   child: Builder(
                     builder: (context) {
                       final query = _searchQuery.toLowerCase();
-                      final suggestions = _allPosts
+                      final suggestions = _currentPosts
                           .where((post) =>
                               post['username'].toLowerCase().contains(query) ||
                               post['barangay'].toLowerCase().contains(query) ||
@@ -314,8 +742,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 ],
               ),
               child: SizedBox(
-                height: 40,
-                width: 160,
+                height: MediaQuery.of(context).size.width > 600 ? 50 : 40,
+                width: MediaQuery.of(context).size.width > 600 ? 200 : 160,
                 child: FloatingActionButton.extended(
                   onPressed: () {
                     Navigator.pushNamed(context, '/prevention');
@@ -334,13 +762,18 @@ class _CommunityScreenState extends State<CommunityScreen> {
                             fontWeight: FontWeight.w600,
                             color: theme.colorScheme.primary,
                             fontStyle: FontStyle.italic,
+                            fontSize: MediaQuery.of(context).size.width > 600
+                                ? 16
+                                : null,
                           ),
                         ),
                         const SizedBox(width: 8),
                         SvgPicture.asset(
                           'assets/icons/right_arrow.svg',
-                          width: 20,
-                          height: 20,
+                          width:
+                              MediaQuery.of(context).size.width > 600 ? 24 : 20,
+                          height:
+                              MediaQuery.of(context).size.width > 600 ? 24 : 20,
                           colorFilter: ColorFilter.mode(
                             theme.colorScheme.primary,
                             BlendMode.srcIn,
@@ -354,11 +787,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
             ),
           ),
           Positioned(
-            bottom: 55,
+            bottom: MediaQuery.of(context).size.width > 600 ? 65 : 55,
             right: 3,
             child: Container(
-              width: 40,
-              height: 40,
+              width: MediaQuery.of(context).size.width > 600 ? 200 : 160,
+              height: MediaQuery.of(context).size.width > 600 ? 50 : 40,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -368,7 +801,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.2),
@@ -377,7 +810,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   ),
                 ],
               ),
-              child: IconButton(
+              child: FloatingActionButton.extended(
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -386,16 +819,40 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     ),
                   );
                 },
-                icon: SvgPicture.asset(
-                  'assets/icons/add.svg',
-                  width: 18,
-                  height: 18,
-                  colorFilter: ColorFilter.mode(
-                    theme.colorScheme.primary,
-                    BlendMode.srcIn,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                label: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Submit a Report',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.primary,
+                          fontStyle: FontStyle.italic,
+                          fontSize: MediaQuery.of(context).size.width > 600
+                              ? 16
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SvgPicture.asset(
+                        'assets/icons/add.svg',
+                        width:
+                            MediaQuery.of(context).size.width > 600 ? 22 : 18,
+                        height:
+                            MediaQuery.of(context).size.width > 600 ? 22 : 18,
+                        colorFilter: ColorFilter.mode(
+                          theme.colorScheme.primary,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                padding: EdgeInsets.zero,
               ),
             ),
           ),
@@ -407,6 +864,17 @@ class _CommunityScreenState extends State<CommunityScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    // Unsubscribe from route changes
+    _routeObserver?.unsubscribe(this);
     super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    // Called when returning to this screen
+    Provider.of<PostProvider>(context, listen: false)
+        .fetchPosts(forceRefresh: true);
+    _getCurrentLocation();
+    setState(() {});
   }
 }
