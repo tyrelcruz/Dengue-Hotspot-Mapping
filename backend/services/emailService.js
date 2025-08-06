@@ -2,12 +2,15 @@ const sendEmail = require("../utils/email");
 const { generateOTP, hashOTP } = require("../utils/otp");
 const { saveOTPToDatabase } = require("./otpService");
 
-const _sendOTPEmail = async (account, { subject, heading, bodyText }) => {
+const _sendOTPEmail = async (account, { subject, heading, bodyText, purpose }) => {
   try {
     const otp = generateOTP();
     const hashedOTP = await hashOTP(otp);
 
-    await saveOTPToDatabase(account._id, hashedOTP);
+    // Set initial lastResendTime for new OTPs
+    const lastResendTime = new Date();
+    await saveOTPToDatabase(account._id, hashedOTP, purpose, lastResendTime);
+    
     console.log(otp)
     const emailContent = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6;">
@@ -48,6 +51,7 @@ const sendOTPVerificationEmail = async (account) => {
     heading: "Email Verification",
     bodyText:
       "Enter this code in the application to verify your email and complete the registration process.",
+    purpose: "account-verification"
   });
 };
 
@@ -57,6 +61,7 @@ const sendForgotPasswordEmail = async (account) => {
     heading: "Password Reset",
     bodyText:
       "We have received a request from you for resetting your password. Enter the above OTP to continue with the password reset process.",
+    purpose: "password-reset"
   });
 };
 

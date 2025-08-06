@@ -37,15 +37,21 @@ app.use(
 const connectDB = require("./db/connect");
 
 // Routes
+app.get("/", (req, res) => {
+  res.json({ message: "Welcome to BuzzMap API Server" });
+});
+
 app.use("/api/v1/auth", require("./routes/auth"));
 app.use("/api/v1/reports", require("./routes/reports"));
 app.use("/api/v1/analytics", require("./routes/analytics"));
 app.use("/api/v1/notifications", require("./routes/notifications"));
 app.use("/api/v1/interventions", require("./routes/interventions"));
 app.use("/api/v1/adminposts", require("./routes/adminPosts"));
+app.use("/api/v1/comments", require("./routes/adminPostComments"));
 app.use("/api/v1/alerts", require("./routes/alerts"));
 app.use("/api/v1/barangays", require("./routes/barangays"));
 app.use("/api/v1/accounts", require("./routes/accounts"));
+app.use("/api/v1/comments", require("./routes/comments"));
 
 // Error handling
 app.use(errorController);
@@ -54,8 +60,23 @@ app.use(errorController);
 const start = async () => {
   try {
     await connectDB(process.env.MONGO_URI);
-    app.listen(process.env.PORT, () => {
+    const server = app.listen(process.env.PORT, () => {
       console.log(`Server running on port ${process.env.PORT}`);
+    });
+
+    // Handle server errors
+    server.on("error", (error) => {
+      if (error.code === "EADDRINUSE") {
+        console.log(
+          `Port ${process.env.PORT} is busy, trying ${process.env.PORT + 1}`
+        );
+        server.close();
+        app.listen(process.env.PORT + 1, () => {
+          console.log(`Server running on port ${process.env.PORT + 1}`);
+        });
+      } else {
+        console.error("Server error:", error);
+      }
     });
   } catch (error) {
     console.error("Server startup failed:", error);

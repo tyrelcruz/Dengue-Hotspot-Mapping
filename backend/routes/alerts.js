@@ -1,4 +1,4 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
 const {
   sendDengueAlert,
@@ -7,28 +7,28 @@ const {
   getAlertsByBarangayName,
   updateAlert,
   deleteAlert,
-  deleteAllAlerts
-} = require('../controllers/alertController');
+  deleteAllAlerts,
+} = require("../controllers/alertController");
 
 // POST /api/v1/alerts
-router.post('/', sendDengueAlert);
+router.post("/", sendDengueAlert);
 
 // GET /api/v1/alerts
-router.get('/', getAllAlerts);
+router.get("/", getAllAlerts);
 
 // GET /api/v1/alerts/barangay/:barangayId
-router.get('/barangay/:barangayId', getAlertsByBarangay);
+router.get("/barangay/:barangayId", getAlertsByBarangay);
 
-// GET /api/v1/alerts/:barangayName
-router.get('/:barangayName', getAlertsByBarangayName);
+// DELETE /api/v1/alerts/all
+router.delete("/all", deleteAllAlerts);
+
+// GET /api/v1/alerts/search
+router.get("/search", getAlertsByBarangayName);
 
 // PATCH /api/v1/alerts/:alertId
-router.patch('/:alertId', updateAlert);
+router.patch("/:alertId", updateAlert);
 
 // DELETE /api/v1/alerts/:alertId
-router.delete('/:alertId', deleteAlert);
+router.delete("/:alertId", deleteAlert);
 
-// DELETE /api/v1/alerts
-router.delete('/', deleteAllAlerts);
-
-module.exports = router; 
+module.exports = router;

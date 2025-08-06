@@ -262,8 +262,8 @@ const deleteAlert = asyncErrorHandler(async (req, res) => {
   const { alertId } = req.params;
 
   try {
-    // Find and delete the alert
-    const alert = await Alert.findByIdAndDelete(alertId);
+    // Find the alert and update its status to ARCHIVED
+    const alert = await Alert.findById(alertId);
     
     if (!alert) {
       return res.status(404).json({
@@ -272,42 +272,41 @@ const deleteAlert = asyncErrorHandler(async (req, res) => {
       });
     }
 
+    alert.status = 'ARCHIVED';
+    await alert.save();
+
     res.status(200).json({
       success: true,
-      message: "Alert deleted successfully",
+      message: "Alert has been archived successfully",
       data: alert
     });
   } catch (error) {
-    console.error("Error deleting alert:", error);
+    console.error("Error archiving alert:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to delete alert",
+      message: "Failed to archive alert",
       error: error.message
     });
   }
 });
 
-const deleteAllAlerts = asyncErrorHandler(async (req, res) => {
+const deleteAllAlerts = async (req, res) => {
   try {
-    // Delete all alerts
-    const result = await Alert.deleteMany({});
+    // Update all active alerts to archived status
+    const result = await Alert.updateMany(
+      { status: 'ACTIVE' },
+      { status: 'ARCHIVED' }
+    );
     
-    res.status(200).json({
-      success: true,
-      message: "All alerts deleted successfully",
-      data: {
-        deletedCount: result.deletedCount
-      }
+    res.json({ 
+      message: "All active alerts have been archived successfully",
+      modifiedCount: result.modifiedCount
     });
   } catch (error) {
-    console.error("Error deleting all alerts:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to delete all alerts",
-      error: error.message
-    });
+    console.error("Error archiving alerts:", error);
+    res.status(500).json({ error: "Failed to archive alerts" });
   }
-});
+};
 
 module.exports = {
   sendDengueAlert,
