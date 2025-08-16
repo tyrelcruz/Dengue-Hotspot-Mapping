@@ -2,18 +2,14 @@ const express = require("express");
 const {
   submitCsvFile,
   retrievePatternRecognitionResults,
-  getLocationRiskLevelByWeather,
-  getAllAlerts,
-  getAlertsByBarangay,
-  getAlertsByBarangayName,
   retrieveTrendsAndPatterns,
   analyzeInterventionEffectivity,
-  getPriorityByCaseDeath,
   analyzeDengueHotspots,
   handleCrowdsourcedReportsAnalysis,
   triggerDengueCaseReportAnalysis,
+  testingAIService,
+  generateRecommendation,
 } = require("../controllers/analyticsController");
-const { findNeighboringBarangays } = require("../utils/geoUtils");
 
 const router = express.Router();
 
@@ -38,11 +34,8 @@ router.post(
   analyzeInterventionEffectivity
 );
 
-// ! NEED TO BE UPDATED
-// router.get("/get-location-weather-risk", getLocationRiskLevelByWeather);
-
-router.get("/case-death-priority", getPriorityByCaseDeath);
-
 router.get("/hotspots", analyzeDengueHotspots);
+
+router.post('/generate-recommendation', generateRecommendation);
 
 module.exports = router;

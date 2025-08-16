@@ -3,7 +3,7 @@ const barangaysData = require("../data/barangays.json");
 const asyncErrorHandler = require("../middleware/asyncErrorHandler");
 const Barangay = require("../models/Barangays");
 const RecommendationTemplate = require("../models/RecommendationTemplates");
-const axios = require("axios");
+const { getRecentCaseCounts } = require("../services/analytics/recentCases");
 
 const getAllBarangays = asyncErrorHandler(async (req, res) => {
   const barangays = await Barangay.find({});
@@ -11,6 +11,8 @@ const getAllBarangays = asyncErrorHandler(async (req, res) => {
   res.status(200).json(barangays);
 });
 
+
+// TODO: Check if this is working
 const getRecentReportsForBarangay = asyncErrorHandler(async (req, res) => {
   const { barangay_name } = req.body;
 
@@ -19,18 +21,15 @@ const getRecentReportsForBarangay = asyncErrorHandler(async (req, res) => {
   }
 
   try {
-    const response = await axios.get(
-      `${process.env.PYTHON_URL}/api/v1/recent-reports?barangay=${encodeURIComponent(
-        barangay_name
-      )}`
-    );
+    const csvPath = "data/main.csv";
+    const caseCounts = await getRecentCaseCounts(csvPath, barangay_name);
 
     return res.status(200).json({
       barangay: barangay_name,
-      reports: response.data,
+      reports: caseCounts,
     });
   } catch (error) {
-    console.error("Error calling FastAPI service:", error.message);
+    console.error("Error getting recent case counts:", error.message);
     return res
       .status(500)
       .json({ message: "Failed to retrieve reports for the barangay." });

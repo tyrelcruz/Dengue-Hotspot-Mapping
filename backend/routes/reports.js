@@ -1,5 +1,6 @@
 const express = require("express");
 const auth = require("../middleware/authentication");
+const uploadImagesToPost = require("../middleware/uploadImagesToPost");
 const {
   getAllReports,
   getReport,
@@ -35,7 +36,7 @@ router.get("/", getAllReports);
 router.get("/:id", getReport);
 router.use(auth);
 
-router.post("/", createReport);
+router.post("/", auth, uploadImagesToPost, createReport);
 router.delete("/all", deleteAllReports);
 router.delete("/:id", deleteReport);
 router.patch("/:id", updateReportStatus);

@@ -29,10 +29,11 @@ async function uploadToImgBB(fileData) {
     throw new Error("Failed to upload image to ImgBB");
   }
 }
+
 // Create a new Admin Post
 const createAdminPost = asyncErrorHandler(async (req, res) => {
-  const { title, content, publishDate, category, references, images } =
-    req.body;
+  const { title, content, publishDate, category, references, images } = req.body;
+  
   console.log("REQ BODY:", req.body); // Logs the form data
   console.log("REQ FILES:", req.files);
 
@@ -41,35 +42,9 @@ const createAdminPost = asyncErrorHandler(async (req, res) => {
       .status(403)
       .json({ error: "You are not authorized to create posts." });
   }
+  
   const adminId = req.user.userId;
 
-  // Check if the file is present in the request
-  if (req.files && req.files.images) {
-    // Ensure it's in the expected array or object format
-    const imageFiles = Array.isArray(req.files.images)
-      ? req.files.images
-      : [req.files.images];
-
-    imageFiles.forEach((file) => {
-      console.log("Uploaded Image:", file.name); // Log the name of the uploaded image
-      console.log("Image Size:", file.size); // Log the size of the uploaded image
-
-      // You can save the image file here (e.g., using the mv method)
-      const uploadPath = path.join(__dirname, "uploads", file.name); // Set the upload directory
-      console.log("UPLOADDD" + uploadPath);
-      // Move the uploaded file to the desired location
-      file.mv(uploadPath, (err) => {
-        if (err) {
-          return res
-            .status(500)
-            .json({ error: "File upload failed", details: err });
-        }
-        console.log(`File uploaded to ${uploadPath}`);
-      });
-    });
-  } else {
-    console.log("No images found in the request.");
-  }
   // Validate required fields
   const missingFields = [];
 
@@ -80,35 +55,44 @@ const createAdminPost = asyncErrorHandler(async (req, res) => {
 
   if (missingFields.length > 0) {
     return res.status(400).json({
-      error: `Please provide the following required fields: ${missingFields.join(
-        ", "
-      )}`,
+      error: `Please provide the following required fields: ${missingFields.join(", ")}`,
     });
   }
 
-  // Continue with creating the report...
+  // Handle image uploads to ImgBB
   const imageUrls = [];
   if (req.files && req.files.images) {
+    console.log("Processing images for upload to ImgBB...");
+    
     const imageFiles = Array.isArray(req.files.images)
       ? req.files.images
       : [req.files.images];
+
     for (const file of imageFiles) {
       try {
-        const imgbbResponse = await uploadToImgBB(file.data); // Assuming `file.data` contains the image data
-        imageUrls.push(imgbbResponse.url); // Store the URL returned by ImgBB
+        console.log(`Uploading ${file.name} to ImgBB...`);
+        const imgbbResponse = await uploadToImgBB(file.data);
+        imageUrls.push(imgbbResponse.url);
+        console.log(`Successfully uploaded ${file.name} to ImgBB: ${imgbbResponse.url}`);
       } catch (error) {
         console.error("ImgBB upload error:", error);
-        return res.status(500).json({ error: "Image upload failed" });
+        return res.status(500).json({ 
+          error: "Image upload failed", 
+          details: error.message 
+        });
       }
     }
+  } else {
+    console.log("No images found in the request.");
   }
 
+  // Create the admin post
   const adminPost = await AdminPost.create({
     title,
     content,
     publishDate,
     category,
-    images: imageUrls, // Store image URLs
+    images: imageUrls, // Store ImgBB URLs
     references,
     adminId,
   });
@@ -116,8 +100,10 @@ const createAdminPost = asyncErrorHandler(async (req, res) => {
   res.status(201).json({
     message: "Admin Post created successfully.",
     post: adminPost,
+    uploadedImages: imageUrls.length
   });
 });
+
 // Get all AdminPosts
 const getAllAdminPosts = asyncErrorHandler(async (req, res) => {
   const adminPosts = await AdminPost.find({}).sort({ createdAt: -1 });

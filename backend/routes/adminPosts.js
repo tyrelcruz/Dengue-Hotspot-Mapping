@@ -13,11 +13,12 @@ const {
 } = require("../controllers/adminPostController");
 
 const auth = require("../middleware/authentication"); // Import auth middleware
+const uploadImagesToPost = require("../middleware/uploadImagesToPost");
 
 const router = express.Router();
 
 // Create a new AdminPost (requires authentication)
-router.post("/", auth, createAdminPost);
+router.post("/", auth, uploadImagesToPost, createAdminPost);
 
 // Get all AdminPosts (requires authentication)
 router.get("/", getAllAdminPosts); // Added auth middleware here

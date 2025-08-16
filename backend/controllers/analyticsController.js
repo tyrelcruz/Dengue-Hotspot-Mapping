@@ -1,7 +1,5 @@
-const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
-const FormData = require("form-data");
 const asyncErrorHandler = require("../middleware/asyncErrorHandler");
 const Barangay = require("../models/Barangays");
 const weatherAnalysis = require("../services/weatherRiskService");
@@ -9,90 +7,33 @@ const Intervention = require("../models/Interventions");
 const { analyzeHotspots } = require("../services/hotspotAnalysisService");
 const {
   analyzeCrowdsourcedReports,
+  updateBarangayStatuses,
 } = require("../services/reportAnalysisService");
+const {
+  analyzeDengueAlerts,
+} = require("../services/analytics/patternRecognition");
+const { getDeathPriorityData } = require("../services/analytics/deathPriority");
+const { returnWeeklyTrends } = require("../services/analytics/weeklyTrends");
+const {
+  returnCaseCountsForIntervention,
+} = require("../services/analytics/interventionsEffectivityAnalysis");
+const {
+  processCsvToSummary,
+} = require("../utils/analytics/processAndWriteMasterCsv");
+const extractSources = require("../utils/extractSources");
 
-console.log(process.env.PYTHON_URL);
-// Function to validate CSV content
-const validateCsvContent = (filePath) => {
-  return new Promise((resolve, reject) => {
-    const fileContent = fs.readFileSync(filePath, "utf-8");
-    const lines = fileContent.split("\n").filter((line) => line.trim());
+const { GoogleGenAI } = require("@google/genai");
 
-    if (lines.length < 2) {
-      reject(
-        new Error(
-          "CSV file must contain at least a header row and one data row"
-        )
-      );
-      return;
-    }
-
-    // Check header
-    const headers = lines[0].split(",").map((h) => h.trim());
-    const requiredHeaders = [
-      "DAdmit",
-      "DOnset",
-      "Barangay",
-      "Outcome",
-      "City",
-    ];
-    const missingHeaders = requiredHeaders.filter((h) => !headers.includes(h));
-
-    if (missingHeaders.length > 0) {
-      reject(
-        new Error(`Missing required columns: ${missingHeaders.join(", ")}`)
-      );
-      return;
-    }
-
-    // Validate data rows
-    const errors = [];
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(",").map((v) => v.trim());
-
-      // Check if we have all required values
-      if (values.length !== headers.length) {
-        errors.push(`Row ${i}: Invalid number of columns`);
-        continue;
-      }
-
-      // Check for empty values in any column
-      values.forEach((value, colIndex) => {
-        if (!value) {
-          errors.push(`Row ${i}: Empty value found in column "${headers[colIndex]}"`);
-        }
-      });
-
-      // Validate date format (MM/DD/YYYY)
-      const dateRegex = /^(0?[1-9]|1[0-2])\/(0?[1-9]|[12]\d|3[01])\/\d{4}$/;
-      if (!dateRegex.test(values[0])) {
-        errors.push(
-          `Row ${i}: Invalid date format for DAdmit. Expected M/D/YYYY or MM/DD/YYYY`
-        );
-      }
-      if (!dateRegex.test(values[1])) {
-        errors.push(
-          `Row ${i}: Invalid date format for DOnset. Expected M/D/YYYY or MM/DD/YYYY`
-        );
-      }
-    }
-
-    if (errors.length > 0) {
-      reject(new Error(`CSV validation failed:\n${errors.join("\n")}`));
-      return;
-    }
-
-    resolve(true);
-  });
-};
-
-// Controller function for allowing the admin to upload a CSV file, and that file being submitted to the Python backend for processing
+// * FUNCTIONING, UPDATE LATER
 const submitCsvFile = asyncErrorHandler(async (req, res) => {
-  try {
-    if (!req.files) {
-      return res.status(400).json({ error: "No file uploaded " });
-    }
+  let storedFilePath;
 
+  try {
+    // ? VALIDATION CHECK FOR FILES
+    // * Checks if there are any files.
+    if (!req.files) return res.status(400).json({ error: "No file uploaded" });
+
+    // * Following checks if there is only one file uploaded.
     const fileKeys = Object.keys(req.files);
     if (fileKeys.length > 1) {
       return res
@@ -101,104 +42,96 @@ const submitCsvFile = asyncErrorHandler(async (req, res) => {
     }
 
     if (!req.files.file) {
-      return res
-        .status(400)
-        .json({ error: "File must be uploaded with field name 'file'" });
+      return res.status(400).json({
+        error: "The file must be uploaded with the field name 'file'.",
+      });
     }
 
     if (Array.isArray(req.files.file)) {
-      return res.status(400).json({
-        error:
-          "Only one file can be uploaded. Multiple files detected with field name 'file'",
-      });
+      return res
+        .status(400)
+        .json({ error: "Only one file can be uploaded at a time." });
     }
 
     const uploadedFile = req.files.file;
 
+    // * Checks if the uploaded file is a CSV file.
     if (!uploadedFile.name.toLowerCase().endsWith(".csv")) {
       return res.status(400).json({ error: "Only CSV files are allowed." });
     }
 
-    const uploadDir = path.join(__dirname, "..", "uploads");
+    // ! Dynamic upload directory based on environment, replace as necessary when deploying to Render or Vercel.
+    const uploadDir =
+      process.env.NODE_ENV === "production"
+        ? path.join("/tmp", "uploads") // ! Check if this is how it works on Render or Vercel
+        : path.join(__dirname, "..", "uploads"); // * Local
+
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
-    const tempFilePath = path.join(
+    storedFilePath = path.join(
       uploadDir,
-      `${Date.now()}_${uploadedFile.name}`
+      //`${Date.now()}_${uploadedFile.name}`
+      uploadedFile.name
     );
 
-    await uploadedFile.mv(tempFilePath);
+    await uploadedFile.mv(storedFilePath);
 
-    // Validate CSV content before proceeding
+    // Process the uploaded CSV file using the enhanced processCsvToSummary function
     try {
-      await validateCsvContent(tempFilePath);
-    } catch (validationError) {
-      // Clean up the temporary file
-      fs.unlinkSync(tempFilePath);
+      // Would there be any difference from procssing an incomplete CSV file with a yearly summary file? Because, if there isn't, then what will change is the name of the directory where the file will be stored in. Uploads to data immediately, under a yearly directory, where yearly files are named 2020.csv, 2021.csv, etc.
+      // validation checks, wherein if trying to upload yearly file
+      const processingResult = await processCsvToSummary(
+        storedFilePath,
+        path.join("data", "main.csv")
+      );
+
+      if (process.env.NODE_ENV !== "production") {
+        console.log("CSV processing completed successfully");
+        console.log(`Rows processed: ${processingResult.rowsRead}`);
+        console.log(`Valid rows: ${processingResult.validRows}`);
+        console.log(
+          `Records aggregated: ${processingResult.recordsAggregated}`
+        );
+
+        if (processingResult.validationErrors.length > 0) {
+          console.log(
+            `Validation warnings: ${processingResult.validationErrors.length} issues found`
+          );
+        }
+      }
+    } catch (processingError) {
+      if (storedFilePath && fs.existsSync(storedFilePath)) {
+        await fs.promises.unlinkSync(storedFilePath);
+      }
+
       return res.status(400).json({
-        error: "CSV validation failed",
-        details: validationError.message,
+        error: "CSV processing failed",
+        details: processingError.message,
       });
     }
 
-    const formData = new FormData();
-    formData.append("file", fs.createReadStream(tempFilePath), {
-      filename: uploadedFile.name,
-    });
-
-    const contentLength = await new Promise((resolve, reject) => {
-      formData.getLength((err, length) => {
-        if (err) reject(err);
-        else resolve(length);
-      });
-    });
-
-    // Upload CSV to Python backend
-    const pythonUploadUrl = process.env.PYTHON_URL + "/api/v1/upload-csv";
-    console.log("Uploading CSV to:", pythonUploadUrl);
-    const uploadResponse = await axios.post(
-      pythonUploadUrl,
-      formData,
-      {
-        headers: {
-          ...formData.getHeaders(),
-          "Content-Length": contentLength,
-        },
-      }
-    );
-
-    // Clean up the temporary file
-    fs.unlink(tempFilePath, (unlinkErr) => {
-      if (unlinkErr) {
-        console.error("Failed to delete uploaded file:", unlinkErr);
-      }
-    });
-
     return res.status(200).json({
-      message: "CSV file uploaded successfully",
-      upload_data: uploadResponse.data,
+      message:
+        "CSV file uploaded, processed, and master CSV updated successfully!",
     });
-  } catch (error) {
-    console.error("Error uploading file:", error);
+  } catch (uploadError) {
+    console.error("Error uploading file: ", uploadError);
 
-    if (req.files && req.files.file && req.files.file.tempFilePath) {
-      try {
-        fs.unlinkSync(req.files.file.tempFilePath);
-      } catch (cleanupError) {
-        console.error("Error cleaning up temp file:", cleanupError);
-      }
+    if (storedFilePath && fs.existsSync(storedFilePath)) {
+      await fs.promises.unlinkSync(storedFilePath);
     }
 
     return res.status(500).json({
-      error: "Failed to process file upload.",
-      details: error.message,
+      error: "Error in file upload process",
+      ...(process.env.NODE_ENV !== "production" && { details: error.message }),
     });
   }
 });
 
 // PASSED
+
 const retrievePatternRecognitionResults = asyncErrorHandler(
   async (req, res) => {
     const { barangay, pattern, topCheck } = req.query;
@@ -211,7 +144,7 @@ const retrievePatternRecognitionResults = asyncErrorHandler(
       }
 
       if (pattern) {
-        query["status_and_recommendation.pattern_based.status"] = pattern;
+        query["status.pattern"] = pattern;
       }
 
       let barangays;
@@ -228,10 +161,8 @@ const retrievePatternRecognitionResults = asyncErrorHandler(
         // Create a filtered result object with only the required fields
         return {
           name: barangayObj.name,
-          pattern: barangayObj.status_and_recommendation.pattern_based.status,
-          alert: barangayObj.status_and_recommendation.pattern_based.alert,
-          recommendation:
-            barangayObj.status_and_recommendation.pattern_based.recommendation,
+          pattern: barangayObj.status.pattern,
+          recommendation: barangayObj.recommendation,
         };
       });
 
@@ -249,96 +180,60 @@ const retrievePatternRecognitionResults = asyncErrorHandler(
   }
 );
 
-// PASSED
+// TODO: Check if this is working, especially the updateBarangayStatuses function
 const triggerDengueCaseReportAnalysis = asyncErrorHandler(async (req, res) => {
   try {
-    const analyzePatternsUrl = process.env.PYTHON_URL + "/api/v1/analyze-patterns";
-    console.log("Triggering pattern analysis at:", analyzePatternsUrl);
-    const response = await axios.get(analyzePatternsUrl);
+    console.log("Triggering dengue case report analysis...");
+
+    // Call the analyzeDengueAlerts function
+    const patternAlerts = await analyzeDengueAlerts();
+
+    // Call the getDeathPriorityData function
+    const deathAlerts = await getDeathPriorityData("data/main.csv");
+
+    const combinedAlerts = {};
+
+    for (const alert of patternAlerts) {
+      if (alert.barangay !== null) {
+        const barangayKey = alert.barangay.toLowerCase();
+        combinedAlerts[barangayKey] = {
+          barangay: alert.barangay,
+          pattern: alert.pattern,
+          recommendation: alert.recommendation,
+        };
+      }
+    }
+
+    for (const alert of deathAlerts) {
+      if (alert.barangay !== null) {
+        const barangayKey = alert.barangay.toLowerCase();
+        if (combinedAlerts[barangayKey]) {
+          combinedAlerts[barangayKey].deaths = alert.deaths;
+        } else {
+          combinedAlerts[barangayKey] = {
+            barangay: alert.barangay,
+            deaths: alert.deaths,
+          };
+        }
+      }
+    }
+
+    const allAlerts = Object.values(combinedAlerts);
+
+    // await updateBarangayStatuses(allAlerts);
 
     return res.status(200).json({
       success: true,
-      message: response.data.message,
+      message: "Dengue case report analysis completed successfully",
+      alerts: allAlerts,
+      count: allAlerts.length,
     });
   } catch (error) {
     console.error("Error in triggerDengueCaseReportAnalysis:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to trigger dengue case report analysis",
-      error: error.response?.data?.detail || error.message,
-    });
-  }
-});
-
-// DIDN'T CHECK CUZ WASN'T USED
-const getLocationRiskLevelByWeather = asyncErrorHandler(async (req, res) => {
-  const { selectedLatitude, selectedLongitude } = req.query;
-
-  if (
-    selectedLatitude === undefined ||
-    selectedLongitude === undefined ||
-    selectedLatitude === "" ||
-    selectedLongitude === ""
-  ) {
-    return res.status(400).json({
-      status: "error",
-      message: "Both latitude and longitude are required.",
-    });
-  }
-
-  try {
-    const weatherDataResponse = await axios.get(
-      "https://weather.googleapis.com/v1/currentConditions:lookup",
-      {
-        params: {
-          key: process.env.GOOGLE_MAPS_WEATHER_API_KEY,
-          "location.latitude": selectedLatitude,
-          "location.longitude": selectedLongitude,
-        },
-      }
-    );
-
-    const weatherData = weatherDataResponse.data;
-
-    const extractedData = {
-      temperature: weatherData.temperature.degrees,
-      relativeHumidity: weatherData.relativeHumidity,
-      rainfall: weatherData.precipitation.qpf.quantity,
-    };
-
-    const result = await weatherAnalysis(
-      extractedData.rainfall,
-      extractedData.temperature,
-      extractedData.relativeHumidity
-    );
-
-    let recommendation;
-
-    if (result === "HIGH") {
-      recommendation =
-        "Risk Level: HIGH.\nStay alert! Based on the analyzed weather data, your area is an optimal breeding ground for mosquitoes!";
-    } else if (result === "MODERATE") {
-      recommendation =
-        "Risk Level: MODERATE.\nTread with caution! Based on the analyzed weather data, your area shows some potential for dengue to thrive.";
-    } else {
-      recommendation =
-        "Risk Level: LOW.\nBased on the analyzed data, your area is safe from dengue as of the moment.";
-    }
-    res.status(200).json({
-      status: "success",
-      data: {
-        extractedData,
-        recommendation,
-      },
-    });
-  } catch (error) {
-    console.error(
-      "Error fetching weather data: ",
-      error.response?.data || error.message
-    );
-    return res.status(500).json({
-      status: "error",
-      message: "Failed to fetch weather data",
+      error: error.message,
     });
   }
 });
@@ -362,56 +257,42 @@ const retrieveTrendsAndPatterns = asyncErrorHandler(async (req, res) => {
     });
   }
 
+  const csvPath = "data/main.csv";
+  const weeksToAnalyze = number_of_weeks ? parseInt(number_of_weeks) : 4;
+
   try {
-    const weeklyTrendsUrl = process.env.PYTHON_URL + "/api/v1/weekly-trends";
-    console.log("Retrieving weekly trends from:", weeklyTrendsUrl);
-    const response = await axios.post(
-      weeklyTrendsUrl,
-      {
-        barangay_name,
-        number_of_weeks: number_of_weeks
-          ? parseInt(number_of_weeks)
-          : undefined,
-      }
+    console.log(
+      "Retrieving weekly trends for:",
+      barangay_name,
+      "with",
+      weeksToAnalyze,
+      "weeks"
+    );
+    const result = await returnWeeklyTrends(
+      barangay_name,
+      weeksToAnalyze,
+      csvPath
     );
 
     return res.status(200).json({
       success: true,
       message: "Weekly trends retrieved successfully!",
-      data: response.data,
+      data: result,
     });
   } catch (error) {
     console.error("Error retrieving weekly trends:", error);
 
-    if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
-      return res.status(error.response.status).json({
-        success: false,
-        error: "Failed to retrieve weekly trends",
-        details: error.response.data,
-      });
-    } else if (error.request) {
-      // The request was made but no response was received
-      return res.status(503).json({
-        success: false,
-        error: "Analysis service is not responding",
-        details: "Could not connect to weekly trends service",
-      });
-    } else {
-      // Something happened in setting up the request that triggered an Error
-      return res.status(500).json({
-        success: false,
-        error: "Failed to process weekly trends request",
-        details: error.message,
-      });
-    }
+    return res.status(500).json({
+      success: false,
+      error: "Failed to process weekly trends request",
+      details: error.message,
+    });
   }
 });
 
 // PASSED
 const analyzeInterventionEffectivity = asyncErrorHandler(async (req, res) => {
-  console.log("Analyzing intervention effectivityyyyy");
+  console.log("Analyzing intervention effectivity...");
   const { intervention_id } = req.body;
 
   if (!intervention_id) {
@@ -457,14 +338,15 @@ const analyzeInterventionEffectivity = asyncErrorHandler(async (req, res) => {
     .split("T")[0];
 
   try {
-    const interventionEffectivityUrl = process.env.PYTHON_URL + "/api/v1/analyze-intervention-effectivity";
-    console.log("Analyzing intervention effectivity at:", interventionEffectivityUrl);
-    const response = await axios.post(
-      interventionEffectivityUrl,
-      {
-        barangay,
-        intervention_date: formattedInterventionDate,
-      }
+    console.log(
+      `Analyzing intervention effectivity for ${barangay} on ${formattedInterventionDate}`
+    );
+
+    const csvPath = "data/main.csv";
+    const analysis = await returnCaseCountsForIntervention(
+      barangay,
+      formattedInterventionDate,
+      csvPath
     );
 
     return res.status(200).json({
@@ -479,57 +361,19 @@ const analyzeInterventionEffectivity = asyncErrorHandler(async (req, res) => {
         status: intervention.status,
         address: intervention.address,
         admin_name: intervention.adminId?.username || "Unknown Admin",
-        specific_location: intervention.specific_location.coordinates || "Not specified."
+        specific_location:
+          intervention.specific_location.coordinates || "Not specified.",
       },
-      analysis: response.data,
+      analysis: analysis,
     });
   } catch (error) {
-    // Handle different types of errors from the FastAPI service
-    if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
-      return res.status(error.response.status).json({
-        success: false,
-        message: "Error analyzing intervention effectivity",
-        error: error.response.data.detail || error.response.data,
-      });
-    } else if (error.request) {
-      // The request was made but no response was received
-      return res.status(503).json({
-        success: false,
-        message: "FastAPI service is not responding",
-        error: "Could not connect to analysis service",
-      });
-    } else {
-      // Something happened in setting up the request that triggered an Error
-      return res.status(500).json({
-        success: false,
-        message: "Error processing intervention analysis",
-        error: error.message,
-      });
-    }
-  }
-});
-
-// HAVEN'T CHECKED YET
-const getPriorityByCaseDeath = asyncErrorHandler(async (req, res) => {
-  const sortBy = req.query.sortBy || "case_count";
-
-  const validSortOptions = ["case_count", "recent_date", "alphabetical"];
-  if (!validSortOptions.includes(sortBy)) {
-    return res.status(400).json({
-      error: `Invalid sortBy option requested.`,
+    console.error("Error analyzing intervention effectivity:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error processing intervention analysis",
+      error: error.message,
     });
   }
-
-  const fastApiUrl = process.env.PYTHON_URL + "/api/v1/death-priority";
-  console.log("Getting death priority from:", fastApiUrl);
-  const { data } = await axios.get(fastApiUrl);
-
-  res.status(200).json({
-    message: `Sorted by: ${sortBy}`,
-    data,
-  });
 });
 
 // DIDN'T CHECK CUZ WASN'T USED
@@ -565,16 +409,6 @@ const analyzeDengueHotspots = asyncErrorHandler(async (req, res) => {
   }
 });
 
-// const getBreedingSitesAnalytics = asyncErrorHandler(async (req, res) => {
-//   // send a trigger to python backend to retrieve from the monthly??? count of reports per barangay and check to see if the count is greater than something something
-//   // set up a 2-week basis of reports with the valid status, then tally up for each barangay that has a report, calendar-basis, not by rolling window
-//   // add to barangay collection a field of the count of these reports
-//   // go for a low, medium, high basis of counts for the reports, so 0 - 3, 4 - 9, 10+
-//   // recommendations field in barangay
-//   // subfields are: pattern_based, report_based, death_based
-
-// });
-
 // PASSED
 const handleCrowdsourcedReportsAnalysis = asyncErrorHandler(
   async (req, res) => {
@@ -600,39 +434,96 @@ const handleCrowdsourcedReportsAnalysis = asyncErrorHandler(
   }
 );
 
-// Check if rightly modified to be a GET request
-// Might be outdated, check instead for getRecentReportsForBarangay in barangayController.js
-const retrieveRecentReports = asyncErrorHandler(async (req, res) => {
-  const { barangay } = req.query;
+// Heatmap functionality
+// database can store the number of dengue cases per barangay per week
 
-  if (!barangay) {
+const generateRecommendation = asyncErrorHandler(async (req, res) => {
+  const { userRole, barangay } = req.body;
+
+  let aiPrompt = "What would you recommend";
+  // let aiPrompt =
+  //   "What do you recommend that we do, considering the current status of the barangay?";
+  let systemInstruction =
+    "You are an expert in dengue prevention and control. You are to generate a recommendation for the barangay based on the provided details.";
+  // let formattingInstruction =
+  //   "When responding, make the response in 3 sentences, bullet form, and concise.";
+  let formattingInstruction = "Your recommendation will be a day to day plan. ";
+  let detailedMessage = "";
+
+  // * AI Settings
+  const ai = new GoogleGenAI({});
+  const groundingTool = {
+    googleSearch: {},
+  };
+  const config = {
+    tools: [groundingTool],
+    systemInstruction: `${systemInstruction} ${formattingInstruction}`,
+  };
+
+  if (!userRole) {
     return res.status(400).json({
-      error: "Barangay name is required",
+      message: 'Required parameters "userRole" or "barangay" are missing.',
     });
   }
 
+  if (userRole !== "admin" && userRole !== "user") {
+    return res.status(400).json({
+      message: "Invalid userRole.",
+    });
+  }
+
+  const barangayData = await Barangay.findOne({ name: barangay });
+
+  if (!barangayData) {
+    return res.status(404).json({
+      message: `Barangay ${barangay} not found in the database.`,
+    });
+  }
+
+  const patternStatus = barangayData.status.pattern;
+  const reportCount = barangayData.status.crowdsourced_reports_count;
+  const deathCount = barangayData.status.deaths;
+
+  if (patternStatus === "") {
+    detailedMessage = `Over the past 2 weeks up until now, there have been no identified pattern of dengue cases in Brgy. ${barangay} of Quezon City, with ${reportCount} crowdsourced reports of potential dengue breeding sites, and ${deathCount} reports of dengue case fatalities.`;
+  } else {
+    detailedMessage = `Over the past 2 weeks up until now, there have been an identified ${patternStatus} pattern of dengue cases in Brgy. ${barangay} of Quezon City, with ${reportCount} crowdsourced reports of potential dengue breeding sites,and ${deathCount} reports of dengue case fatalities.`;
+  }
+
+  if (userRole === "admin") {
+    aiPrompt +=
+      " the surveillance division to do to prevent dengue in this barangay, considering the possible dengue factors. Include a day to day action plan and the factors that you considered.";
+    // aiPrompt += " Especially as a disease surveillance officer.";
+  } else {
+    aiPrompt +=
+      " for the citizens of this barangay to do to prevent and protect themselves from dengue.";
+    // aiPrompt += " Especially as a community resident.";
+  }
+
   try {
-    const recentReportsUrl = process.env.PYTHON_URL + "/api/v1/recent-reports";
-    console.log("Retrieving recent reports from:", recentReportsUrl);
-    const response = await axios.get(
-      recentReportsUrl,
-      {
-        params: {
-          barangay: barangay,
-        },
-      }
-    );
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `${detailedMessage} ${aiPrompt}`,
+      config,
+    });
+
+    const sources = extractSources(response);
+
+    await Barangay.findByIdAndUpdate(barangayData._id, {
+      recommendation: response.text,
+      last_analysis_time: new Date(),
+    });
 
     return res.status(200).json({
-      success: true,
-      message: "Recent reports retrieved successfully",
-      data: response.data,
+      response: response.text,
+      sources: sources,
+      message: "Recommendation generated and saved successfully.",
     });
   } catch (error) {
-    console.error("Error retrieving recent reports:", error);
+    console.error("Error in generateRecommendation:", error);
     return res.status(500).json({
-      error: "Failed to retrieve recent reports",
-      details: error.response?.data || error.message,
+      message: "Failed to process AI service request",
+      error: error.message,
     });
   }
 });
@@ -640,12 +531,10 @@ const retrieveRecentReports = asyncErrorHandler(async (req, res) => {
 module.exports = {
   submitCsvFile,
   retrievePatternRecognitionResults,
-  getLocationRiskLevelByWeather,
   retrieveTrendsAndPatterns,
   analyzeInterventionEffectivity,
-  getPriorityByCaseDeath,
   analyzeDengueHotspots,
   handleCrowdsourcedReportsAnalysis,
   triggerDengueCaseReportAnalysis,
-  retrieveRecentReports,
+  generateRecommendation,
 };

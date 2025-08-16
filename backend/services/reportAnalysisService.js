@@ -44,17 +44,12 @@ const getBarangayReportCounts = async () => {
 
 const updateBarangayStatuses = async (reportCounts) => {
   const bulkOperations = reportCounts.map(({ _id: barangayName, count }) => {
-    const statusInfo = determineStatusInfo(count, barangayName);
-    
     return {
       updateOne: {
         filter: { name: barangayName },
         update: {
           $set: {
-            "status_and_recommendation.report_based.status": statusInfo.status,
-            "status_and_recommendation.report_based.count": count,
-            "status_and_recommendation.report_based.alert": statusInfo.alert,
-            "status_and_recommendation.report_based.recommendation": statusInfo.recommendation
+            "status.crowdsourced_reports_count": count
           }
         }
       }

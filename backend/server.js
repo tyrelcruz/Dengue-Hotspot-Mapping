@@ -1,0 +1,126 @@
+require("dotenv").config();
+const path = require("path");
+const cors = require("cors");
+const fileUpload = require("express-fileupload");
+// const { accessControl } = require("./middleware/accessControl");
+const errorController = require("./errors/error-controller");
+
+const express = require("express");
+const app = express();
+
+// Middleware
+app.use(
+  cors({
+    origin: "*",
+    credentials: true,
+  })
+);
+
+// ? Uncomment if CORS policy restriction is needed.
+// app.use(accessControl);
+
+// Body parsing
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// File upload handling
+app.use(
+  fileUpload({
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB
+    },
+    abortOnLimit: true,
+    useTempFiles: false,
+    createParentPath: true, // Creates upload directory if needed
+  })
+);
+
+// Database connection
+const { connectDB, closeConnection } = require("./db/connect");
+
+// Routes
+app.get("/", (req, res) => {
+  res.json({ message: "Welcome to BuzzMap API Server" });
+});
+
+// const authRoutes = require("./routes/auth");
+// const reportsRoutes = require("./routes/reports");
+// const analyticsRoutes = require("./routes/analytics");
+// // ! There exists a notificationsRoutes.js file, check on that.
+// const notificationsRoutes = require("./routes/notifications");
+// const interventionsRoutes = require("./routes/interventions");
+// const adminPostsRoutes = require("./routes/adminPosts");
+// const commentsRoutes = require("./routes/adminPostComments");
+// const alertsRoutes = require("./routes/alerts");
+// const barangaysRoutes = require("./routes/barangays");
+// const accountsRoutes = require("./routes/accounts");
+
+app.use("/api/v1/auth", require("./routes/auth"));
+app.use("/api/v1/reports", require("./routes/reports"));
+app.use("/api/v1/analytics", require("./routes/analytics"));
+app.use("/api/v1/notifications", require("./routes/notifications"));
+app.use("/api/v1/interventions", require("./routes/interventions"));
+app.use("/api/v1/adminposts", require("./routes/adminPosts"));
+app.use("/api/v1/comments", require("./routes/adminPostComments"));
+app.use("/api/v1/alerts", require("./routes/alerts"));
+app.use("/api/v1/barangays", require("./routes/barangays"));
+app.use("/api/v1/accounts", require("./routes/accounts"));
+app.use("/api/v1/comments", require("./routes/comments"));
+
+// Error handling
+app.use(errorController);
+
+
+
+// Server startup function
+const start = async () => {
+  try {
+    await connectDB(process.env.MONGO_URI);
+    const server = app.listen(process.env.PORT, () => {
+      console.log(`Server running on port ${process.env.PORT}`);
+    });
+
+    // Handle server errors
+    server.on("error", (error) => {
+      if (error.code === "EADDRINUSE") {
+        console.log(
+          `Port ${process.env.PORT} is busy, trying ${process.env.PORT + 1}`
+        );
+        server.close();
+        app.listen(process.env.PORT + 1, () => {
+          console.log(`Server running on port ${process.env.PORT + 1}`);
+        });
+      } else {
+        console.error("Server error:", error);
+      }
+    });
+
+    // Graceful shutdown for Vercel
+    process.on("SIGTERM", async () => {
+      console.log("SIGTERM received, shutting down gracefully...");
+      server.close(async () => {
+        await closeConnection();
+        process.exit(0);
+      });
+    });
+
+    process.on("SIGINT", async () => {
+      console.log("SIGINT received, shutting down gracefully...");
+      server.close(async () => {
+        await closeConnection();
+        process.exit(0);
+      });
+    });
+  } catch (error) {
+    console.error("Server startup failed:", error);
+    process.exit(1);
+  }
+};
+
+// Only start the server if this file is run directly (not imported)
+if (require.main === module) {
+  start();
+}
+
+// Export the app for Vercel
+module.exports = app;

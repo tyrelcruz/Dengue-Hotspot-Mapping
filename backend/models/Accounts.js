@@ -89,6 +89,10 @@ const accountSchema = new Schema(
       type: String,
       default: "",
       maxLength: [500, "Bio cannot exceed 500 characters"],
+      set: function(value) {
+        // Ensure bio is always a string, never null or undefined
+        return value == null ? "" : value;
+      }
     },
   },
   {

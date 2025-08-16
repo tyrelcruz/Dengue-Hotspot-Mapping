@@ -635,6 +635,11 @@ const getUserProfile = async (req, res) => {
       "_id username email role authProvider status createdAt updatedAt profilePhotoUrl bio"
     );
 
+    // Ensure bio exists
+    if (!account.bio) {
+      account.bio = "";
+    }
+
     if (!account) {
       return res.status(404).json({ error: "Account not found." });
     }
@@ -696,7 +701,7 @@ const getUserProfile = async (req, res) => {
         role: account.role,
         status: account.status,
         profilePhotoUrl: account.profilePhotoUrl,
-        bio: account.bio,
+        bio: account.bio || "",
         joinedDate: account.createdAt,
         lastUpdated: account.updatedAt
       },
@@ -745,7 +750,7 @@ const getBasicProfile = async (req, res) => {
     res.status(200).json({
       username: account.username,
       profilePhotoUrl: account.profilePhotoUrl,
-      bio: account.bio
+      bio: account.bio || ""
     });
   } catch (error) {
     console.error("Error fetching basic profile:", error);
