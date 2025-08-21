@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class PatternRecognitionData {
   final String name;
@@ -39,6 +40,44 @@ class PatternRecognitionData {
   }
 }
 
+class RecommendationData {
+  final String recommendation;
+  final List<String> factors;
+  final String summary;
+  final List<Map<String, String>> sources;
+  final String pattern;
+  final int reports;
+  final int deaths;
+  final String message;
+
+  RecommendationData({
+    required this.recommendation,
+    required this.factors,
+    required this.summary,
+    required this.sources,
+    required this.pattern,
+    required this.reports,
+    required this.deaths,
+    required this.message,
+  });
+
+  factory RecommendationData.fromJson(Map<String, dynamic> json) {
+    return RecommendationData(
+      recommendation: json['recommendation'] ?? '',
+      factors: List<String>.from(json['factors'] ?? []),
+      summary: json['summary'] ?? '',
+      sources: (json['sources'] as List<dynamic>?)
+              ?.map((source) => Map<String, String>.from(source))
+              .toList() ??
+          [],
+      pattern: json['pattern'] ?? '',
+      reports: json['reports'] ?? 0,
+      deaths: json['deaths'] ?? 0,
+      message: json['message'] ?? '',
+    );
+  }
+}
+
 class RecommendationsWidget extends StatefulWidget {
   final String severity;
   final Map<String, String> hazardRiskLevels;
@@ -63,14 +102,17 @@ class RecommendationsWidget extends StatefulWidget {
 
 class _RecommendationsWidgetState extends State<RecommendationsWidget> {
   PatternRecognitionData? _patternData;
+  RecommendationData? _recommendationData;
   bool _isLoading = false;
   String? _error;
   bool _isDengueExpanded = false;
+  bool _showSources = false;
 
   @override
   void initState() {
     super.initState();
     _fetchPatternData();
+    _fetchRecommendationData();
   }
 
   @override
@@ -82,6 +124,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
       print(
           'Location changed: ${widget.selectedBarangay} (${widget.latitude}, ${widget.longitude})');
       _fetchPatternData();
+      _fetchRecommendationData();
     }
   }
 
@@ -166,6 +209,76 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
         );
       });
     }
+  }
+
+  Future<void> _fetchRecommendationData() async {
+    try {
+      print('Fetching recommendation data for: ${widget.selectedBarangay}');
+
+      final response = await http.post(
+        Uri.parse('${Config.baseUrl}/api/v1/analytics/generate-recommendation'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'userRole': 'user',
+          'barangay': widget.selectedBarangay,
+        }),
+      );
+
+      print('Recommendation API Response Status: ${response.statusCode}');
+      print('Recommendation API Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _recommendationData = RecommendationData.fromJson(data);
+        });
+        print('Recommendation data loaded successfully');
+      } else {
+        print('Failed to fetch recommendation data: ${response.statusCode}');
+        // Set default recommendation data on error
+        setState(() {
+          _recommendationData = RecommendationData(
+            recommendation: '',
+            factors: [],
+            summary: 'Unable to load recommendations at this time.',
+            sources: [],
+            pattern: '',
+            reports: 0,
+            deaths: 0,
+            message: 'Failed to load recommendations',
+          );
+        });
+      }
+    } catch (e) {
+      print('Error fetching recommendation data: $e');
+      // Set default recommendation data on error
+      setState(() {
+        _recommendationData = RecommendationData(
+          recommendation: '',
+          factors: [],
+          summary: 'Unable to load recommendations at this time.',
+          sources: [],
+          pattern: '',
+          reports: 0,
+          deaths: 0,
+          message: 'Error loading recommendations',
+        );
+      });
+    }
+  }
+
+  Future<void> _launchSourceUrl(String url) async {
+    try {
+      final uri = Uri.tryParse(url);
+      if (uri == null) return;
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open link')),
+        );
+      }
+    } catch (_) {}
   }
 
   Color _getRiskColor(String riskLevel) {
@@ -451,18 +564,78 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
   List<Widget> _getPreventiveActions(String riskLevel) {
     final actions = <Widget>[];
 
-    if (_patternData?.userRecommendation != null &&
-        _patternData!.userRecommendation!.isNotEmpty) {
-      // Split the recommendations by newline and create action items
-      final recommendations = _patternData!.userRecommendation!.split('\n');
-      for (var i = 0; i < recommendations.length; i++) {
-        final recommendation = recommendations[i].trim();
-        if (recommendation.isNotEmpty) {
-          actions.add(_buildActionItem('${i + 1}. $recommendation'));
+    if (_recommendationData?.summary != null &&
+        _recommendationData!.summary.isNotEmpty) {
+      // Use the summary from the API as the main preventive action
+      actions.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            _recommendationData!.summary,
+            style: TextStyle(
+              color: Colors.grey.shade700,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ),
+      );
+
+      // Add additional context if available
+      if (_recommendationData!.factors.isNotEmpty) {
+        actions.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 8),
+            child: Text(
+              'Key Factors Considered:',
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        );
+
+        for (var factor in _recommendationData!.factors.take(3)) {
+          actions.add(_buildActionItem('• $factor'));
         }
       }
+    } else if (_recommendationData == null) {
+      // Show a single centered loading indicator under the header
+      actions.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Center(
+            child: Column(
+              children: [
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Generating AI Recommendations...',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 12.5,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     } else {
-      // Fallback to default recommendations if no user recommendations are available
+      // Fallback to default recommendations if no API data is available
       switch (riskLevel.toLowerCase()) {
         case 'high':
           actions.addAll([
@@ -533,6 +706,84 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
     );
   }
 
+  Widget _buildSourcesSection() {
+    if (_recommendationData?.sources == null ||
+        _recommendationData!.sources.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Icon(
+              Icons.source,
+              size: 16,
+              color: Colors.grey.shade600,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Sources',
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _showSources = !_showSources;
+                });
+              },
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                _showSources ? 'Hide' : 'Show',
+                style: TextStyle(
+                  color: Colors.blue.shade600,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_showSources) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: _recommendationData!.sources.map((source) {
+              final title = source['title'] ?? 'Source';
+              final uri = source['uri'] ?? '';
+              return ActionChip(
+                label: Text(
+                  title,
+                  style: const TextStyle(fontSize: 11),
+                ),
+                backgroundColor: Colors.grey.shade100,
+                side: BorderSide(color: Colors.grey.shade300),
+                labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                onPressed: () => _launchSourceUrl(uri),
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -549,6 +800,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
             ElevatedButton(
               onPressed: () {
                 _fetchPatternData();
+                _fetchRecommendationData();
               },
               child: const Text('Retry'),
             ),
@@ -688,6 +940,7 @@ class _RecommendationsWidgetState extends State<RecommendationsWidget> {
                                         const SizedBox(height: 12),
                                         ..._getPreventiveActions(
                                             _patternData!.riskLevel),
+                                        _buildSourcesSection(),
                                       ],
                                     ),
                                   ),

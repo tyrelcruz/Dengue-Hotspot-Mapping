@@ -6,7 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:buzzmap/data/dengue_data.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'dart:convert';
-import 'dart:math' show min, max;
+import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:buzzmap/auth/config.dart';
@@ -1192,29 +1192,161 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     double latitude,
     double longitude,
   ) async {
-    try {
-      final response = await http.get(
-        Uri.parse(
-            '${Config.baseUrl}/api/v1/health-facilities/nearby?lat=$latitude&lng=$longitude'),
-        headers: {'Content-Type': 'application/json'},
-      );
+    final apiKey = 'AIzaSyC1qJ8pzXVWuWOEyc7svbEKDa_HEPE2EL0';
+    final url =
+        'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$latitude,$longitude&radius=2000&type=hospital&key=$apiKey';
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data
-            .map((facility) => {
-                  'name': facility['name'],
-                  'address': facility['address'],
-                  'distance': facility['distance'],
-                })
-            .toList();
+    print('DEBUG: Fetching health facilities from URL: $url');
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      print(
+          'DEBUG: Health facilities API response status: ${response.statusCode}');
+      print('DEBUG: Health facilities API response body: ${response.body}');
+
+      final data = jsonDecode(response.body);
+
+      if (data['status'] == 'OK') {
+        print('DEBUG: Found ${data['results']?.length ?? 0} health facilities');
+
+        // Debug: Print all raw results first
+        if (data['results'] != null) {
+          print('DEBUG: Raw results from API:');
+          for (int i = 0; i < (data['results'] as List).length; i++) {
+            final place = (data['results'] as List)[i];
+            print(
+                'DEBUG: Place $i: ${place['name']} - Types: ${place['types']}');
+          }
+        }
+
+        final List<Map<String, dynamic>> facilities =
+            (data['results'] as List).map((place) {
+          final List types = place['types'] ?? [];
+          String facilityType = '';
+          final nameLower = place['name'].toString().toLowerCase();
+
+          print('DEBUG: Processing place: ${place['name']}');
+          print('DEBUG: Types: $types');
+          print('DEBUG: Name lower: $nameLower');
+
+          // More lenient filtering - include any hospital or health facility
+          if (types.contains('hospital') || types.contains('health')) {
+            facilityType = 'Hospital';
+            print('DEBUG: Found hospital/health facility: ${place['name']}');
+          } else if (nameLower.contains('hospital') ||
+              nameLower.contains('medical') ||
+              nameLower.contains('health center') ||
+              nameLower.contains('healthcare')) {
+            facilityType = 'Health Facility';
+            print('DEBUG: Found health facility by name: ${place['name']}');
+          }
+
+          // Only exclude very specific non-medical facilities
+          if (nameLower.contains('animal') ||
+              nameLower.contains('pet') ||
+              nameLower.contains('veterinary') ||
+              nameLower.contains('vet') ||
+              nameLower.contains('airgun') ||
+              nameLower.contains('shooting') ||
+              nameLower.contains('spa') ||
+              nameLower.contains('wellness center')) {
+            facilityType = '';
+            print('DEBUG: Excluded facility: ${place['name']}');
+          }
+
+          print(
+              'DEBUG: Final facility type for ${place['name']}: $facilityType');
+
+          return {
+            'name': place['name'],
+            'type': facilityType,
+            'address': place['vicinity'] ?? '',
+            'lat': place['geometry']['location']['lat'],
+            'lng': place['geometry']['location']['lng'],
+          };
+        }).toList();
+
+        // Remove duplicates and filter by type
+        final seen = <String>{};
+        final all = <Map<String, dynamic>>[];
+
+        for (final facility in facilities) {
+          final key = facility['name'] + facility['address'];
+          if (!seen.contains(key) && facility['type'].isNotEmpty) {
+            // Calculate distance from report location to facility
+            final distance = _calculateDistanceKm(
+              latitude,
+              longitude,
+              facility['lat'],
+              facility['lng'],
+            );
+            facility['distance'] = distance;
+            seen.add(key);
+            all.add(facility);
+            print(
+                'DEBUG: Added facility: ${facility['name']} (${facility['type']}) - ${distance.toStringAsFixed(1)}km away');
+          }
+        }
+
+        // Sort facilities by distance
+        all.sort((a, b) =>
+            (a['distance'] as double).compareTo(b['distance'] as double));
+
+        print('DEBUG: Returning ${all.length} filtered health facilities');
+
+        // If no facilities found after filtering, return all results for debugging
+        if (all.isEmpty && (data['results'] as List).isNotEmpty) {
+          print(
+              'DEBUG: No facilities passed filtering, returning all results for debugging');
+          return (data['results'] as List).map((place) {
+            final distance = _calculateDistanceKm(
+              latitude,
+              longitude,
+              place['geometry']['location']['lat'],
+              place['geometry']['location']['lng'],
+            );
+            return {
+              'name': place['name'],
+              'type': 'Unknown',
+              'address': place['vicinity'] ?? '',
+              'lat': place['geometry']['location']['lat'],
+              'lng': place['geometry']['location']['lng'],
+              'distance': distance,
+            };
+          }).toList();
+        }
+
+        return all;
       } else {
-        throw Exception('Failed to load health facilities');
+        print('DEBUG: Error from Places API: ${data['status']}');
+        print('DEBUG: Error message: ${data['error_message']}');
+        return [];
       }
     } catch (e) {
-      print('Error fetching health facilities: $e');
+      print('DEBUG: Error fetching health facilities: $e');
       return [];
     }
+  }
+
+  double _calculateDistanceKm(
+      double lat1, double lng1, double lat2, double lng2) {
+    const double earthRadius = 6371; // Earth's radius in kilometers
+
+    final double dLat = _degreesToRadians(lat2 - lat1);
+    final double dLng = _degreesToRadians(lng2 - lng1);
+
+    final double a = sin(dLat / 2) * sin(dLat / 2) +
+        sin(_degreesToRadians(lat1)) *
+            sin(_degreesToRadians(lat2)) *
+            sin(dLng / 2) *
+            sin(dLng / 2);
+    final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+
+    return earthRadius * c;
+  }
+
+  double _degreesToRadians(double degrees) {
+    return degrees * (pi / 180);
   }
 
   Color _getColorForSeverity(String severity) {
