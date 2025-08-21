@@ -6,7 +6,6 @@ uploads/
 test/
 controllers/spare/
 backups/
-data/main.csv
 vercel-env-example.txt
 VERCEL_DEPLOYMENT.md
 .history/

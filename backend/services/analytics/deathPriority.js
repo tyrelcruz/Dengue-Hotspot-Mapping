@@ -5,9 +5,11 @@ const fs = require("fs").promises;
 function createDefaultResponse(alert, barangay = null) {
   return {
     barangay,
-    deaths: 0,
-    alert,
-    recommendation: 'No recommendations available. Continue monitoring and surveillance practices.',
+    death_priority: {
+      count: 0,
+      alert: alert,
+      recommendation: 'No recommendations available. Continue monitoring and surveillance practices.',
+    }
   };
 }
 
@@ -19,8 +21,8 @@ async function getDeathPriorityData(filePath) {
   }
 
   return new Promise((resolve, reject) => {
-
     const results = [];
+    const allBarangays = new Set();
     
     const today = new Date();
     today.setHours(23, 59, 59, 999);
@@ -28,11 +30,15 @@ async function getDeathPriorityData(filePath) {
     twoWeeksAgo.setDate(today.getDate() - 14);
     twoWeeksAgo.setHours(0, 0, 0, 0);
 
-
     createReadStream(filePath)
       .pipe(csv())
       .on("data", (data) => {
         try {
+          // Always collect barangay names
+          if (data.Barangay && data.Barangay.trim()) {
+            allBarangays.add(data.Barangay.trim());
+          }
+
           const admitDate = new Date(data.DAdmit);
           if (isNaN(admitDate.getTime())) {
             console.warn(`Invalid date found: ${data.DAdmit}`);
@@ -64,25 +70,20 @@ async function getDeathPriorityData(filePath) {
       })
       .on("end", () => {
         try {
-          if (results.length === 0) {
-            return resolve([createDefaultResponse('No recent data available for analysis.')]);
-          }
-
-          // Get all unique barangays first
-          const allBarangays = [...new Set(results.map(row => row.Barangay))];
-
           // Create initial alerts for all barangays with no deaths
           const barangayAlerts = {};
           for (const barangay of allBarangays) {
             barangayAlerts[barangay] = {
               barangay,
-              deaths: 0,
-              alert: "No deaths reported.",
-              recommendation: "No recommendations available. Continue monitoring and surveillance practices.",
+              death_priority: {
+                count: 0,
+                alert: "No deaths reported.",
+                recommendation: "No recommendations available. Continue monitoring and surveillance practices.",
+              }
             };
           }
 
-          // * Process death statistics
+          // Process death statistics
           const deathStats = {};
           for (const row of results) {
             if (row.deaths > 0) {
@@ -100,25 +101,16 @@ async function getDeathPriorityData(filePath) {
             }
           }
 
-          // If no deaths were found, return default responses
-          if (Object.keys(deathStats).length === 0) {
-            return resolve(Object.values(barangayAlerts));
-          }
-
-          const highestDeathCount = Math.max(
-            ...Object.values(deathStats).map(stats => stats.totalDeaths)
-          );
-
-            // Update only the barangays that have deaths
+          // Update only the barangays that have deaths
           for (const [barangay, stats] of Object.entries(deathStats)) {
             const { totalDeaths } = stats;
 
             // Determine recommendation based on death count
             let recommendation;
-            if (highestDeathCount === 1) {
+            if (totalDeaths === 1) {
               recommendation =
                 "Due to a detected dengue-related death in this barangay, conduct a visit to this area to investigate and enforce some interventions.";
-            } else if (totalDeaths === highestDeathCount) {
+            } else if (totalDeaths >= 2) {
               recommendation =
                 "Due to the high number of deaths recorded in this barangay, it is recommended for your team to prioritize visiting this area immediately to investigate and conduct some necessary interventions.";
             } else {
@@ -128,9 +120,11 @@ async function getDeathPriorityData(filePath) {
 
             barangayAlerts[barangay] = {
               barangay,
-              deaths: totalDeaths,
-              alert: `${barangay} has a recorded number of ${totalDeaths} death(s) due to dengue in the last 2 weeks.`,
-              recommendation: recommendation,
+              death_priority: {
+                count: totalDeaths,
+                alert: `${barangay} has a recorded number of ${totalDeaths} death(s) due to dengue in the last 2 weeks.`,
+                recommendation: recommendation,
+              }
             };
           }
 

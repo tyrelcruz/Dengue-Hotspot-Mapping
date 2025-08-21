@@ -7,8 +7,8 @@ const Intervention = require("../models/Interventions");
 const { analyzeHotspots } = require("../services/hotspotAnalysisService");
 const {
   analyzeCrowdsourcedReports,
-  updateBarangayStatuses,
 } = require("../services/reportAnalysisService");
+const { updateBarangayStatuses } = require("../utils/analytics/updateToDb");
 const {
   analyzeDengueAlerts,
 } = require("../services/analytics/patternRecognition");
@@ -21,6 +21,11 @@ const {
   processCsvToSummary,
 } = require("../utils/analytics/processAndWriteMasterCsv");
 const extractSources = require("../utils/extractSources");
+const extractResponseAndFactors = require("../utils/extractResponseAndFactors");
+const {
+  processDengueCasesHighlights,
+} = require("../services/analytics/processDengueCasesHighlights");
+const mongoose = require("mongoose");
 
 const { GoogleGenAI } = require("@google/genai");
 
@@ -144,7 +149,7 @@ const retrievePatternRecognitionResults = asyncErrorHandler(
       }
 
       if (pattern) {
-        query["status.pattern"] = pattern;
+        query["status_and_recommendation.pattern_based.status"] = pattern;
       }
 
       let barangays;
@@ -161,8 +166,8 @@ const retrievePatternRecognitionResults = asyncErrorHandler(
         // Create a filtered result object with only the required fields
         return {
           name: barangayObj.name,
-          pattern: barangayObj.status.pattern,
-          recommendation: barangayObj.recommendation,
+          pattern: barangayObj.status_and_recommendation.pattern_based.status,
+          recommendation: barangayObj.status_and_recommendation.recommendation,
         };
       });
 
@@ -199,20 +204,21 @@ const triggerDengueCaseReportAnalysis = asyncErrorHandler(async (req, res) => {
         combinedAlerts[barangayKey] = {
           barangay: alert.barangay,
           pattern: alert.pattern,
+          alert: alert.alert, // ← Add this!
           recommendation: alert.recommendation,
         };
       }
     }
 
     for (const alert of deathAlerts) {
-      if (alert.barangay !== null) {
+      if (alert.barangay && alert.barangay !== null) {
         const barangayKey = alert.barangay.toLowerCase();
         if (combinedAlerts[barangayKey]) {
-          combinedAlerts[barangayKey].deaths = alert.deaths;
+          combinedAlerts[barangayKey].death_priority = alert.death_priority;
         } else {
           combinedAlerts[barangayKey] = {
             barangay: alert.barangay,
-            deaths: alert.deaths,
+            death_priority: alert.death_priority,
           };
         }
       }
@@ -220,7 +226,7 @@ const triggerDengueCaseReportAnalysis = asyncErrorHandler(async (req, res) => {
 
     const allAlerts = Object.values(combinedAlerts);
 
-    // await updateBarangayStatuses(allAlerts);
+    await updateBarangayStatuses(allAlerts);
 
     return res.status(200).json({
       success: true,
@@ -434,20 +440,32 @@ const handleCrowdsourcedReportsAnalysis = asyncErrorHandler(
   }
 );
 
-// Heatmap functionality
-// database can store the number of dengue cases per barangay per week
-
 const generateRecommendation = asyncErrorHandler(async (req, res) => {
   const { userRole, barangay } = req.body;
 
+  if (mongoose.connection.readyState !== 1) {
+    console.log("MongoDB connection not ready, attempting to reconnect...");
+    try {
+      await mongoose.connect(process.env.MONGO_URI);
+    } catch (error) {
+      return res.status(500).json({
+        message: "Database connection failed",
+        error: error.message,
+      });
+    }
+  }
+
   let aiPrompt = "What would you recommend";
-  // let aiPrompt =
-  //   "What do you recommend that we do, considering the current status of the barangay?";
   let systemInstruction =
-    "You are an expert in dengue prevention and control. You are to generate a recommendation for the barangay based on the provided details.";
-  // let formattingInstruction =
-  //   "When responding, make the response in 3 sentences, bullet form, and concise.";
-  let formattingInstruction = "Your recommendation will be a day to day plan. ";
+    "You are an expert in dengue prevention and control. You are to generate a recommendation for the barangay based on the provided details. Make use of credible and authoritative sources, such as reputable news outlets, government agencies (e.g., DOH, WHO), and recognized health organizations from the internet, and also check in on the current weather factors for the provided barangay. Avoid generating any unnecessary text, response should focus on the recommendation.";
+
+  let formattingInstruction = `After everything, include a JSON formatted list of factors used for determining the recommendation, a summarization of the recommendation, as well as the current weather factors of the specified barangay in the following format:
+
+  "factors": ["factor 1", ...],
+  "summary": "summary of recommendation...",
+  "weather_details": ["weather factor 1", ...]
+  
+  `;
   let detailedMessage = "";
 
   // * AI Settings
@@ -480,9 +498,11 @@ const generateRecommendation = asyncErrorHandler(async (req, res) => {
     });
   }
 
-  const patternStatus = barangayData.status.pattern;
-  const reportCount = barangayData.status.crowdsourced_reports_count;
-  const deathCount = barangayData.status.deaths;
+  const patternStatus =
+    barangayData.status_and_recommendation.pattern_based.status;
+  const reportCount = barangayData.status_and_recommendation.report_based.count;
+  const deathCount =
+    barangayData.status_and_recommendation.death_priority.count;
 
   if (patternStatus === "") {
     detailedMessage = `Over the past 2 weeks up until now, there have been no identified pattern of dengue cases in Brgy. ${barangay} of Quezon City, with ${reportCount} crowdsourced reports of potential dengue breeding sites, and ${deathCount} reports of dengue case fatalities.`;
@@ -492,12 +512,10 @@ const generateRecommendation = asyncErrorHandler(async (req, res) => {
 
   if (userRole === "admin") {
     aiPrompt +=
-      " the surveillance division to do to prevent dengue in this barangay, considering the possible dengue factors. Include a day to day action plan and the factors that you considered.";
-    // aiPrompt += " Especially as a disease surveillance officer.";
+      " the surveillance division to do to prevent dengue in this barangay, considering the possible dengue factors. Include a day to day action plan.";
   } else {
     aiPrompt +=
       " for the citizens of this barangay to do to prevent and protect themselves from dengue.";
-    // aiPrompt += " Especially as a community resident.";
   }
 
   try {
@@ -507,22 +525,54 @@ const generateRecommendation = asyncErrorHandler(async (req, res) => {
       config,
     });
 
+    const { recommendation, factors, summary, weatherDetails } =
+      extractResponseAndFactors(response.text);
     const sources = extractSources(response);
 
     await Barangay.findByIdAndUpdate(barangayData._id, {
-      recommendation: response.text,
+      "status_and_recommendation.recommendation": recommendation,
       last_analysis_time: new Date(),
     });
 
     return res.status(200).json({
-      response: response.text,
-      sources: sources,
+      recommendation,
+      summary,
+      factors,
+      weatherDetails,
+      sources,
+      pattern: patternStatus,
+      reports: reportCount,
+      deaths: deathCount,
       message: "Recommendation generated and saved successfully.",
     });
   } catch (error) {
     console.error("Error in generateRecommendation:", error);
     return res.status(500).json({
       message: "Failed to process AI service request",
+      error: error.message,
+    });
+  }
+});
+
+const supplyDengueHighlightsData = asyncErrorHandler(async (req, res) => {
+  // Supplies some summarized dengue data for the dashboard to use.
+  // TODO: Case Based Surveillance: Overall dengue state, identified trend (decline, increase, no change). Total up case counts of current and previous two ISO weeks, then provide the trend, as well as the percentage change. Include as well the date range. --DONE--
+  // TODO: Health Events Section: Total number of identified dengue clusters, then provide as well the barangay names, and the number of cases in each barangay. Current two weeks. -- DO NOT IMPLEMENT YET, ASK FOR FURTHER CLARIFICATION ON CLUSTERS --
+  // TODO: Number of new dengue cases, for the current ISO week. Provide total number of new cases, the date range, as well as the cumulative case count starting from the start of the year. --DONE--
+  try {
+    // Process dengue cases highlights from main.csv
+    const dengueHighlights = await processDengueCasesHighlights();
+
+    return res.status(200).json({
+      success: true,
+      data: dengueHighlights,
+      message: "Dengue highlights data retrieved successfully.",
+    });
+  } catch (error) {
+    console.error("Error in supplyDengueHighlightsData:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve dengue highlights data",
       error: error.message,
     });
   }
@@ -537,4 +587,5 @@ module.exports = {
   handleCrowdsourcedReportsAnalysis,
   triggerDengueCaseReportAnalysis,
   generateRecommendation,
+  supplyDengueHighlightsData,
 };

@@ -28,16 +28,19 @@ const connectDB = async (url) => {
     if (!cached.promise) {
       const opts = {
         bufferCommands: false, // Disable buffering to prevent timeouts
-        serverSelectionTimeoutMS: 15000, // Increase to 15s
-        socketTimeoutMS: 45000,
-        connectTimeoutMS: 15000, // Connection timeout
-        maxPoolSize: 1,
-        minPoolSize: 0,
-        maxIdleTimeMS: 30000,
+        serverSelectionTimeoutMS: 30000, // Increase to 30s
+        socketTimeoutMS: 60000, // Increase to 60s
+        connectTimeoutMS: 30000, // Connection timeout increased to 30s
+        maxPoolSize: 10, // Increased pool size
+        minPoolSize: 1, // Keep at least 1 connection
+        maxIdleTimeMS: 60000, // Increased to 60s
         retryWrites: true,
         retryReads: true,
         // Connection validation
         heartbeatFrequencyMS: 10000,
+        // // keepAlive is not supported when ran locally
+        // keepAlive: true,
+        // keepAliveInitialDelay: 300000, // 5 minutes
       };
 
       console.log("Creating new MongoDB connection...");

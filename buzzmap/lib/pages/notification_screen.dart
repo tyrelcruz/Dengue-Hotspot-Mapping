@@ -7,7 +7,7 @@ import 'package:buzzmap/config/config.dart';
 import 'package:buzzmap/services/notification_service.dart';
 import 'package:buzzmap/widgets/utils/notification_template.dart';
 import 'package:buzzmap/widgets/offline_posts_list.dart';
-import 'package:buzzmap/widgets/global_alert_overlay.dart';
+// import 'package:buzzmap/widgets/global_alert_overlay.dart';
 import 'package:buzzmap/services/alert_service.dart';
 import 'package:buzzmap/pages/mapping_screen.dart';
 import 'package:flutter/services.dart';
@@ -36,9 +36,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
   final List<String> _filters = [
     'All',
     'Admin Alerts',
-    'Pending',
-    'Approved',
-    'Rejected',
   ];
 
   @override
@@ -369,8 +366,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   List<Map<String, dynamic>> _getFilteredNotifications() {
-    if (_cachedFilteredNotifications != null &&
-        _lastFilterKey == _selectedFilter) {
+    final cacheKey = _selectedFilter;
+    if (_cachedFilteredNotifications != null && _lastFilterKey == cacheKey) {
       return _cachedFilteredNotifications!;
     }
 
@@ -392,11 +389,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         final status = report['status']?.toString();
         print('Notification status: $status');
 
-        bool shouldInclude = _selectedFilter == 'All' ||
-            (_selectedFilter == 'Pending' && status == 'Pending') ||
-            (_selectedFilter == 'Approved' &&
-                (status == 'Approved' || status == 'Validated')) ||
-            (_selectedFilter == 'Rejected' && status == 'Rejected');
+        bool shouldInclude = _selectedFilter == 'All';
 
         print('Should include notification: $shouldInclude');
         return shouldInclude;
@@ -406,7 +399,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     }
 
     _cachedFilteredNotifications = filtered;
-    _lastFilterKey = _selectedFilter;
+    _lastFilterKey = cacheKey;
     return filtered;
   }
 
@@ -420,20 +413,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return alert['severity']?.toString().toUpperCase() ?? 'ALERT';
   }
 
-  String _formatAdminAlertSubtitle(Map<String, dynamic> alert) {
-    final messages = alert['messages'] as List?;
-    return messages?.isNotEmpty == true ? messages!.first : 'Alert';
-  }
-
-  String _formatAdminAlertDetails(Map<String, dynamic> alert) {
-    final barangays = alert['barangays'] as List?;
-    final barangayNames = (barangays != null && barangays.isNotEmpty)
-        ? barangays.map((b) => b['name']).whereType<String>().join(', ')
-        : 'All Areas';
-    final timestamp =
-        DateTime.parse(alert['timestamp'] ?? DateTime.now().toIso8601String());
-    return '$barangayNames • ${_formatDate(timestamp)}';
-  }
+  // Removed unused helpers _formatAdminAlertSubtitle and _formatAdminAlertDetails to satisfy lints
 
   String _formatDate(DateTime date) {
     final now = DateTime.now();
@@ -454,17 +434,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   }
 
   Widget _buildShowMoreButton() {
-    final totalFiltered = _notifications.where((notification) {
-      final report = notification['report'] as Map<String, dynamic>?;
-      if (report == null) return false;
-
-      final status = report['status']?.toString();
-      return _selectedFilter == 'All' ||
-          (_selectedFilter == 'Pending' && status == 'Pending') ||
-          (_selectedFilter == 'Approved' &&
-              (status == 'Approved' || status == 'Validated')) ||
-          (_selectedFilter == 'Rejected' && status == 'Rejected');
-    }).length;
+    final totalFiltered = _getFilteredNotifications().length;
 
     if (totalFiltered <= _displayCount) return const SizedBox.shrink();
 
@@ -540,6 +510,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
       ),
     );
   }
+
+  // Reports Status filter moved to Community > My Posts
 
   Widget _buildAdminAlertItem(Map<String, dynamic> notification) {
     final messages = notification['messages'] as List?;
@@ -620,134 +592,145 @@ class _NotificationScreenState extends State<NotificationScreen> {
       context: context,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 5),
-              ),
-            ],
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+            maxWidth: MediaQuery.of(context).size.width * 0.9,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.announcement,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 24,
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.announcement,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Announcement',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                          fontFamily: 'Inter',
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(height: 16),
                   Text(
-                    'Announcement',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
+                    announcement['title'] ?? 'Announcement',
+                    style: const TextStyle(
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      fontFamily: 'Inter',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    announcement['content'] ?? 'No content available',
+                    style: const TextStyle(
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (announcement['images'] != null &&
+                      (announcement['images'] as List).isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 200,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: (announcement['images'] as List).length,
+                        itemBuilder: (context, index) {
+                          final imageUrl = announcement['images'][index];
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                imageUrl,
+                                width: 200,
+                                height: 200,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  print('Error loading image: $error');
+                                  print('Image URL: $imageUrl');
+                                  return Container(
+                                    width: 200,
+                                    height: 200,
+                                    color: Colors.grey[200],
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.broken_image,
+                                        color: Colors.grey,
+                                        size: 40,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                loadingBuilder:
+                                    (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Container(
+                                    width: 200,
+                                    height: 200,
+                                    color: Colors.grey[200],
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress
+                                                    .expectedTotalBytes !=
+                                                null
+                                            ? loadingProgress
+                                                    .cumulativeBytesLoaded /
+                                                loadingProgress
+                                                    .expectedTotalBytes!
+                                            : null,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Text(
+                    'Published: ${_formatDate(DateTime.parse(announcement['createdAt'] ?? DateTime.now().toIso8601String()))}',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Text(
-                announcement['title'] ?? 'Announcement',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                announcement['content'] ?? 'No content available',
-                style: const TextStyle(
-                  fontSize: 14,
-                ),
-              ),
-              if (announcement['images'] != null &&
-                  (announcement['images'] as List).isNotEmpty) ...[
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 200,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: (announcement['images'] as List).length,
-                    itemBuilder: (context, index) {
-                      final imageUrl = announcement['images'][index];
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            imageUrl,
-                            width: 200,
-                            height: 200,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              print('Error loading image: $error');
-                              print('Image URL: $imageUrl');
-                              return Container(
-                                width: 200,
-                                height: 200,
-                                color: Colors.grey[200],
-                                child: const Center(
-                                  child: Icon(
-                                    Icons.broken_image,
-                                    color: Colors.grey,
-                                    size: 40,
-                                  ),
-                                ),
-                              );
-                            },
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Container(
-                                width: 200,
-                                height: 200,
-                                color: Colors.grey[200],
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    value: loadingProgress.expectedTotalBytes !=
-                                            null
-                                        ? loadingProgress
-                                                .cumulativeBytesLoaded /
-                                            loadingProgress.expectedTotalBytes!
-                                        : null,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              Text(
-                'Published: ${_formatDate(DateTime.parse(announcement['createdAt'] ?? DateTime.now().toIso8601String()))}',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -872,6 +855,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
           SliverToBoxAdapter(
             child: _buildFilterBar(),
           ),
+          // Reports Status filter removed from Notifications; moved to Community > My Posts
           if (_isLoading)
             const SliverFillRemaining(
               child: Center(child: CircularProgressIndicator()),

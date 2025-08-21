@@ -31,24 +31,7 @@ class NotificationTemplate extends StatelessWidget {
     this.onTap,
   }) : super(key: key);
 
-  String _getTimeAgo() {
-    if (createdAt == null) return '';
-
-    final now = DateTime.now();
-    final difference = now.difference(createdAt!);
-
-    if (difference.inDays > 7) {
-      return '${createdAt!.day}/${createdAt!.month}/${createdAt!.year}';
-    } else if (difference.inDays > 0) {
-      return '${difference.inDays}d ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
-  }
+  // Removed unused _getTimeAgo() to satisfy lints
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +81,21 @@ class NotificationTemplate extends StatelessWidget {
                   NotificationPopup.showReportDeleted(context);
                 } else if (status?.toLowerCase() == 'rejected') {
                   NotificationPopup.showReportRejected(context);
+                } else if (status?.toLowerCase() == 'alert' ||
+                    status?.toLowerCase() == 'announcement') {
+                  // Use responsive popup with optional image to avoid overflow
+                  NotificationPopup.showCustom(
+                    context,
+                    title: (status?.toLowerCase() == 'alert')
+                        ? 'Alert'
+                        : 'Announcement',
+                    message: message,
+                    image: SvgPicture.asset(
+                      'assets/icons/logo_ligthbg.svg',
+                      fit: BoxFit.contain,
+                    ),
+                    buttonText: 'Close',
+                  );
                 } else {
                   print(
                       '❌ Cannot navigate: Invalid status or missing location data');
@@ -263,8 +261,7 @@ class NotificationTemplate extends StatelessWidget {
     }
   }
 
-  String _formatDate(DateTime? date) {
-    if (date == null) return '';
+  String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
   }
 }

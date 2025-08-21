@@ -18,21 +18,7 @@ class PostProvider with ChangeNotifier {
       _lastFetchTime == null ||
       DateTime.now().difference(_lastFetchTime!) > _cacheDuration;
 
-  String _formatWhenPosted(String dateTimeStr) {
-    final DateTime postDate = DateTime.parse(dateTimeStr);
-    final DateTime now = DateTime.now();
-    final Duration difference = now.difference(postDate);
-
-    if (difference.inDays > 0) {
-      return '${difference.inDays} days ago';
-    } else if (difference.inHours > 0) {
-      return '${difference.inHours} hours ago';
-    } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes} minutes ago';
-    } else {
-      return 'Just now';
-    }
-  }
+  // Removed unused _formatWhenPosted helper per lints
 
   Future<void> fetchPosts({bool forceRefresh = false}) async {
     if (!forceRefresh && !shouldRefresh && _posts.isNotEmpty) {
@@ -54,7 +40,7 @@ class PostProvider with ChangeNotifier {
       }
 
       final response = await http.get(
-        Uri.parse('${Config.postsUrl}?status=Validated'),
+        Uri.parse(Config.postsUrl),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',

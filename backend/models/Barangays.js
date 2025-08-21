@@ -8,64 +8,68 @@ const barangaySchema = new Schema({
     required: true,
     unique: true,
   },
-  status: {
-    pattern: {
+  status_and_recommendation: {
+    pattern_based: {
+      status: {
+        type: String,
+        enum: [
+          "spike",
+          "gradual_rise",
+          "decline",
+          "stability",
+          "low_level_activity",
+        ],
+        default: "stability",
+      },
+      alert: {
+        type: String,
+        default: "None",
+      },
+      admin_recommendation: {
+        type: String,
+        default: "None",
+      },
+      user_recommendation: {
+        type: String,
+        default: "None",
+      },
+    },
+    report_based: {
+      count: {
+        type: Number,
+        default: 0,
+      },
+      status: {
+        type: String,
+      },
+      alert: {
+        type: String,
+        default: "None",
+      },
+      recommendation: {
+        type: String,
+        default: "None",
+      },
+    },
+    death_priority: {
+      count: {
+        type: Number,
+        default: 0,
+      },
+      alert: {
+        type: String,
+        default: "None",
+      },
+      recommendation: {
+        type: String,
+        default: "None",
+      },
+    },
+    recommendation: {
       type: String,
-      enum: ["spike", "gradual_rise", "decline", "stability", "low_level_activity"],
-      default: "stability",
-    },
-    crowdsourced_reports_count: {
-      type: Number,
-      default: 0,
-    },
-    deaths: {
-      type: Number,
-      default: 0,
+      default: "None",
     },
   },
-  recommendation: {
-    type: String,
-    default: "None",
-  },
-  // status_and_recommendation: {
-  //   pattern_based: {
-  //     status: {
-  //       type: String,
-  //       enum: ["spike", "gradual_rise", "decline", "stability"],
-  //       default: "stability",
-  //     },
-  //     alert: {
-  //       type: String,
-  //       default: "None",
-  //     },
-  //   },
-  //   report_based: {
-  //     count: {
-  //       type: Number,
-  //       default: 0,
-  //     },
-  //     status: {
-  //       type: String,
-  //     },
-  //     alert: {
-  //       type: String,
-  //       default: "None",
-  //     },
-  //   },
-  //   death_priority: {
-  //     status: {
-  //       type: String,
-  //     },
-  //     alert: {
-  //       type: String,
-  //       default: "None",
-  //     },
-  //   },
-  //   recommendation: {
-  //     type: String,
-  //     default: "None",
-  //   },
-  // },
   last_analysis_time: {
     type: Date,
   },

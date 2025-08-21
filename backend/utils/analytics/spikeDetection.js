@@ -5,7 +5,22 @@ const {
   calculateWeeklyTotals,
 } = require("./isoWeekUtils");
 
-// Simple DBSCAN implementation for outlier detection
+/**
+ * DAILY SPIKE DETECTION ALGORITHM USING DBSCAN
+ * 
+ * This algorithm detects spikes by looking at daily case counts within a 2-week period.
+ * It uses DBSCAN clustering to identify outliers in daily case counts, detecting when
+ * a barangay experiences a sudden jump from normal daily cases (0-1) to significantly
+ * higher daily cases (5+ cases in a single day).
+ * 
+ * Key features:
+ * 1. Analyzes daily data points instead of weekly aggregates
+ * 2. Uses DBSCAN to detect daily outliers
+ * 3. Detects sudden daily spikes (e.g., 0-1 cases → 5-6 cases in one day)
+ * 4. Considers baseline daily patterns for each barangay
+ */
+
+// Simple DBSCAN implementation for outlier detection on daily case counts
 function dbscan(data, eps, minSamples) {
   const labels = new Array(data.length).fill(-1);
   let clusterId = 0;
@@ -16,7 +31,7 @@ function dbscan(data, eps, minSamples) {
     const neighbors = findNeighbors(data, i, eps);
 
     if (neighbors.length < minSamples) {
-      labels[i] = -1; // Noise point
+      labels[i] = -1; // Noise point (outlier)
     } else {
       clusterId++;
       labels[i] = clusterId;
@@ -54,12 +69,43 @@ function expandCluster(data, labels, neighbors, clusterId, eps, minSamples) {
   }
 }
 
+// Check if a daily case count represents a spike using DBSCAN
+function isDailySpikeWithDBSCAN(dailyCases, options = {}) {
+  const {
+    minSpikeThreshold = 5,           // Minimum cases to consider a spike
+    baselineThreshold = 1,            // Maximum cases considered "normal" baseline
+    dbscanEps = 2,                   // DBSCAN epsilon (distance threshold)
+    dbscanMinSamples = 2             // DBSCAN minimum samples for cluster
+  } = options;
+
+  // Apply DBSCAN to detect outliers in daily case counts
+  const dbscanLabels = dbscan(dailyCases, dbscanEps, dbscanMinSamples);
+  
+  // Find the most recent day (last element)
+  const mostRecentIndex = dailyCases.length - 1;
+  const mostRecentCases = dailyCases[mostRecentIndex];
+  
+  // Check if the most recent day is an outlier (label -1) and meets spike criteria
+  const isOutlier = dbscanLabels[mostRecentIndex] === -1;
+  const isAboveSpikeThreshold = mostRecentCases >= minSpikeThreshold;
+  const isAboveBaseline = mostRecentCases > baselineThreshold;
+  
+  // A spike is detected if:
+  // 1. It's a DBSCAN outlier (label -1)
+  // 2. It has enough cases to be considered a spike (5+ cases)
+  // 3. It's above the baseline threshold (1+ cases)
+  return isOutlier && isAboveSpikeThreshold && isAboveBaseline;
+}
+
 async function checkSpike(options = {}) {
   const {
     data,
     masterCsvPath = "data/main.csv",
+    minSpikeThreshold = 5,
+    baselineThreshold = 1,
     dbscanEps = 2,
     dbscanMinSamples = 2,
+    analysisDays = 14  // 2 weeks = 14 days
   } = options;
 
   let processedData;
@@ -100,12 +146,9 @@ async function checkSpike(options = {}) {
     Math.max(...processedData.map((row) => row.DAdmit))
   );
 
-  // Get ISO week boundaries for the past 2 weeks
-  const weekBoundaries = getIsoWeekBoundaries(latestDate, 2);
-
-  // Get the complete date range for the 2-week period
-  const startDate = weekBoundaries[1][0]; // Start of previous week
-  const endDate = weekBoundaries[0][1]; // End of current week
+  // Calculate the start date for 2-week analysis
+  const startDate = new Date(latestDate);
+  startDate.setDate(startDate.getDate() - analysisDays + 1);
 
   // Process each barangay separately
   const uniqueBarangays = [
@@ -122,7 +165,7 @@ async function checkSpike(options = {}) {
     const completeData = [];
     const currentDate = new Date(startDate);
 
-    while (currentDate <= endDate) {
+    while (currentDate <= latestDate) {
       const existingRow = barangayData.find((row) => {
         const rowDate = new Date(row.DAdmit);
         return rowDate.toDateString() === currentDate.toDateString();
@@ -137,42 +180,33 @@ async function checkSpike(options = {}) {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // Calculate weekly totals using the complete dataset
-    const weeklyData = calculateWeeklyTotals(completeData, weekBoundaries);
-
-    // Get weekly totals for current and previous week
-    const currentWeekTotal = weeklyData[0].total;
-    const previousWeekTotal = weeklyData[1].total;
-
-    // Calculate percentage increase from previous week
-    const pctIncrease =
-      previousWeekTotal > 0
-        ? ((currentWeekTotal - previousWeekTotal) / previousWeekTotal) * 100
-        : 0;
-
-    // Apply DBSCAN to detect outliers in the two weeks
-    const weeklyTotals = [currentWeekTotal, previousWeekTotal];
-    const dbscanLabels = dbscan(weeklyTotals, dbscanEps, dbscanMinSamples);
-
-    // Check if current week (index 0) is an outlier (label -1)
-    const isSpike =
-      dbscanLabels[0] === -1 && currentWeekTotal > previousWeekTotal;
-
-    if (isSpike) {
+    // Extract daily case counts for the analysis period
+    const dailyCases = completeData.map(day => day["Case Count"]);
+    
+    // Check if the daily pattern represents a spike using DBSCAN
+    if (isDailySpikeWithDBSCAN(dailyCases, {
+      minSpikeThreshold,
+      baselineThreshold,
+      dbscanEps,
+      dbscanMinSamples
+    })) {
+      // Get baseline cases (all days except the most recent for comparison)
+      const baselineCases = dailyCases.slice(0, -1);
+      const mostRecentCases = dailyCases[dailyCases.length - 1];
+      
+      // Find the highest daily case count in the baseline for comparison
+      const maxBaseline = Math.max(...baselineCases);
+      
       let alertMsg;
-      if (previousWeekTotal === 0) {
-        alertMsg = `Detected a spike of dengue cases in the current 2-week period. Current week dengue case count of ${currentWeekTotal} cases, Previous week dengue case count of ${previousWeekTotal} cases, showing a sudden jump from zero cases.`;
+      if (maxBaseline === 0) {
+        alertMsg = `Detected a daily spike of dengue cases using DBSCAN outlier detection. Today: ${mostRecentCases} cases, Previous days: ${baselineCases.join(', ')} cases. This represents a sudden emergence of cases from zero baseline.`;
       } else {
-        alertMsg = `Detected a spike of dengue cases in the current 2-week period. Current week dengue case count of ${currentWeekTotal} cases, Previous week dengue case count of ${previousWeekTotal} cases, a ${Math.round(
-          pctIncrease
-        )}% increase from the previous week.`;
+        const increase = mostRecentCases - maxBaseline;
+        alertMsg = `Detected a daily spike of dengue cases using DBSCAN outlier detection. Today: ${mostRecentCases} cases, Previous days: ${baselineCases.join(', ')} cases. This represents a sudden increase of ${increase} cases from the highest previous day.`;
       }
 
       alerts.push({
         barangay: barangay,
-        // admin_recommendation: `- Intensify health promotion, advocacy, and information campaigns to help raise public awareness.\n- Ensure the continuous and intensified disease surveillance by the QCESD with immediate feedback to the barangay officials for appropriate action.\n- Strengthen the conduct of onsite monitoring visits to assist of mentor LGU partners.\n- Strongly consider the implementation of appropriate vector control measures for this location due to the detected increased risk of transmission.\n- Encourage the community to join the clean-up drive efforts to help reduce the risk of mosquito breeding.\n`,
-        //   user_recommendation: `- Be very vigilant in your surroundings. Aedes mosquitoes are most active during early morning and late afternoon times, but they can bite at night in well-lit areas.\n- Protect yourself by wearing light-colored, long-sleeved clothes and pants.\n- Conduct some cleaning on your household surroundings and remove any potential breeding sites for mosquitoes.\n- Seek early consultation with your local health facility immediately if you're experiencing any dengue symptoms, as many fatalities to this disease are caused by delayed treatment.\n- Join your local clean-up drive efforts to help reduce the risk of mosquito breeding.`,
-        // },
         pattern: "spike",
         alert: alertMsg,
         recommendation: "Intensify vector control measures and health promotion campaigns. Strengthen disease surveillance and consider implementing appropriate mosquito control measures. Encourage community participation in clean-up drives.",

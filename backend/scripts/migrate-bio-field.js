@@ -1,5 +1,6 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
+const Account = require("../models/Accounts");
 
 async function migrateBioField() {
   try {
@@ -8,15 +9,15 @@ async function migrateBioField() {
     console.log("Connected to MongoDB");
 
     // Update all accounts that don't have a bio field
-    const result = await mongoose.connection.db.collection("accounts").updateMany(
-      { bio: { $exists: false } }, // Find documents without bio field
-      { $set: { bio: "" } } // Set bio to empty string
+    const result = await Account.updateMany(
+      { bio: { $exists: false } },
+      { $set: { bio: "" } }
     );
 
     console.log(`Migration completed: ${result.modifiedCount} documents updated`);
-    
+
     // Also check for null bio values
-    const nullBioResult = await mongoose.connection.db.collection("accounts").updateMany(
+    const nullBioResult = await Account.updateMany(
       { bio: null },
       { $set: { bio: "" } }
     );

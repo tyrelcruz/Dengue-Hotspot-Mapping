@@ -7,8 +7,8 @@ const {
   analyzeDengueHotspots,
   handleCrowdsourcedReportsAnalysis,
   triggerDengueCaseReportAnalysis,
-  testingAIService,
   generateRecommendation,
+  supplyDengueHighlightsData,
 } = require("../controllers/analyticsController");
 
 const router = express.Router();
@@ -36,6 +36,8 @@ router.post(
 
 router.get("/hotspots", analyzeDengueHotspots);
 
-router.post('/generate-recommendation', generateRecommendation);
+router.post("/generate-recommendation", generateRecommendation);
+
+router.get("/dengue-highlights", supplyDengueHighlightsData);
 
 module.exports = router;

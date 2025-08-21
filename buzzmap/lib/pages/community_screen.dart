@@ -12,7 +12,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
 import 'package:buzzmap/widgets/post_detail_screen.dart';
-import 'package:buzzmap/errors/flushbar.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:math';
 import 'package:buzzmap/providers/post_provider.dart';
@@ -38,6 +37,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
   Position? _currentPosition;
   bool _isLocationLoading = false;
   RouteObserver<PageRoute>? _routeObserver;
+  String _myPostsStatusFilter = 'All';
 
   // Add a map to store userId -> profilePhotoUrl
   Map<String, String> _userProfilePhotos = {};
@@ -56,7 +56,8 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _ensureProfilePhotoLoaded();
       await _fetchUserProfiles();
-      await Provider.of<PostProvider>(context, listen: false).fetchPosts();
+      await Provider.of<PostProvider>(context, listen: false)
+          .fetchPosts(forceRefresh: true);
       await Provider.of<VoteProvider>(context, listen: false).refreshAllVotes();
     });
   }
@@ -260,6 +261,11 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
     // Apply sorting based on selected tab
     if (selectedIndex == 0) {
       // Popular tab - Sort by total engagement (upvotes + comments - downvotes)
+      // Show only validated/approved posts in public tabs
+      filtered = filtered.where((p) {
+        final s = (p['status']?.toString() ?? '').toLowerCase();
+        return s == 'validated' || s == 'approved';
+      }).toList();
       filtered.sort((a, b) {
         final aUpvotes = (a['numUpvotes'] as int?) ?? 0;
         final aDownvotes = (a['numDownvotes'] as int?) ?? 0;
@@ -283,6 +289,11 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
       });
     } else if (selectedIndex == 1) {
       // Latest tab
+      // Show only validated/approved posts in public tabs
+      filtered = filtered.where((p) {
+        final s = (p['status']?.toString() ?? '').toLowerCase();
+        return s == 'validated' || s == 'approved';
+      }).toList();
       filtered.sort((a, b) => (b['date_and_time']?.toString() ?? '')
           .compareTo(a['date_and_time']?.toString() ?? ''));
     } else if (selectedIndex == 2) {
@@ -294,6 +305,21 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
       filtered = posts
           .where((post) => post['userId']?.toString() == currentUserId)
           .toList();
+      // Apply status filter even if there are no posts (UI shows filter regardless)
+      if (_myPostsStatusFilter != 'All') {
+        filtered = filtered.where((post) {
+          final status = post['status']?.toString() ?? '';
+          switch (_myPostsStatusFilter) {
+            case 'Pending':
+              return status == 'Pending';
+            case 'Approved':
+              return status == 'Approved' || status == 'Validated';
+            case 'Rejected':
+              return status == 'Rejected';
+          }
+          return true;
+        }).toList();
+      }
       filtered.sort((a, b) => (b['date_and_time']?.toString() ?? '')
           .compareTo(a['date_and_time']?.toString() ?? ''));
     } else if (selectedIndex == 3) {
@@ -519,6 +545,88 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                       ],
                     ),
                   ),
+                  // Show My Posts status filters whenever My Posts tab is active
+                  if (selectedIndex == 2)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.filter_list,
+                              size: 18, color: Colors.grey),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  ...['All', 'Pending', 'Approved', 'Rejected']
+                                      .map((opt) {
+                                    final active = _myPostsStatusFilter == opt;
+                                    final primary =
+                                        Theme.of(context).colorScheme.primary;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(14),
+                                        onTap: () {
+                                          setState(() {
+                                            _myPostsStatusFilter = opt;
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: active
+                                                ? primary.withOpacity(0.1)
+                                                : Colors.grey[50],
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            border: Border.all(
+                                                color: active
+                                                    ? primary
+                                                    : Colors.grey[300]!,
+                                                width: 1),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                opt == 'Pending'
+                                                    ? Icons.hourglass_empty
+                                                    : opt == 'Approved'
+                                                        ? Icons.check_circle
+                                                        : opt == 'Rejected'
+                                                            ? Icons.cancel
+                                                            : Icons.list,
+                                                size: 16,
+                                                color: active
+                                                    ? primary
+                                                    : Colors.grey[600],
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                opt,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: active
+                                                      ? primary
+                                                      : Colors.grey[700],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   const SizedBox(height: 16),
                   if (selectedIndex == 0 || selectedIndex == 1) ...[
                     RichText(
