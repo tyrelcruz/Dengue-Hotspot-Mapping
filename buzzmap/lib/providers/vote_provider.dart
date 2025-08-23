@@ -233,13 +233,8 @@ class VoteProvider with ChangeNotifier {
       final token = _prefs!.getString('authToken');
       final userId = _prefs!.getString('userId');
 
-      print('VoteProvider: Attempting to upvote post $postId');
-      print('VoteProvider: Auth token present: ${token != null}');
-      print('VoteProvider: User ID: $userId');
-
       final endpoint = isAdminPost ? 'adminPosts' : 'reports';
       final url = '${Config.baseUrl}/api/v1/$endpoint/$postId/upvote';
-      print('VoteProvider: Calling endpoint: $url');
 
       final response = await http.post(
         Uri.parse(url),
@@ -249,20 +244,11 @@ class VoteProvider with ChangeNotifier {
         },
       );
 
-      print('VoteProvider: Response status code: ${response.statusCode}');
-      print('VoteProvider: Response body: ${response.body}');
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (userId == null) {
-          print('VoteProvider: No user ID found');
           return;
         }
-
-        // Debug prints
-        print('VoteProvider upvotePost response: $data');
-        print(
-            'VoteProvider upvotePost before update: upvotes=${_upvoteCounts[postId]}, downvotes=${_downvoteCounts[postId]}');
 
         // Update vote counts from response
         _upvoteCounts[postId] =
@@ -270,8 +256,7 @@ class VoteProvider with ChangeNotifier {
         _downvoteCounts[postId] =
             data['downvoteCount'] ?? (data['downvotes']?.length ?? 0);
 
-        print(
-            'VoteProvider upvotePost after update: upvotes=${_upvoteCounts[postId]}, downvotes=${_downvoteCounts[postId]}');
+
 
         // Update vote state
         _upvotedPosts[postId] = true;
@@ -285,13 +270,11 @@ class VoteProvider with ChangeNotifier {
 
         notifyListeners();
       } else {
-        print(
-            'VoteProvider: Failed to upvote. Status code: ${response.statusCode}');
-        print('VoteProvider: Response body: ${response.body}');
+
         throw Exception('Failed to upvote post: ${response.body}');
       }
     } catch (e) {
-      print('Error upvoting post: $e');
+
       rethrow;
     } finally {
       _isLoading = false;

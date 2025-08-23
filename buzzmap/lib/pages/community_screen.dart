@@ -18,6 +18,7 @@ import 'package:buzzmap/providers/post_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/widgets.dart';
 import 'package:buzzmap/providers/vote_provider.dart';
+import 'package:buzzmap/errors/flushbar.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -36,6 +37,9 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
   String? _currentUsername;
   Position? _currentPosition;
   bool _isLocationLoading = false;
+  bool _hasShownLocationError = false;
+  bool _isGettingLocation =
+      false; // Prevent multiple simultaneous location calls
   RouteObserver<PageRoute>? _routeObserver;
   String _myPostsStatusFilter = 'All';
 
@@ -52,7 +56,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
   void initState() {
     super.initState();
     _initializePrefs();
-    _getCurrentLocation();
+    _getCurrentLocation(showErrors: false); // Don't show errors on initial load
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _ensureProfilePhotoLoaded();
       await _fetchUserProfiles();
@@ -65,14 +69,16 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Subscribe to route changes
-    _routeObserver = ModalRoute.of(context)
-        ?.navigator
-        ?.widget
-        .observers
-        .whereType<RouteObserver<PageRoute>>()
-        .firstOrNull;
-    _routeObserver?.subscribe(this, ModalRoute.of(context)! as PageRoute);
+    // Subscribe to route changes only once
+    if (_routeObserver == null) {
+      _routeObserver = ModalRoute.of(context)
+          ?.navigator
+          ?.widget
+          .observers
+          .whereType<RouteObserver<PageRoute>>()
+          .firstOrNull;
+      _routeObserver?.subscribe(this, ModalRoute.of(context)! as PageRoute);
+    }
   }
 
   Future<void> _initializePrefs() async {
@@ -81,10 +87,6 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
       String? username = _prefs.getString('username');
       String? email = _prefs.getString('email');
       String? userId = _prefs.getString('userId');
-      print(
-          '👤 Loading username from SharedPreferences: $username'); // Debug log
-      print('📧 Loading email from SharedPreferences: $email'); // Debug log
-      print('👤 Loading userId from SharedPreferences: $userId'); // Debug log
 
       if (username == null ||
           username.isEmpty ||
@@ -112,26 +114,17 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
               if (fetchedUsername.isNotEmpty) {
                 username = fetchedUsername;
                 await _prefs.setString('username', fetchedUsername);
-                print(
-                    '👤 Username fetched from backend and saved: $fetchedUsername');
               }
               if (fetchedEmail.isNotEmpty) {
                 email = fetchedEmail;
                 await _prefs.setString('email', fetchedEmail);
-                print('📧 Email fetched from backend and saved: $fetchedEmail');
               }
               if (fetchedUserId.isNotEmpty) {
                 userId = fetchedUserId;
                 await _prefs.setString('userId', fetchedUserId);
-                print(
-                    '👤 User ID fetched from backend and saved: $fetchedUserId');
               }
-            } else {
-              print('❌ Failed to fetch user profile: ${response.body}');
-            }
-          } catch (e) {
-            print('❌ Error fetching user profile: $e');
-          }
+            } else {}
+          } catch (e) {}
         }
       }
 
@@ -142,7 +135,6 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
         });
       }
     } catch (e) {
-      print('❌ Error loading username: $e');
       if (mounted) {
         setState(() {
           _isUsernameLoading = false;
@@ -151,7 +143,11 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
     }
   }
 
-  Future<void> _getCurrentLocation() async {
+  Future<void> _getCurrentLocation({bool showErrors = true}) async {
+    // Prevent multiple simultaneous location calls
+    if (_isGettingLocation) return;
+
+    _isGettingLocation = true;
     setState(() {
       _isLocationLoading = true;
     });
@@ -159,14 +155,33 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Location services are disabled. Please enable them to use the "Near Me" feature.'),
-              backgroundColor: Colors.red,
-            ),
+        if (mounted && showErrors && !_hasShownLocationError) {
+          _hasShownLocationError = true;
+          AppFlushBar.showError(
+            context,
+            title: 'Location Services Disabled',
+            message:
+                'Please enable location services to use the "Near Me" feature.',
           );
+        }
+
+        // For simulator testing, use a fallback location (Quezon City coordinates)
+        if (mounted) {
+          setState(() {
+            _currentPosition = Position(
+              latitude: 14.6760, // Quezon City latitude
+              longitude: 121.0437, // Quezon City longitude
+              timestamp: DateTime.now(),
+              accuracy: 100.0,
+              altitude: 0.0,
+              heading: 0.0,
+              speed: 0.0,
+              speedAccuracy: 0.0,
+              altitudeAccuracy: 0.0,
+              headingAccuracy: 0.0,
+            );
+            _isLocationLoading = false;
+          });
         }
         return;
       }
@@ -175,13 +190,13 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                    'Location permissions are required to use the "Near Me" feature.'),
-                backgroundColor: Colors.red,
-              ),
+          if (mounted && showErrors && !_hasShownLocationError) {
+            _hasShownLocationError = true;
+            AppFlushBar.showError(
+              context,
+              title: 'Location Permission Required',
+              message:
+                  'Location permissions are required to use the "Near Me" feature.',
             );
           }
           return;
@@ -189,43 +204,69 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
       }
 
       if (permission == LocationPermission.deniedForever) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Location permissions are permanently denied. Please enable them in app settings.'),
-              backgroundColor: Colors.red,
-            ),
+        if (mounted && showErrors && !_hasShownLocationError) {
+          _hasShownLocationError = true;
+          AppFlushBar.showError(
+            context,
+            title: 'Location Permission Denied',
+            message:
+                'Location permissions are permanently denied. Please enable them in app settings.',
           );
+        }
+
+        // For simulator testing, use a fallback location when permissions are denied
+        if (mounted) {
+          setState(() {
+            _currentPosition = Position(
+              latitude: 14.6760, // Quezon City latitude
+              longitude: 121.0437, // Quezon City longitude
+              timestamp: DateTime.now(),
+              accuracy: 100.0,
+              altitude: 0.0,
+              heading: 0.0,
+              speed: 0.0,
+              speedAccuracy: 0.0,
+              altitudeAccuracy: 0.0,
+              headingAccuracy: 0.0,
+            );
+            _isLocationLoading = false;
+          });
         }
         return;
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        desiredAccuracy:
+            LocationAccuracy.medium, // Reduced accuracy for better performance
+        timeLimit:
+            const Duration(seconds: 10), // Add timeout to prevent hanging
       );
 
-      print('📍 Current Location: ${position.latitude}, ${position.longitude}');
+      // Location obtained successfully
 
       if (mounted) {
         setState(() {
           _currentPosition = position;
           _isLocationLoading = false;
+          _hasShownLocationError = false; // Reset error flag on success
         });
       }
+      _isGettingLocation = false;
     } catch (e) {
-      print('Error getting location: $e');
       if (mounted) {
         setState(() {
           _isLocationLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to get your location. Please try again.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        if (showErrors && !_hasShownLocationError) {
+          _hasShownLocationError = true;
+          AppFlushBar.showError(
+            context,
+            title: 'Location Error',
+            message: 'Failed to get your location. Please try again.',
+          );
+        }
       }
+      _isGettingLocation = false;
     }
   }
 
@@ -328,29 +369,49 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
         return [];
       }
 
-      // Add distance to each post and filter by radius
-      filtered = filtered.map((post) {
-        final coords = post['specific_location']?['coordinates'];
-        if (coords != null && coords.length == 2) {
-          final distance = _calculateDistance(
-            _currentPosition!.latitude,
-            _currentPosition!.longitude,
-            coords[1],
-            coords[0],
-          );
-          return {...post, 'distance': distance};
-        }
-        return {...post, 'distance': double.infinity};
-      }).toList();
+      try {
+        // Add distance to each post and filter by radius
+        filtered = filtered.map((post) {
+          try {
+            final coords = post['specific_location']?['coordinates'];
+            if (coords != null && coords is List && coords.length >= 2) {
+              final lat = coords[1] is num ? coords[1].toDouble() : null;
+              final lng = coords[0] is num ? coords[0].toDouble() : null;
 
-      // Sort by distance
-      filtered.sort((a, b) =>
-          (a['distance'] as double).compareTo(b['distance'] as double));
+              if (lat != null && lng != null) {
+                try {
+                  final distance = _calculateDistance(
+                    _currentPosition!.latitude,
+                    _currentPosition!.longitude,
+                    lat,
+                    lng,
+                  );
+                  // Distance calculated successfully
+                  return {...post, 'distance': distance};
+                } catch (e) {
+                  return {...post, 'distance': double.infinity};
+                }
+              }
+            }
+            return {...post, 'distance': double.infinity};
+          } catch (e) {
+            return {...post, 'distance': double.infinity};
+          }
+        }).toList();
 
-      // Filter out posts that are too far (more than 2km radius)
-      filtered = filtered
-          .where((post) => (post['distance'] as double) <= 2.0)
-          .toList();
+        // Sort by distance
+        filtered.sort((a, b) =>
+            (a['distance'] as double).compareTo(b['distance'] as double));
+
+        // Filter out posts that are too far (more than 2km radius)
+        filtered = filtered
+            .where((post) => (post['distance'] as double) <= 2.0)
+            .toList();
+
+        // Near Me filtering complete
+      } catch (e) {
+        filtered = [];
+      }
     }
 
     return filtered;
@@ -377,7 +438,6 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
         throw Exception('Failed to report post');
       }
     } catch (e) {
-      print('Error reporting post: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Failed to report post'),
@@ -411,7 +471,6 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
         throw Exception('Failed to delete post');
       }
     } catch (e) {
-      print('Error deleting post: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Failed to delete post'),
@@ -441,9 +500,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
             await prefs.setString('profilePhotoUrl', photoUrl);
           }
         }
-      } catch (e) {
-        print('Error fetching profile photo URL: $e');
-      }
+      } catch (e) {}
     }
   }
 
@@ -461,12 +518,8 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                 user['_id']: user['profilePhotoUrl'] ?? ''
           };
         });
-      } else {
-        print('Failed to fetch user profiles: \\${response.body}');
-      }
-    } catch (e) {
-      print('Error fetching user profiles: $e');
-    }
+      } else {}
+    } catch (e) {}
   }
 
   @override
@@ -491,7 +544,8 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
               await postProvider.fetchPosts(forceRefresh: true);
               await Provider.of<VoteProvider>(context, listen: false)
                   .refreshAllVotes();
-              await _getCurrentLocation();
+              await _getCurrentLocation(
+                  showErrors: false); // Don't show errors on refresh
             },
             edgeOffset: 10,
             child: SingleChildScrollView(
@@ -537,7 +591,9 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                           isSelected: selectedIndex == 3,
                           onTap: () {
                             if (_currentPosition == null) {
-                              _getCurrentLocation();
+                              _getCurrentLocation(
+                                  showErrors:
+                                      true); // Show errors when user actively taps Near Me
                             }
                             _onTabSelected(3);
                           },
@@ -853,6 +909,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                 height: MediaQuery.of(context).size.width > 600 ? 50 : 40,
                 width: MediaQuery.of(context).size.width > 600 ? 200 : 160,
                 child: FloatingActionButton.extended(
+                  heroTag: 'prevention_fab',
                   onPressed: () {
                     Navigator.pushNamed(context, '/prevention');
                   },
@@ -919,6 +976,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                 ],
               ),
               child: FloatingActionButton.extended(
+                heroTag: 'submit_report_fab',
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -982,7 +1040,8 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
     // Called when returning to this screen
     Provider.of<PostProvider>(context, listen: false)
         .fetchPosts(forceRefresh: true);
-    _getCurrentLocation();
+    _getCurrentLocation(
+        showErrors: false); // Don't show errors when returning to screen
     setState(() {});
   }
 }

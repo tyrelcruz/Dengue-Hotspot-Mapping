@@ -558,8 +558,7 @@ class _MappingScreenState extends State<MappingScreen>
               _barangayPatterns[currentBarangay]?.toLowerCase() ?? 'no data';
           final color = _getColorForBarangay(currentBarangay);
 
-          print('Showing notification for barangay: $currentBarangay');
-          print('Risk Level: $riskLevel, Pattern: $pattern');
+          // Notification shown for barangay: $currentBarangay
 
           LocationNotificationService.show(
             context: context,
@@ -822,11 +821,8 @@ class _MappingScreenState extends State<MappingScreen>
       final token = prefs.getString('authToken');
 
       if (token == null) {
-        print('❌ No auth token found');
         return {};
       }
-
-      print('🔍 Fetching reports with token: ${token.substring(0, 10)}...');
       final response = await http.get(
         Uri.parse('${Config.baseUrl}/api/v1/reports'),
         headers: {
@@ -837,8 +833,6 @@ class _MappingScreenState extends State<MappingScreen>
 
       if (response.statusCode == 200) {
         final dynamic responseData = jsonDecode(response.body);
-        print('📄 Raw response data: $responseData');
-
         // Handle both possible response formats
         final List<dynamic> reports = responseData is Map<String, dynamic>
             ? responseData['data'] ?? []
@@ -846,38 +840,24 @@ class _MappingScreenState extends State<MappingScreen>
                 ? responseData
                 : [];
 
-        print('📊 Total reports fetched: ${reports.length}');
-
         final verifiedReports = reports.where((r) {
           final status = r['status']?.toString().toLowerCase();
           final isVerified = status == 'validated';
-          print('🔍 Report status: $status, isVerified: $isVerified');
-          print('🔍 Report data: $r');
           return isVerified;
         }).toList();
-
-        print('✅ Verified reports: ${verifiedReports.length}');
 
         // Create markers
         final List<Marker> markers = [];
         for (var report in verifiedReports) {
           final coords = report['specific_location']?['coordinates'];
           if (coords == null || coords.length != 2) {
-            print('❌ Invalid coordinates for report: ${report['_id']}');
             continue;
           }
 
           final position = LatLng(coords[1], coords[0]);
           final reportType = report['report_type']?.toString() ?? '';
 
-          print('📍 Creating marker for report:');
-          print('  - ID: ${report['_id']}');
-          print('  - Type: $reportType');
-          print('  - Status: ${report['status']}');
-          print('  - Date: ${report['date']}');
-          print('  - Address: ${report['address']}');
-          print('  - Barangay: ${report['barangay']}');
-          print('  - Coordinates: ${coords[1]}, ${coords[0]}');
+          // Creating marker for report: ${report['_id']}
 
           final icon = await _getReportMarkerIcon(reportType);
 
@@ -900,9 +880,7 @@ class _MappingScreenState extends State<MappingScreen>
 
         return markers.toSet();
       }
-      print('❌ Failed to fetch reports: ${response.statusCode}');
       if (response.statusCode == 401) {
-        print('Authentication failed. Please log in again.');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -914,7 +892,6 @@ class _MappingScreenState extends State<MappingScreen>
       }
       return {};
     } catch (e) {
-      print('❌ Exception in _loadVerifiedReportMarkers: $e');
       return {};
     }
   }
@@ -1109,7 +1086,7 @@ class _MappingScreenState extends State<MappingScreen>
   }
 
   Color _getColorForSeverity(String severity) {
-    print('Getting color for severity: $severity');
+    // Removed debug prints for performance optimization
     switch (severity.toLowerCase()) {
       case 'spike':
         return Colors.red.shade700;
@@ -1123,7 +1100,6 @@ class _MappingScreenState extends State<MappingScreen>
       case 'low_level_activity':
         return Colors.grey.shade400;
       default:
-        print('Unknown severity: $severity, using grey');
         return Colors.grey.shade700;
     }
   }
@@ -1175,13 +1151,9 @@ class _MappingScreenState extends State<MappingScreen>
     // Check if we need to map this name
     final lookupName = nameMapping[barangayName] ?? barangayName;
     final pattern = _barangayPatterns[lookupName]?.toLowerCase();
-    print(
-        'Getting color for $barangayName (mapped to $lookupName) with pattern: $pattern'); // Debug log
 
     // If no data is available, return
     if (pattern == null) {
-      print(
-          'No pattern data for $barangayName (mapped to $lookupName)'); // Debug log
       return;
     }
 
@@ -2446,12 +2418,12 @@ class _MappingScreenState extends State<MappingScreen>
     }
 
     // Fetch health facilities
-    print('DEBUG: Fetching health facilities...');
+    // Fetching health facilities...
     final facilities = await fetchNearbyHealthFacilities(
       location.latitude,
       location.longitude,
     );
-    print('DEBUG: Found ${facilities.length} health facilities');
+    // Found ${facilities.length} health facilities
 
     if (mounted) {
       showModalBottomSheet(
@@ -2881,7 +2853,7 @@ class _MappingScreenState extends State<MappingScreen>
     final url =
         'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=2000&type=hospital&key=$apiKey';
 
-    print('DEBUG: Fetching health facilities from URL: $url');
+    // Fetching health facilities from API
 
     try {
       final response = await http.get(Uri.parse(url));
@@ -3003,22 +2975,17 @@ class _MappingScreenState extends State<MappingScreen>
 
   Future<void> _fetchRiskLevels() async {
     try {
-      print('Fetching risk levels from API...');
+      // Fetching risk levels from API...
       final response = await http.get(
         Uri.parse(
             '${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
       );
 
-      print('API Response Status: ${response.statusCode}');
-      print('API Response Body: ${response.body}');
+      // API Response Status: ${response.statusCode}
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('Parsed data: $data');
-
         if (data['success'] == true && data['data'] != null) {
-          print('Data array length: ${(data['data'] as List).length}');
-
           setState(() {
             _barangayRiskLevels = {};
             _barangayPatterns = {};
@@ -3037,22 +3004,16 @@ class _MappingScreenState extends State<MappingScreen>
                 name = nameMapping[name]!;
               }
 
-              print('Processing barangay: $name');
-              print('Item data: $item');
-
               // Handle pattern directly from the pattern field
               String pattern =
                   item['pattern']?.toString().toLowerCase() ?? 'stable';
               _barangayPatterns[name] = pattern;
-              print('Set pattern for $name: ${_barangayPatterns[name]}');
 
               // Handle alert
               _barangayAlerts[name] = item['alert']?.toString() ?? '';
-              print('Set alert for $name: ${_barangayAlerts[name]}');
             }
 
-            print('Final _barangayPatterns: $_barangayPatterns');
-            print('Final _barangayAlerts: $_barangayAlerts');
+            // Risk levels and patterns loaded successfully
           });
 
           // Update polygons with new risk levels and patterns
@@ -3060,17 +3021,10 @@ class _MappingScreenState extends State<MappingScreen>
 
           // Force a map update
           _updateMapLayers();
-        } else {
-          print('API response indicates failure or no data');
-          print('Success flag: ${data['success']}');
-          print('Data present: ${data['data'] != null}');
         }
-      } else {
-        print('API request failed with status code: ${response.statusCode}');
       }
     } catch (e) {
-      print('Error fetching risk levels: $e');
-      print('Error stack trace: ${StackTrace.current}');
+      // Error fetching risk levels
     }
   }
 
@@ -3108,8 +3062,7 @@ class _MappingScreenState extends State<MappingScreen>
         }
       }
     } catch (e) {
-      print('Error fetching dengue data: $e');
-      print('Error stack trace: ${StackTrace.current}');
+      // Error fetching dengue data
     }
   }
 
@@ -3160,14 +3113,13 @@ class _MappingScreenState extends State<MappingScreen>
 
   Future<void> _fetchInterventions() async {
     try {
-      print('Fetching interventions...'); // Debug log
+      // Fetching interventions...
 
       // Get the auth token
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('authToken');
 
       if (token == null) {
-        print('No auth token found for interventions');
         return;
       }
 

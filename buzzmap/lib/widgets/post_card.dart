@@ -67,7 +67,7 @@ class PostCard extends StatelessWidget {
     final iconColor = isDark ? Colors.white : Colors.black;
 
     final postIdStr = postId;
-    print('PostCard debug: postId=$postIdStr full post=$post');
+    // Removed debug print to improve performance
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -90,11 +90,35 @@ class PostCard extends StatelessWidget {
               if (showDistance && post['distance'] != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    _formatDistance(post['distance']),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w500,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: theme.colorScheme.primary.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.location_on,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatDistance(post['distance']),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -241,31 +265,5 @@ class PostCard extends StatelessWidget {
         );
       },
     );
-  }
-}
-
-Future<void> _ensureProfilePhotoLoaded() async {
-  final prefs = await SharedPreferences.getInstance();
-  String? profilePhotoUrl = prefs.getString('profilePhotoUrl');
-  final token = prefs.getString('authToken');
-  if ((profilePhotoUrl == null || profilePhotoUrl.isEmpty) && token != null) {
-    try {
-      final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/auth/me'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final photoUrl = data['user']?['profilePhotoUrl'];
-        if (photoUrl != null && photoUrl.isNotEmpty) {
-          await prefs.setString('profilePhotoUrl', photoUrl);
-        }
-      }
-    } catch (e) {
-      print('Error fetching profile photo URL: $e');
-    }
   }
 }

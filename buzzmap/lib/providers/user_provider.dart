@@ -27,10 +27,7 @@ class UserProvider with ChangeNotifier {
           _userId != null &&
           _authToken!.isNotEmpty &&
           _userId!.isNotEmpty;
-      print('🔐 UserProvider initialized:');
-      print('📝 Auth Token: ${_authToken != null ? 'Present' : 'Missing'}');
-      print('👤 User ID: ${_userId ?? 'Missing'}');
-      print('🔑 Is Logged In: $_isLoggedIn');
+
       notifyListeners();
     } catch (e) {
       print('Error initializing UserProvider: $e');
@@ -43,9 +40,7 @@ class UserProvider with ChangeNotifier {
     _isLoggedIn = true;
     await _prefs?.setString('userId', userId);
     await _prefs?.setString('authToken', authToken);
-    print('🔐 User logged in:');
-    print('👤 User ID: $userId');
-    print('📝 Auth Token: ${authToken.isNotEmpty ? 'Present' : 'Missing'}');
+
     notifyListeners();
   }
 
@@ -67,7 +62,7 @@ class UserProvider with ChangeNotifier {
     } catch (e) {
       print('Error clearing notifications on logout: $e');
     }
-    print('🔐 User logged out');
+
     notifyListeners();
   }
 

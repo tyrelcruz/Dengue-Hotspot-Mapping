@@ -46,7 +46,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
   }
 
   Future<void> refresh() async {
-    print('🔄 Refreshing announcement card...');
+    
     setState(() {
       _isLoading = true;
       _announcement = null; // Clear the current announcement
@@ -72,18 +72,14 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
       bool isUpvoted = _isUpvoted;
       bool isDownvoted = _isDownvoted;
 
-      print('🎯 Handling vote:');
-      print('Vote type: $voteType');
-      print('Announcement ID: $announcementId');
-      print('Current upvoted: $isUpvoted');
-      print('Current downvoted: $isDownvoted');
+
 
       // If clicking the same vote type, remove the vote
       if ((voteType == 'upvote' && isUpvoted) ||
           (voteType == 'downvote' && isDownvoted)) {
         final url =
             '${Config.baseUrl}/api/v1/adminPosts/$announcementId/$voteType';
-        print('🗑️ Removing vote: $url');
+
 
         final response = await http.delete(
           Uri.parse(url),
@@ -113,8 +109,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
         // Add new vote
         final url =
             '${Config.baseUrl}/api/v1/adminPosts/$announcementId/$voteType';
-        print('➕ Adding vote: $url');
-
         final response = await http.post(
           Uri.parse(url),
           headers: {
@@ -141,7 +135,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
         }
       }
     } catch (e) {
-      print('❌ Error handling vote: $e');
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to submit vote: $e')),
       );
