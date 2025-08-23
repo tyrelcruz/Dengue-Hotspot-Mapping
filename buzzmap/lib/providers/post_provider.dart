@@ -55,12 +55,35 @@ class PostProvider with ChangeNotifier {
           final Duration difference = now.difference(reportDate);
 
           String whenPosted;
-          if (difference.inDays > 0) {
-            whenPosted = '${difference.inDays} days ago';
+          if (difference.inDays >= 7) {
+            // For posts older than 7 days, show month and day
+            final months = [
+              'Jan',
+              'Feb',
+              'Mar',
+              'Apr',
+              'May',
+              'Jun',
+              'Jul',
+              'Aug',
+              'Sep',
+              'Oct',
+              'Nov',
+              'Dec'
+            ];
+            whenPosted = '${months[reportDate.month - 1]} ${reportDate.day}';
+          } else if (difference.inDays > 0) {
+            whenPosted = difference.inDays == 1
+                ? '1 day ago'
+                : '${difference.inDays} days ago';
           } else if (difference.inHours > 0) {
-            whenPosted = '${difference.inHours} hours ago';
+            whenPosted = difference.inHours == 1
+                ? '1 hour ago'
+                : '${difference.inHours} hours ago';
           } else if (difference.inMinutes > 0) {
-            whenPosted = '${difference.inMinutes} minutes ago';
+            whenPosted = difference.inMinutes == 1
+                ? '1 minute ago'
+                : '${difference.inMinutes} minutes ago';
           } else {
             whenPosted = 'Just now';
           }

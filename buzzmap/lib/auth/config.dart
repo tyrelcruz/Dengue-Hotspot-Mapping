@@ -9,15 +9,13 @@ class Config {
   static String get baseUrl {
     if (Platform.isAndroid) {
       return dotenv.env['API_BASE_URL_ANDROID_EMULATOR'] ??
-          'https://buzzmap-server.vercel.app';
+          'http://10.0.2.2:4000';
     } else if (Platform.isIOS) {
-      return dotenv.env['API_BASE_URL_IOS'] ??
-          'https://buzzmap-server.vercel.app';
+      return dotenv.env['API_BASE_URL_IOS'] ?? 'http://localhost:4000';
     } else if (kIsWeb) {
-      return dotenv.env['API_BASE_URL_WEB'] ??
-          'https://buzzmap-server.vercel.app';
+      return dotenv.env['API_BASE_URL_WEB'] ?? 'http://localhost:4000';
     }
-    return 'https://buzzmap-server.vercel.app';
+    return 'http://localhost:4000';
   }
 
   static String get createPostUrl => '$baseUrl/api/v1/reports';

@@ -114,7 +114,24 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     if (diff.inMinutes < 1) return 'Just now';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m';
     if (diff.inHours < 24) return '${diff.inHours}h';
-    return '${diff.inDays}d';
+    if (diff.inDays < 7) return '${diff.inDays}d';
+
+    // For posts older than 7 days, show month and day
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    return '${months[date.month - 1]} ${date.day}';
   }
 
   String _formatDistance(double distance) {
