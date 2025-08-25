@@ -19,7 +19,7 @@ class WelcomeScreen extends StatelessWidget {
     double buttonPaddingHorizontal = screenWidth * 0.14;
     double buttonPaddingVertical = screenHeight * 0.01;
     double titleFontSize = 70 * MediaQuery.of(context).textScaleFactor;
-    double subtitleFontSize = 25 * MediaQuery.of(context).textScaleFactor;
+    double subtitleFontSize = 15 * MediaQuery.of(context).textScaleFactor;
     double textContent = 12 * MediaQuery.of(context).textScaleFactor;
 
     return Scaffold(
