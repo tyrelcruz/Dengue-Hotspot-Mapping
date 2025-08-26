@@ -16,7 +16,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:buzzmap/widgets/location_notification.dart';
 import 'package:buzzmap/services/alert_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:provider/provider.dart';
 import 'package:buzzmap/providers/post_provider.dart';
 
