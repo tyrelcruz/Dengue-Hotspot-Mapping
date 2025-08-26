@@ -256,8 +256,6 @@ class VoteProvider with ChangeNotifier {
         _downvoteCounts[postId] =
             data['downvoteCount'] ?? (data['downvotes']?.length ?? 0);
 
-
-
         // Update vote state
         _upvotedPosts[postId] = true;
         _downvotedPosts[postId] = false;
@@ -270,11 +268,9 @@ class VoteProvider with ChangeNotifier {
 
         notifyListeners();
       } else {
-
         throw Exception('Failed to upvote post: ${response.body}');
       }
     } catch (e) {
-
       rethrow;
     } finally {
       _isLoading = false;
@@ -437,23 +433,53 @@ class VoteProvider with ChangeNotifier {
   }
 
   bool isUpvoted(String postId) {
-    if (!_isInitialized || _prefs == null) return false;
+    if (!_isInitialized) {
+      // Initialize lazily when first accessed
+      initializePrefs();
+      return false;
+    }
+    if (_prefs == null) return false;
     return _upvotedPosts[postId] ?? false;
   }
 
   bool isDownvoted(String postId) {
-    if (!_isInitialized || _prefs == null) return false;
+    if (!_isInitialized) {
+      // Initialize lazily when first accessed
+      initializePrefs();
+      return false;
+    }
+    if (_prefs == null) return false;
     return _downvotedPosts[postId] ?? false;
   }
 
   int getUpvoteCount(String postId) {
-    if (!_isInitialized || _prefs == null) return 0;
+    if (!_isInitialized) {
+      // Initialize lazily when first accessed
+      initializePrefs();
+      return 0;
+    }
+    if (_prefs == null) return 0;
     return _upvoteCounts[postId] ?? 0;
   }
 
   int getDownvoteCount(String postId) {
-    if (!_isInitialized || _prefs == null) return 0;
+    if (!_isInitialized) {
+      // Initialize lazily when first accessed
+      initializePrefs();
+      return 0;
+    }
+    if (_prefs == null) return 0;
     return _downvoteCounts[postId] ?? 0;
+  }
+
+  // Add a method to load vote states when needed (e.g., when entering community screen)
+  Future<void> loadVoteStatesIfNeeded() async {
+    if (!_isInitialized) {
+      await initializePrefs();
+    }
+    if (!_isLoadingAllVotes && _prefs != null) {
+      await _loadPersistedVoteStates();
+    }
   }
 
   Future<void> clearUserVotes() async {

@@ -1,10 +1,8 @@
-import 'package:buzzmap/main.dart';
 import 'package:buzzmap/widgets/engagement_row.dart';
 import 'package:buzzmap/widgets/user_info_row.dart';
 import 'package:buzzmap/widgets/admin_post_detail_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
@@ -46,7 +44,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
   }
 
   Future<void> refresh() async {
-    
     setState(() {
       _isLoading = true;
       _announcement = null; // Clear the current announcement
@@ -72,14 +69,11 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
       bool isUpvoted = _isUpvoted;
       bool isDownvoted = _isDownvoted;
 
-
-
       // If clicking the same vote type, remove the vote
       if ((voteType == 'upvote' && isUpvoted) ||
           (voteType == 'downvote' && isDownvoted)) {
         final url =
             '${Config.baseUrl}/api/v1/adminPosts/$announcementId/$voteType';
-
 
         final response = await http.delete(
           Uri.parse(url),
@@ -135,7 +129,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
         }
       }
     } catch (e) {
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to submit vote: $e')),
       );

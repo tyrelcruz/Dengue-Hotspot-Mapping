@@ -3,7 +3,6 @@ import 'package:buzzmap/widgets/post_card.dart';
 import 'package:flutter/material.dart';
 import 'package:buzzmap/widgets/appbar/custom_app_bar.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:buzzmap/data/dengue_data.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'dart:convert';
 import 'dart:math';
@@ -77,11 +76,11 @@ class _LocationDetailsScreenState extends State<LocationDetailsScreen> {
     print('DEBUG: Starting screen initialization');
     // Load posts first
     await Provider.of<PostProvider>(context, listen: false).fetchPosts();
-    // Initialize VoteProvider and refresh votes
+    // Initialize VoteProvider and load votes lazily
     final voteProvider = Provider.of<VoteProvider>(context, listen: false);
     print('DEBUG: VoteProvider initialized');
-    await voteProvider.refreshAllVotes();
-    print('DEBUG: All votes refreshed');
+    await voteProvider.loadVoteStatesIfNeeded();
+    print('DEBUG: All votes loaded');
     await _loadCustomMarkerIcons();
     print('DEBUG: Custom icons loaded, proceeding with data load');
     await _loadDengueData();

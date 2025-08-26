@@ -1,15 +1,12 @@
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:buzzmap/widgets/utils/notification_template.dart';
 import 'package:another_flushbar/flushbar.dart';
 import 'package:buzzmap/errors/flushbar.dart';
 import 'package:buzzmap/config/config.dart';
 import 'package:buzzmap/services/http_client.dart';
-import 'package:buzzmap/errors/flushbar.dart';
 
 class NotificationService with ChangeNotifier {
   final storage = FlutterSecureStorage();

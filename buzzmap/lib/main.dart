@@ -15,13 +15,11 @@ import 'package:buzzmap/pages/login_screen.dart';
 import 'package:provider/provider.dart';
 
 import 'package:buzzmap/services/notification_service.dart';
-import 'package:buzzmap/services/alert_service.dart';
 import 'package:buzzmap/widgets/global_alert_overlay.dart';
 import 'package:buzzmap/providers/vote_provider.dart';
 import 'package:buzzmap/providers/comment_provider.dart';
 import 'package:buzzmap/providers/user_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:buzzmap/config/config.dart';
 import 'package:buzzmap/providers/post_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:buzzmap/services/update_service.dart';
@@ -211,9 +209,12 @@ class MyApp extends StatelessWidget {
               return GlobalAlertOverlay(
                 child: Builder(
                   builder: (context) {
-                    // Check for updates when the app starts
+                    // Defer update check to avoid blocking startup
                     WidgetsBinding.instance.addPostFrameCallback((_) {
-                      UpdateService.checkForUpdates(context);
+                      // Add a delay to ensure app is fully loaded
+                      Future.delayed(const Duration(seconds: 2), () {
+                        UpdateService.checkForUpdates(context);
+                      });
                     });
                     return child!;
                   },

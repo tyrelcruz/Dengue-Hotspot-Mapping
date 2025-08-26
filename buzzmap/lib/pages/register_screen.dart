@@ -4,13 +4,11 @@ import 'package:buzzmap/pages/welcome_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:buzzmap/errors/flushbar.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:buzzmap/auth/config.dart';
 import 'package:buzzmap/auth/auth_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});

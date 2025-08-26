@@ -62,7 +62,9 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
       await _fetchUserProfiles();
       await Provider.of<PostProvider>(context, listen: false)
           .fetchPosts(forceRefresh: true);
-      await Provider.of<VoteProvider>(context, listen: false).refreshAllVotes();
+      // Use lazy loading instead of refreshAllVotes
+      await Provider.of<VoteProvider>(context, listen: false)
+          .loadVoteStatesIfNeeded();
     });
   }
 
@@ -542,8 +544,9 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
               await _ensureProfilePhotoLoaded();
               await _fetchUserProfiles();
               await postProvider.fetchPosts(forceRefresh: true);
+              // Use lazy loading instead of refreshAllVotes
               await Provider.of<VoteProvider>(context, listen: false)
-                  .refreshAllVotes();
+                  .loadVoteStatesIfNeeded();
               await _getCurrentLocation(
                   showErrors: false); // Don't show errors on refresh
             },

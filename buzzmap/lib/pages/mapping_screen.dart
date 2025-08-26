@@ -6,24 +6,17 @@ import 'package:buzzmap/pages/location_details_screen.dart';
 import 'dart:math';
 import 'dart:async';
 import 'dart:convert';
-import 'package:buzzmap/data/dengue_data.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:buzzmap/widgets/recommendations_widget.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:buzzmap/services/notification_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:buzzmap/auth/config.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:buzzmap/widgets/location_notification.dart';
 import 'package:buzzmap/services/alert_service.dart';
-import 'dart:io' show Platform;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_svg/flutter_svg.dart' as svg;
-import 'dart:ui' as ui;
 import 'package:flutter_svg/svg.dart';
-import 'dart:typed_data';
 import 'package:provider/provider.dart';
 import 'package:buzzmap/providers/post_provider.dart';
 
@@ -337,29 +330,20 @@ class _MappingScreenState extends State<MappingScreen>
     _layerOptions['Markers'] = widget.reportId != null;
     _layerOptions['Heatmap'] = false;
 
-    // Load custom marker icons first
-    _loadCustomMarkerIcons().then((_) {
-      // Start the initialization sequence after icons are loaded
-      _initializeMappingScreen();
-    });
+    // Use a more efficient initialization sequence
+    _initializeMappingScreenOptimized();
   }
 
-  Future<void> _initializeMappingScreen() async {
+  Future<void> _initializeMappingScreenOptimized() async {
     setState(() {
       _isLoading = true;
     });
+
     try {
-      // Fetch dengue data first
-      await _fetchDengueData();
-      // Fetch risk levels
-      await _fetchRiskLevels();
-      // Load GeoJSON
-      await _loadGeoJSON();
-      // Optionally, initialize location services (don't block UI)
-      Future.delayed(const Duration(seconds: 1), () {
-        _initializeLocationServices();
-      });
-      // If we have initial coordinates from a notification, add a marker
+      // Step 1: Load custom marker icons (lightweight)
+      await _loadCustomMarkerIcons();
+
+      // Step 2: If we have initial coordinates, add marker immediately
       if (widget.initialLatitude != null && widget.initialLongitude != null) {
         setState(() {
           _markers.add(
@@ -373,20 +357,53 @@ class _MappingScreenState extends State<MappingScreen>
           );
         });
       }
-      // Using a slight delay to ensure Google Maps is fully loaded
-      Timer(const Duration(milliseconds: 500), () {
+
+      // Step 3: Mark map as ready to show UI
+      setState(() {
+        _isMapReady = true;
+        _isLoading = false;
+      });
+
+      // Step 4: Defer heavy operations to avoid blocking UI
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadHeavyDataInBackground();
+      });
+    } catch (e) {
+      print('Error in initial mapping screen setup: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadHeavyDataInBackground() async {
+    try {
+      // Load data sequentially to avoid overwhelming the system
+      await _fetchDengueData();
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      await _fetchRiskLevels();
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      await _loadGeoJSON();
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      // Initialize location services after data is loaded
+      await Future.delayed(const Duration(milliseconds: 500), () {
+        _initializeLocationServices();
+      });
+
+      // Update map layers after everything is loaded
+      await Future.delayed(const Duration(milliseconds: 700), () {
         _updateMapLayers();
       });
-      // Start polling for alerts
-      _alertService.startPolling();
+
+      // Start alert polling last with reduced frequency
+      await Future.delayed(const Duration(milliseconds: 1000), () {
+        _alertService.startPolling();
+      });
     } catch (e) {
-      print('Error initializing mapping screen: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      print('Error loading heavy data: $e');
     }
   }
 
@@ -2975,94 +2992,108 @@ class _MappingScreenState extends State<MappingScreen>
 
   Future<void> _fetchRiskLevels() async {
     try {
-      // Fetching risk levels from API...
-      final response = await http.get(
-        Uri.parse(
-            '${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
-      );
+      // Add a small delay to avoid overwhelming the server
+      await Future.delayed(const Duration(milliseconds: 150));
 
-      // API Response Status: ${response.statusCode}
+      final response = await http
+          .get(
+            Uri.parse(
+                '${Config.baseUrl}/api/v1/analytics/retrieve-pattern-recognition-results'),
+          )
+          .timeout(const Duration(seconds: 10)); // Add timeout
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && data['data'] != null) {
-          setState(() {
-            _barangayRiskLevels = {};
-            _barangayPatterns = {};
-            _barangayAlerts = {};
+          if (mounted) {
+            setState(() {
+              _barangayRiskLevels = {};
+              _barangayPatterns = {};
+              _barangayAlerts = {};
 
-            // Name mapping for special cases
-            final nameMapping = {
-              'E. Rodriguez Sr.': 'E. Rodriguez',
-              // Add more mappings if needed
-            };
+              // Name mapping for special cases
+              final nameMapping = {
+                'E. Rodriguez Sr.': 'E. Rodriguez',
+                // Add more mappings if needed
+              };
 
-            for (var item in data['data'] as List) {
-              String name = item['name'];
-              // Check if we need to map this name
-              if (nameMapping.containsKey(name)) {
-                name = nameMapping[name]!;
+              for (var item in data['data'] as List) {
+                String name = item['name'];
+                // Check if we need to map this name
+                if (nameMapping.containsKey(name)) {
+                  name = nameMapping[name]!;
+                }
+
+                // Handle pattern directly from the pattern field
+                String pattern =
+                    item['pattern']?.toString().toLowerCase() ?? 'stable';
+                _barangayPatterns[name] = pattern;
+
+                // Handle alert
+                _barangayAlerts[name] = item['alert']?.toString() ?? '';
               }
 
-              // Handle pattern directly from the pattern field
-              String pattern =
-                  item['pattern']?.toString().toLowerCase() ?? 'stable';
-              _barangayPatterns[name] = pattern;
-
-              // Handle alert
-              _barangayAlerts[name] = item['alert']?.toString() ?? '';
-            }
-
-            // Risk levels and patterns loaded successfully
-          });
+              // Risk levels and patterns loaded successfully
+            });
+          }
 
           // Update polygons with new risk levels and patterns
-          _updatePolygonsWithRiskLevels();
-
-          // Force a map update
-          _updateMapLayers();
+          if (mounted) {
+            _updatePolygonsWithRiskLevels();
+            // Force a map update
+            _updateMapLayers();
+          }
         }
       }
     } catch (e) {
-      // Error fetching risk levels
+      print('Error fetching risk levels: $e');
+      // Don't block UI on error
     }
   }
 
   Future<void> _fetchDengueData() async {
     try {
-      final response = await http.get(
-        Uri.parse('${Config.baseUrl}/api/v1/barangays/get-all-barangays'),
-      );
+      // Add a small delay to avoid overwhelming the server
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final response = await http
+          .get(
+            Uri.parse('${Config.baseUrl}/api/v1/barangays/get-all-barangays'),
+          )
+          .timeout(const Duration(seconds: 10)); // Add timeout
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         if (data.isNotEmpty) {
-          setState(() {
-            _dengueData = Map.fromEntries(
-              data.map((item) => MapEntry(
-                    item['name'],
-                    {
-                      'cases':
-                          0, // Since the API doesn't provide cases, we'll use 0
-                      'severity':
-                          item['risk_level']?.toString().toLowerCase() ??
-                              'Unknown',
-                      'alert': item['status_and_recommendation']
-                              ?['pattern_based']?['alert'] ??
-                          'No alerts triggered.',
-                      'pattern': item['status_and_recommendation']
-                              ?['pattern_based']?['status'] ??
-                          '',
-                      'last_analysis_time': item['last_analysis_time'],
-                    },
-                  )),
-            );
-            _isLoadingData = false;
-          });
+          if (mounted) {
+            setState(() {
+              _dengueData = Map.fromEntries(
+                data.map((item) => MapEntry(
+                      item['name'],
+                      {
+                        'cases':
+                            0, // Since the API doesn't provide cases, we'll use 0
+                        'severity':
+                            item['risk_level']?.toString().toLowerCase() ??
+                                'Unknown',
+                        'alert': item['status_and_recommendation']
+                                ?['pattern_based']?['alert'] ??
+                            'No alerts triggered.',
+                        'pattern': item['status_and_recommendation']
+                                ?['pattern_based']?['status'] ??
+                            '',
+                        'last_analysis_time': item['last_analysis_time'],
+                      },
+                    )),
+              );
+              _isLoadingData = false;
+            });
+          }
         }
       }
     } catch (e) {
-      // Error fetching dengue data
+      print('Error fetching dengue data: $e');
+      // Don't block UI on error
     }
   }
 

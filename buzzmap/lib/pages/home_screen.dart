@@ -9,7 +9,6 @@ import 'package:buzzmap/pages/post/post_screen.dart';
 import 'package:buzzmap/tips/id_mosquito.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:buzzmap/services/alert_service.dart';
-import 'package:buzzmap/widgets/global_alert_overlay.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'dart:convert';

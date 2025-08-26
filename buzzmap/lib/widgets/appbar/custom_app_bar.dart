@@ -3,7 +3,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:buzzmap/pages/menu_screen.dart';
 import 'package:buzzmap/pages/notification_screen.dart';
 import 'package:buzzmap/services/notification_service.dart';
-import 'package:provider/provider.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 

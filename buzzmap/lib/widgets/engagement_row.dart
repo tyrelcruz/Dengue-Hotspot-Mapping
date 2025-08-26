@@ -1,9 +1,5 @@
 import 'package:buzzmap/main.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:buzzmap/auth/config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:buzzmap/providers/vote_provider.dart';
@@ -49,7 +45,8 @@ class _EngagementRowState extends State<EngagementRow> {
       if (mounted) {
         final voteProvider = Provider.of<VoteProvider>(context, listen: false);
         await voteProvider.checkVoteStatus(widget.postId);
-        await voteProvider.refreshAllVotes();
+        // Use lazy loading instead of refreshAllVotes
+        await voteProvider.loadVoteStatesIfNeeded();
       }
     });
   }

@@ -4,26 +4,20 @@ import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
-
 import 'package:buzzmap/main.dart';
 import 'package:buzzmap/widgets/custom_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
-
-import 'package:buzzmap/auth/config.dart'; // Adjust the path based on your file structure
+import 'package:buzzmap/auth/config.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-
 import 'package:buzzmap/services/notification_service.dart';
-import 'package:buzzmap/widgets/utils/notification_template.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:buzzmap/errors/flushbar.dart';
-
 import 'package:buzzmap/pages/community_screen.dart';
 import 'package:dropdown_search/dropdown_search.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:buzzmap/services/offline_post_service.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 

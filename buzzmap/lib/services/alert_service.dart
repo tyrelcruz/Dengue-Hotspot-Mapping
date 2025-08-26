@@ -25,7 +25,7 @@ class AlertService {
     debugPrint('Using base URL: ${Config.baseUrl}');
 
     _isPolling = true;
-    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       _fetchLatestAlert();
     });
     _fetchLatestAlert();

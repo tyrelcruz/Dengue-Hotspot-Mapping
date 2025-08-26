@@ -20,28 +20,46 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   void _startSplashFlow() {
-    Future.delayed(const Duration(seconds: 1), () {
-      if (!mounted) return;
-      setState(() {
-        _showFirstImage = !_showFirstImage;
-      });
-    });
+    // Use a single timer for better performance
+    Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
 
-    // Navigate after 3 seconds and check token
-    Future.delayed(const Duration(seconds: 3), _checkAuthAndNavigate);
+      if (timer.tick == 1) {
+        // First tick - change image
+        setState(() {
+          _showFirstImage = !_showFirstImage;
+        });
+      } else if (timer.tick == 3) {
+        // Third tick - navigate
+        timer.cancel();
+        _checkAuthAndNavigate();
+      }
+    });
   }
 
   Future<void> _checkAuthAndNavigate() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('authToken');
-    debugPrint('🧪 SplashScreen token check: $token');
-
     if (!mounted) return;
 
-    if (token != null && token.isNotEmpty) {
-      Navigator.pushReplacementNamed(context, '/home');
-    } else {
-      Navigator.pushReplacementNamed(context, '/welcome');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('authToken');
+      debugPrint('🧪 SplashScreen token check: $token');
+
+      if (!mounted) return;
+
+      if (token != null && token.isNotEmpty) {
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        Navigator.pushReplacementNamed(context, '/welcome');
+      }
+    } catch (e) {
+      // Fallback to welcome screen if there's an error
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/welcome');
+      }
     }
   }
 

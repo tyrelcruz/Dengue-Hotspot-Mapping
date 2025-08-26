@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:io' show Platform;
 import 'package:upgrader/upgrader.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 

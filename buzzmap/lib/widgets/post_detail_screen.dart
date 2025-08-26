@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:buzzmap/widgets/engagement_row.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:buzzmap/widgets/user_info_row.dart';
-import 'package:buzzmap/main.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';

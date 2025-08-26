@@ -1,20 +1,15 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
 import 'package:http/http.dart' as http;
 import 'package:buzzmap/main.dart';
-import 'package:buzzmap/pages/tips_screen.dart';
 import 'package:buzzmap/pages/tip_details_screen.dart';
 import 'package:buzzmap/widgets/appbar/custom_app_bar.dart';
 import 'package:buzzmap/widgets/article_sampler.dart';
-import 'package:buzzmap/widgets/interests.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:buzzmap/data/articles_data.dart';
 import 'package:buzzmap/models/admin_post.dart';
 import 'package:intl/intl.dart';
 import 'package:buzzmap/pages/news_details_screen.dart';
 import 'package:buzzmap/config/config.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:buzzmap/widgets/custom_search_bar.dart';
 
 class PreventionScreen extends StatefulWidget {

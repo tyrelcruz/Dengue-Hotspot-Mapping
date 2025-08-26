@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:buzzmap/services/offline_post_service.dart';
 import 'package:intl/intl.dart';
 import 'package:carousel_slider/carousel_slider.dart';
-import 'dart:io';
 
 class OfflinePostsList extends StatefulWidget {
   const OfflinePostsList({super.key});

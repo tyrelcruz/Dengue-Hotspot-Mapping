@@ -1,11 +1,14 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:buzzmap/auth/config.dart' as auth_config;
 import 'package:buzzmap/models/admin_post.dart';
 import 'package:buzzmap/widgets/appbar/custom_app_bar.dart';
 import 'package:buzzmap/main.dart';
 import 'package:intl/intl.dart';
-import 'dart:io' show Platform;
 import 'package:buzzmap/config/config.dart';
 
 class NewsDetailsScreen extends StatefulWidget {

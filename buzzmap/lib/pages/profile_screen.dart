@@ -4,13 +4,11 @@ import 'package:buzzmap/providers/post_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:buzzmap/widgets/post_card.dart';
 import 'package:buzzmap/widgets/post_detail_screen.dart';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:buzzmap/auth/config.dart';
 import 'package:buzzmap/providers/vote_provider.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String username;
@@ -41,7 +39,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _initPrefs();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await Provider.of<PostProvider>(context, listen: false).fetchPosts();
-      await Provider.of<VoteProvider>(context, listen: false).refreshAllVotes();
+      // Use lazy loading instead of refreshAllVotes
+      await Provider.of<VoteProvider>(context, listen: false)
+          .loadVoteStatesIfNeeded();
     });
     _bioController.text = _bio;
   }

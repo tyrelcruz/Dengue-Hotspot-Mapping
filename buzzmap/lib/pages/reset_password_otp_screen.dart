@@ -7,7 +7,6 @@ import 'dart:async';
 import 'package:buzzmap/auth/config.dart';
 import 'package:buzzmap/errors/flushbar.dart';
 import 'package:buzzmap/pages/new_password_screen.dart';
-import 'package:flutter/foundation.dart';
 
 class ResetPasswordOTPScreen extends StatefulWidget {
   final String email;
