@@ -36,6 +36,11 @@ class Config {
   // Image Upload Configuration
   static String get imgbbApiKey => dotenv.env['IMGBB_API_KEY'] ?? '';
 
+  // Google Maps API Configuration
+  static String get googleMapsApiKey =>
+      dotenv.env['GOOGLE_MAPS_API_KEY'] ??
+      'AIzaSyC1qJ8pzXVWuWOEyc7svbEKDa_HEPE2EL0';
+
   // API Timeouts and Retries
   static Duration get timeoutDuration => Duration(
         seconds: int.parse(dotenv.env['API_TIMEOUT_SECONDS'] ?? '10'),

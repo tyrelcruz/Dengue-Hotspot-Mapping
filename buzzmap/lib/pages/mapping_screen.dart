@@ -306,7 +306,7 @@ class _MappingScreenState extends State<MappingScreen>
     );
 
     _polygonFadeController = AnimationController(
-      duration: const Duration(milliseconds: 10500),
+      duration: const Duration(milliseconds: 3000),
       vsync: this,
     );
 
@@ -319,8 +319,11 @@ class _MappingScreenState extends State<MappingScreen>
 
     // Add listener to update polygons when animation value changes
     _polygonFadeAnimation.addListener(() {
-      if (mounted) {
-        _updatePolygonsWithRiskLevels();
+      if (mounted && _polygonsLoaded) {
+        // Throttle updates to improve performance
+        if (_polygonFadeAnimation.value % 0.1 < 0.05) {
+          _updatePolygonsWithRiskLevels();
+        }
       }
     });
 
@@ -336,6 +339,8 @@ class _MappingScreenState extends State<MappingScreen>
   Future<void> _initializeMappingScreenOptimized() async {
     setState(() {
       _isLoading = true;
+      _polygonsLoaded =
+          false; // Ensure polygons are marked as not loaded initially
     });
 
     try {
@@ -357,10 +362,10 @@ class _MappingScreenState extends State<MappingScreen>
         });
       }
 
-      // Step 3: Mark map as ready to show UI
+      // Step 3: Mark map as ready to show UI, but keep loading overlay until polygons are loaded
       setState(() {
         _isMapReady = true;
-        _isLoading = false;
+        // Don't set _isLoading to false here - let it be controlled by polygon loading
       });
 
       // Step 4: Defer heavy operations to avoid blocking UI
@@ -377,28 +382,30 @@ class _MappingScreenState extends State<MappingScreen>
 
   Future<void> _loadHeavyDataInBackground() async {
     try {
-      // Load data sequentially to avoid overwhelming the system
-      await _fetchDengueData();
-      await Future.delayed(const Duration(milliseconds: 300));
+      // Load GeoJSON first and in parallel with API calls
+      final geoJsonFuture = _loadGeoJSON();
+      final dengueDataFuture = _fetchDengueData();
+      final riskLevelsFuture = _fetchRiskLevels();
 
-      await _fetchRiskLevels();
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      await _loadGeoJSON();
-      await Future.delayed(const Duration(milliseconds: 300));
+      // Wait for all operations to complete
+      await Future.wait([
+        geoJsonFuture,
+        dengueDataFuture,
+        riskLevelsFuture,
+      ]);
 
       // Initialize location services after data is loaded
-      await Future.delayed(const Duration(milliseconds: 500), () {
+      await Future.delayed(const Duration(milliseconds: 300), () {
         _initializeLocationServices();
       });
 
       // Update map layers after everything is loaded
-      await Future.delayed(const Duration(milliseconds: 700), () {
+      await Future.delayed(const Duration(milliseconds: 500), () {
         _updateMapLayers();
       });
 
       // Start alert polling last with reduced frequency
-      await Future.delayed(const Duration(milliseconds: 1000), () {
+      await Future.delayed(const Duration(milliseconds: 700), () {
         _alertService.startPolling();
       });
     } catch (e) {
@@ -1036,54 +1043,71 @@ class _MappingScreenState extends State<MappingScreen>
 
       List<Polygon> loadedPolygons = [];
 
-      for (var feature in features) {
-        final properties = feature['properties'];
-        final geometry = feature['geometry'];
+      // Process features in batches to avoid blocking UI
+      const int batchSize = 10;
+      for (int i = 0; i < features.length; i += batchSize) {
+        final end =
+            (i + batchSize < features.length) ? i + batchSize : features.length;
+        final batch = features.sublist(i, end);
 
-        if (properties == null ||
-            geometry == null ||
-            geometry['type'] != 'Polygon') continue;
+        for (var feature in batch) {
+          final properties = feature['properties'];
+          final geometry = feature['geometry'];
 
-        final name = properties['name'] ?? properties['NAME_3'];
-        if (name == null) continue;
+          if (properties == null ||
+              geometry == null ||
+              geometry['type'] != 'Polygon') continue;
 
-        final severity = _dengueData[name]?['severity'] ?? 'Unknown';
-        final color = _getColorForSeverity(severity);
+          final name = properties['name'] ?? properties['NAME_3'];
+          if (name == null) continue;
 
-        final coords = geometry['coordinates'][0]
-            .map<LatLng>(
-                (coord) => LatLng(coord[1].toDouble(), coord[0].toDouble()))
-            .toList();
+          // Use default color initially, will be updated later
+          final color = Colors.grey.shade700;
 
-        _barangayCentroids[name] = _getPolygonCentroid(coords);
+          final coords = geometry['coordinates'][0]
+              .map<LatLng>(
+                  (coord) => LatLng(coord[1].toDouble(), coord[0].toDouble()))
+              .toList();
 
-        loadedPolygons.add(Polygon(
-          polygonId: PolygonId(name),
-          points: coords,
-          strokeColor: Colors.white.withOpacity(0.0), // Start fully transparent
-          strokeWidth: _selectedPolygonId == PolygonId(name) ? 4 : 2,
-          fillColor: color.withOpacity(0.0), // Start fully transparent
-          consumeTapEvents: true,
-          onTap: () {
-            _onBarangayPolygonTapped(name);
-          },
-        ));
-        barangayBoundaries[name] = coords;
+          _barangayCentroids[name] = _getPolygonCentroid(coords);
+
+          loadedPolygons.add(Polygon(
+            polygonId: PolygonId(name),
+            points: coords,
+            strokeColor: Colors.white.withOpacity(0.0),
+            strokeWidth: 2,
+            fillColor: color.withOpacity(0.0),
+            consumeTapEvents: true,
+            onTap: () {
+              _onBarangayPolygonTapped(name);
+            },
+          ));
+          barangayBoundaries[name] = coords;
+        }
+
+        // Allow UI to update between batches
+        if (i + batchSize < features.length) {
+          await Future.delayed(const Duration(milliseconds: 10));
+        }
       }
 
-      setState(() {
-        _barangayPolygons = loadedPolygons.toSet();
-        _polygonsLoaded = true;
-        _isLoading = false;
-      });
-
-      // Add a small delay before starting the animation
-      await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) {
+        setState(() {
+          _barangayPolygons = loadedPolygons.toSet();
+          _polygonsLoaded = true;
+          _isLoading = false;
+        });
+
+        // Start animation immediately after loading
         _polygonFadeController.forward();
       }
     } catch (e) {
       print('Error loading GeoJSON: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -1366,40 +1390,61 @@ class _MappingScreenState extends State<MappingScreen>
                             }
                           },
                         ),
-                        if (_isLoading || !_isMapReady)
-                          Center(
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const CircularProgressIndicator(),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    _isLoadingMarkers
-                                        ? 'Loading report markers...'
-                                        : _isLoadingRiskLevels
-                                            ? 'Loading risk levels...'
-                                            : _isLoadingInterventions
-                                                ? 'Loading interventions...'
-                                                : 'Loading map data...',
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
+                        if (_isLoading || !_isMapReady || !_polygonsLoaded)
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.3),
+                            ),
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.3),
+                                      blurRadius: 20,
+                                      spreadRadius: 5,
+                                      offset: const Offset(0, 8),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const CircularProgressIndicator(
+                                      strokeWidth: 3,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Color(0xFF4AA8C7),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      _isLoadingMarkers
+                                          ? 'Loading report markers...'
+                                          : _isLoadingRiskLevels
+                                              ? 'Loading risk levels...'
+                                              : _isLoadingInterventions
+                                                  ? 'Loading interventions...'
+                                                  : 'Loading map data...',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Please wait while we prepare your map',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
