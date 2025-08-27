@@ -743,8 +743,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                         postWithId['_id'] = postWithId['id'];
                       }
                       return Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                         child: GestureDetector(
                           onTap: () async {
                             await Navigator.push(
@@ -757,58 +756,40 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                             setState(
                                 () {}); // Refresh EngagementRow/comment count
                           },
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.08),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: PostCard(
-                              key:
-                                  ValueKey(postWithId['_id']?.toString() ?? ''),
-                              post: postWithId,
-                              username: postWithId['username']?.toString() ??
-                                  'Anonymous',
-                              whenPosted:
-                                  postWithId['whenPosted']?.toString() ??
-                                      'Just now',
-                              location: postWithId['location']?.toString() ??
-                                  'Unknown location',
-                              date: postWithId['date']?.toString() ?? '',
-                              time: postWithId['time']?.toString() ?? '',
-                              reportType:
-                                  postWithId['reportType']?.toString() ??
-                                      'Unknown',
-                              description:
-                                  postWithId['description']?.toString() ?? '',
-                              numUpvotes:
-                                  (postWithId['numUpvotes'] as int?) ?? 0,
-                              numDownvotes:
-                                  (postWithId['numDownvotes'] as int?) ?? 0,
-                              images: (postWithId['images'] as List<dynamic>?)
-                                      ?.map((e) => e.toString())
-                                      .toList() ??
-                                  [],
-                              iconUrl: _userProfilePhotos[postWithId['userId']]
-                                          ?.isNotEmpty ==
-                                      true
-                                  ? _userProfilePhotos[postWithId['userId']]!
-                                  : 'assets/icons/person_1.svg',
-                              type: 'bordered',
-                              onReport: () => _reportPost(postWithId),
-                              onDelete: () => _deletePost(postWithId),
-                              isOwner: postWithId['userId']?.toString() ==
-                                  _prefs.getString('userId'),
-                              postId: postWithId['_id']?.toString() ?? '',
-                              showDistance: selectedIndex == 3,
-                            ),
+                          child: PostCard(
+                            key: ValueKey(postWithId['_id']?.toString() ?? ''),
+                            post: postWithId,
+                            username: postWithId['username']?.toString() ??
+                                'Anonymous',
+                            whenPosted: postWithId['whenPosted']?.toString() ??
+                                'Just now',
+                            location: postWithId['location']?.toString() ??
+                                'Unknown location',
+                            date: postWithId['date']?.toString() ?? '',
+                            time: postWithId['time']?.toString() ?? '',
+                            reportType: postWithId['reportType']?.toString() ??
+                                'Unknown',
+                            description:
+                                postWithId['description']?.toString() ?? '',
+                            numUpvotes: (postWithId['numUpvotes'] as int?) ?? 0,
+                            numDownvotes:
+                                (postWithId['numDownvotes'] as int?) ?? 0,
+                            images: (postWithId['images'] as List<dynamic>?)
+                                    ?.map((e) => e.toString())
+                                    .toList() ??
+                                [],
+                            iconUrl: _userProfilePhotos[postWithId['userId']]
+                                        ?.isNotEmpty ==
+                                    true
+                                ? _userProfilePhotos[postWithId['userId']]!
+                                : 'assets/icons/person_1.svg',
+                            type: 'bordered',
+                            onReport: () => _reportPost(postWithId),
+                            onDelete: () => _deletePost(postWithId),
+                            isOwner: postWithId['userId']?.toString() ==
+                                _prefs.getString('userId'),
+                            postId: postWithId['_id']?.toString() ?? '',
+                            showDistance: selectedIndex == 3,
                           ),
                         ),
                       );

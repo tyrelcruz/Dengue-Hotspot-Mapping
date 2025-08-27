@@ -68,7 +68,7 @@ class PostCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -183,15 +183,30 @@ class PostCard extends StatelessWidget {
             ],
           ),
         ),
+        // Separator line
+        Container(
+          height: 1,
+          color: const Color(0xFFDBEBF3),
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+        ),
         // Engagement Row
-        EngagementRow(
-          key: ValueKey('engagement_$postIdStr'),
-          postId: postIdStr,
-          post: post,
-          initialUpvotes: numUpvotes,
-          initialDownvotes: numDownvotes,
-          isAdminPost: false,
-          themeMode: 'light',
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: EngagementRow(
+            key: ValueKey('engagement_$postIdStr'),
+            postId: postIdStr,
+            post: post,
+            initialUpvotes: numUpvotes,
+            initialDownvotes: numDownvotes,
+            isAdminPost: false,
+            themeMode: 'light',
+          ),
+        ),
+        // Bottom separator line between posts
+        Container(
+          height: 7,
+          color: const Color(0xFFE0E0E0),
+          margin: EdgeInsets.zero,
         ),
       ],
     );
