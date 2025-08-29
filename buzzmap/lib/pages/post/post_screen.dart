@@ -219,9 +219,21 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
     }
 
     try {
-      // Check connectivity
-      final connectivityResult = await Connectivity().checkConnectivity();
-      final isOnline = connectivityResult != ConnectivityResult.none;
+      // Check connectivity with timeout
+      bool isOnline = false;
+      try {
+        final connectivityResult =
+            await Connectivity().checkConnectivity().timeout(
+                  const Duration(seconds: 5),
+                );
+        isOnline = connectivityResult != ConnectivityResult.none;
+        print(
+            '🌐 Connectivity check: $connectivityResult, isOnline: $isOnline');
+      } catch (e) {
+        print('⚠️ Connectivity check failed: $e');
+        // Assume online if connectivity check fails
+        isOnline = true;
+      }
 
       // Prepare post data
       final postData = {
@@ -270,6 +282,9 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
           final streamedResponse = await request.send();
           final response = await http.Response.fromStream(streamedResponse);
 
+          print('📡 Online submission response: ${response.statusCode}');
+          print('📄 Response body: ${response.body}');
+
           if (response.statusCode == 200 || response.statusCode == 201) {
             if (mounted) {
               // Refresh notifications to show the new pending review post
@@ -290,7 +305,8 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
             throw Exception('Failed to submit post: ${response.statusCode}');
           }
         } catch (e) {
-          print('Online submission failed, saving offline: $e');
+          print('❌ Online submission failed, saving offline: $e');
+          print('🔍 Error details: ${e.toString()}');
           // If online submission fails, save offline
           // Convert image paths to strings before saving
           final offlineData = Map<String, dynamic>.from(postData);
@@ -434,7 +450,7 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _pickImage() async {
-    if (_selectedImages.length >= 3) return;
+    if (_selectedImages.length >= 4) return;
 
     showModalBottomSheet(
       context: context,
@@ -1165,7 +1181,7 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
                                         ),
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 16),
                                   IgnorePointer(
                                     child: CustomTextField(
                                       hintText: 'Selected Location',
@@ -1176,13 +1192,13 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
                                           text: selectedAddress ?? ''),
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 26),
                                   Text('🕒 Date & Time:',
                                       style: theme.textTheme.titleSmall
                                           ?.copyWith(
                                               color:
                                                   theme.colorScheme.primary)),
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: 6),
                                   Row(
                                     children: [
                                       Expanded(
@@ -1224,7 +1240,7 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
                                           ?.copyWith(
                                               color:
                                                   theme.colorScheme.primary)),
-                                  const SizedBox(height: 10),
+                                  const SizedBox(height: 6),
                                   Row(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.center,
@@ -1458,8 +1474,24 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('📝 Description:',
-                                style: theme.textTheme.titleSmall),
+                            Row(
+                              children: [
+                                Text('📝 Description:',
+                                    style: theme.textTheme.titleSmall),
+                                const SizedBox(width: 60),
+                                Icon(Icons.info_outline,
+                                    size: 14, color: Colors.grey.shade600),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Up to 4 images (JPG/PNG).',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
                             const SizedBox(height: 8),
                             if (!keyboardOpen)
                               AnimatedContainer(
@@ -1549,6 +1581,78 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
                                 .toList(),
                           ),
                         ],
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surface,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: IconButton(
+                                onPressed: _selectedImages.length >= 4
+                                    ? null
+                                    : _pickImage,
+                                icon: SvgPicture.asset(
+                                  'assets/icons/image.svg',
+                                  width: 18,
+                                  height: 18,
+                                  colorFilter: ColorFilter.mode(
+                                    _selectedImages.length >= 4
+                                        ? theme.colorScheme.primary
+                                            .withOpacity(0.5)
+                                        : theme.colorScheme.primary,
+                                    BlendMode.srcIn,
+                                  ),
+                                ),
+                                padding: const EdgeInsets.all(8),
+                                constraints: const BoxConstraints(
+                                    minWidth: 36, minHeight: 36),
+                              ),
+                            ),
+                            SizedBox(
+                              height: 40,
+                              width: 140,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : _submitPost,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: theme.colorScheme.secondary,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  elevation: 2,
+                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.5,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Text(
+                                        'Report',
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                          fontFamily: 'Inter',
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 44),
                       ],
                     ),
                   ),
@@ -1614,99 +1718,6 @@ class _PostScreenState extends State<PostScreen> with TickerProviderStateMixin {
                 ),
               ),
             ),
-        ],
-      ),
-      floatingActionButton: Stack(
-        children: [
-          Positioned(
-            bottom: 5,
-            right: 3,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    const Color.fromRGBO(248, 169, 0, 1),
-                    theme.colorScheme.secondary,
-                  ],
-                  stops: const [0.0, 1.0],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.5),
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: SizedBox(
-                height: 30,
-                width: 130,
-                child: FloatingActionButton.extended(
-                  heroTag: 'report_submit_button',
-                  onPressed: _isLoading ? null : _submitPost,
-                  backgroundColor: Colors.transparent,
-                  elevation: 0,
-                  label: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Text(
-                            'Report',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.primary,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 2,
-            left: 38,
-            child: Container(
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: IconButton(
-                onPressed: _selectedImages.length >= 3 ? null : _pickImage,
-                icon: SvgPicture.asset(
-                  'assets/icons/image.svg',
-                  width: 18,
-                  height: 18,
-                  colorFilter: ColorFilter.mode(
-                    _selectedImages.length >= 3
-                        ? theme.colorScheme.primary.withOpacity(0.5)
-                        : theme.colorScheme.primary,
-                    BlendMode.srcIn,
-                  ),
-                ),
-                padding: const EdgeInsets.all(8),
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              ),
-            ),
-          ),
         ],
       ),
     );

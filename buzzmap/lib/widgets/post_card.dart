@@ -191,7 +191,7 @@ class PostCard extends StatelessWidget {
         ),
         // Engagement Row
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: EngagementRow(
             key: ValueKey('engagement_$postIdStr'),
             postId: postIdStr,
@@ -252,10 +252,13 @@ class PostCard extends StatelessWidget {
                 return Dialog(
                   child: CachedNetworkImage(
                     imageUrl: validImages[index],
-                    placeholder: (context, url) => Center(
-                      child: CircularProgressIndicator(),
+                    placeholder: (context, url) => Container(
+                      width: 300,
+                      height: 300,
+                      color: Colors.grey.shade200,
                     ),
-                    errorWidget: (context, url, error) => Icon(Icons.error),
+                    errorWidget: (context, url, error) =>
+                        const Icon(Icons.error),
                   ),
                 );
               },
@@ -265,15 +268,136 @@ class PostCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             child: CachedNetworkImage(
               imageUrl: validImages[index],
-              placeholder: (context, url) => Center(
-                child: CircularProgressIndicator(),
-              ),
-              errorWidget: (context, url, error) => Icon(Icons.error),
+              placeholder: (context, url) =>
+                  Container(color: Colors.grey.shade200),
+              errorWidget: (context, url, error) => const Icon(Icons.error),
               fit: BoxFit.cover,
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class PostCardSkeleton extends StatelessWidget {
+  const PostCardSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Color shimmer = Colors.grey.shade300;
+    Color shimmerDark = Colors.grey.shade200;
+
+    Widget line({double width = double.infinity, double height = 12}) =>
+        Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: shimmer,
+            borderRadius: BorderRadius.circular(6),
+          ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // User row skeleton
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: shimmer,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        line(width: 140, height: 12),
+                        const SizedBox(height: 6),
+                        line(width: 90, height: 10),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              line(width: 180),
+              const SizedBox(height: 8),
+              line(width: 220),
+              const SizedBox(height: 8),
+              line(width: 160),
+              const SizedBox(height: 8),
+              line(width: double.infinity, height: 60),
+              const SizedBox(height: 8),
+              // Image grid placeholder
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemCount: 2,
+                itemBuilder: (context, index) => Container(
+                  decoration: BoxDecoration(
+                    color: shimmerDark,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  height: 120,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Separator line
+        Container(
+          height: 1,
+          color: const Color(0xFFDBEBF3),
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        // Engagement row skeleton
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          child: Row(
+            children: [
+              Container(
+                width: 80,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: shimmer,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 80,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: shimmer,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          height: 7,
+          color: const Color(0xFFE0E0E0),
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+      ],
     );
   }
 }
