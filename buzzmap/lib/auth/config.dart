@@ -50,6 +50,5 @@ class Config {
         seconds: int.parse(dotenv.env['API_RETRY_DELAY_SECONDS'] ?? '2'),
       );
 
-  static const String apiUrl =
-      'http://your-api-url.com/api'; // Replace with your actual API URL
+  // Removed hardcoded API URL - using environment variables instead
 }
