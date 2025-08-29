@@ -278,7 +278,7 @@ class _LoginScreenState extends State<LoginScreen> {
           const SizedBox(height: 40),
           Expanded(
             child: Container(
-              padding: const EdgeInsets.all(50),
+              padding: const EdgeInsets.all(40),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.only(
@@ -347,7 +347,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         validator: _validatePassword,
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 20),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -378,7 +378,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               const Text(
                                 "Remember Me",
                                 style: TextStyle(
-                                  fontFamily: 'Inter-Regular',
+                                  fontFamily: 'Inter',
                                   fontSize: 14.0,
                                   fontWeight: FontWeight.w400,
                                 ),
@@ -399,14 +399,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               "Forgot Password?",
                               style: TextStyle(
                                 fontFamily: 'Inter',
-                                fontSize: 14,
-                                color: const Color(0xFF1D4C5E),
+                                fontSize: 14.0,
+                                fontWeight: FontWeight.w400,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 40),
                       Center(
                         child: SizedBox(
                           width: 200,
@@ -459,25 +459,26 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 10),
                       Center(
-                        child: TextButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (context) => RegisterScreen()),
-                                  );
-                                },
-                          child: const Text(
-                            "Don't have an account? Sign up",
+                        child: RichText(
+                          text: const TextSpan(
                             style: TextStyle(
-                              fontSize: 14.0,
+                              fontFamily: 'Inter',
+                              fontSize: 14,
                               color: Color(0xFF245261),
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w500,
                             ),
+                            children: [
+                              TextSpan(text: "Don't have an account? "),
+                              TextSpan(
+                                text: "Sign up",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),

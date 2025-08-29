@@ -655,13 +655,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           const SizedBox(width: 5),
                           GestureDetector(
                             onTap: _showTermsAndConditions,
-                            child: Text(
-                              "I agree to the Terms and Conditions",
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 13,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
+                            child: RichText(
+                              text: TextSpan(
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 14,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                children: const [
+                                  TextSpan(text: 'I agree to the '),
+                                  TextSpan(
+                                    text: 'Terms and Conditions',
+                                    style: TextStyle(
+                                      decoration: TextDecoration.underline,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -896,7 +907,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           child: RichText(
                             text: const TextSpan(
                               style: TextStyle(
-                                  fontSize: 14.0, color: Colors.white),
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
                               children: [
                                 TextSpan(text: "Already have an account? "),
                                 TextSpan(
