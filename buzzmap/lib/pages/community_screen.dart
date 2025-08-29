@@ -33,7 +33,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
   String _searchQuery = '';
   bool _showSuggestions = false;
   bool _isUsernameLoading = true;
-  late SharedPreferences _prefs;
+  SharedPreferences? _prefs;
   String? _currentUsername;
   Position? _currentPosition;
   bool _isLocationLoading = false;
@@ -86,9 +86,9 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
   Future<void> _initializePrefs() async {
     try {
       _prefs = await SharedPreferences.getInstance();
-      String? username = _prefs.getString('username');
-      String? email = _prefs.getString('email');
-      String? userId = _prefs.getString('userId');
+      String? username = _prefs?.getString('username');
+      String? email = _prefs?.getString('email');
+      String? userId = _prefs?.getString('userId');
 
       if (username == null ||
           username.isEmpty ||
@@ -97,7 +97,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
           userId == null ||
           userId.isEmpty) {
         // Fetch from backend if missing
-        final token = _prefs.getString('authToken');
+        final token = _prefs?.getString('authToken');
         if (token != null && token.isNotEmpty) {
           try {
             final response = await http.get(
@@ -115,15 +115,15 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
               final fetchedUserId = data['_id'] ?? '';
               if (fetchedUsername.isNotEmpty) {
                 username = fetchedUsername;
-                await _prefs.setString('username', fetchedUsername);
+                await _prefs?.setString('username', fetchedUsername);
               }
               if (fetchedEmail.isNotEmpty) {
                 email = fetchedEmail;
-                await _prefs.setString('email', fetchedEmail);
+                await _prefs?.setString('email', fetchedEmail);
               }
               if (fetchedUserId.isNotEmpty) {
                 userId = fetchedUserId;
-                await _prefs.setString('userId', fetchedUserId);
+                await _prefs?.setString('userId', fetchedUserId);
               }
             } else {}
           } catch (e) {}
@@ -341,7 +341,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
           .compareTo(a['date_and_time']?.toString() ?? ''));
     } else if (selectedIndex == 2) {
       // My Posts tab
-      final currentUserId = _prefs.getString('userId');
+      final currentUserId = _prefs?.getString('userId');
       if (currentUserId == null || currentUserId.isEmpty) {
         return [];
       }
@@ -424,7 +424,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
       final response = await http.post(
         Uri.parse('${Config.baseUrl}/api/v1/reports/${post['id']}/report'),
         headers: {
-          'Authorization': 'Bearer ${_prefs.getString('authToken')}',
+          'Authorization': 'Bearer ${_prefs?.getString('authToken')}',
           'Content-Type': 'application/json',
         },
       );
@@ -454,7 +454,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
       final response = await http.delete(
         Uri.parse('${Config.baseUrl}/api/v1/reports/${post['id']}'),
         headers: {
-          'Authorization': 'Bearer ${_prefs.getString('authToken')}',
+          'Authorization': 'Bearer ${_prefs?.getString('authToken')}',
           'Content-Type': 'application/json',
         },
       );
@@ -715,19 +715,19 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                       style: theme.textTheme.titleSmall,
                     ),
                     const SizedBox(height: 18),
-                    AnnouncementCard(
-                      onRefresh: () {
-                        // Refresh the reports when announcement is refreshed
-                        // Assuming _loadReports() is called elsewhere in the code
-                      },
-                    ),
+                    (postProvider.isLoading && postProvider.posts.isEmpty)
+                        ? const _AnnouncementCardSkeletonInline()
+                        : AnnouncementCard(
+                            onRefresh: () {
+                              // Refresh the reports when announcement is refreshed
+                              // Assuming _loadReports() is called elsewhere in the code
+                            },
+                          ),
                   ],
-                  if (postProvider.isLoading ||
-                      _isUsernameLoading ||
-                      _isLocationLoading)
+                  if (postProvider.isLoading && postProvider.posts.isEmpty)
                     const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Center(child: CircularProgressIndicator()),
+                      padding: EdgeInsets.symmetric(horizontal: 0),
+                      child: PostCardSkeleton(),
                     )
                   else if (_currentPosts.isEmpty)
                     const Padding(
@@ -787,7 +787,7 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
                             onReport: () => _reportPost(postWithId),
                             onDelete: () => _deletePost(postWithId),
                             isOwner: postWithId['userId']?.toString() ==
-                                _prefs.getString('userId'),
+                                _prefs?.getString('userId'),
                             postId: postWithId['_id']?.toString() ?? '',
                             showDistance: selectedIndex == 3,
                           ),
@@ -1027,5 +1027,57 @@ class _CommunityScreenState extends State<CommunityScreen> with RouteAware {
     _getCurrentLocation(
         showErrors: false); // Don't show errors when returning to screen
     setState(() {});
+  }
+}
+
+// Lightweight inline announcement skeleton to sync with posts loader
+class _AnnouncementCardSkeletonInline extends StatelessWidget {
+  const _AnnouncementCardSkeletonInline();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Card(
+        margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 0),
+        elevation: 2,
+        color: Theme.of(context).colorScheme.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header row skeleton
+              Row(
+                children: [
+                  CircleAvatar(radius: 18, backgroundColor: Colors.white24),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(height: 12, width: 140),
+                        SizedBox(height: 6),
+                        SizedBox(height: 10, width: 200),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+              SizedBox(height: 16, width: double.infinity),
+              SizedBox(height: 8),
+              SizedBox(height: 12, width: double.infinity),
+              SizedBox(height: 12),
+              SizedBox(height: 120, width: double.infinity),
+              SizedBox(height: 12),
+              SizedBox(height: 12, width: 160),
+              SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

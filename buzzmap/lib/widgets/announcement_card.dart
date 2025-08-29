@@ -319,7 +319,83 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      // Skeleton placeholder that preserves layout and padding
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Card(
+          margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 0),
+          elevation: 2,
+          color: theme.colorScheme.primary,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        color: Colors.white24,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                              height: 12, width: 140, color: Colors.white24),
+                          const SizedBox(height: 6),
+                          Container(
+                              height: 10, width: 200, color: Colors.white24),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                    height: 16, width: double.infinity, color: Colors.white24),
+                const SizedBox(height: 8),
+                Container(
+                    height: 12, width: double.infinity, color: Colors.white24),
+                const SizedBox(height: 12),
+                Container(
+                    height: 120, width: double.infinity, color: Colors.white24),
+                const SizedBox(height: 12),
+                Container(height: 12, width: 160, color: Colors.white24),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      height: 28,
+                      width: 90,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      height: 28,
+                      width: 90,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
 
     if (_announcement == null) {
@@ -530,7 +606,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
         fit: BoxFit.cover,
         placeholder: (context, url) => Container(
           color: Colors.grey.shade200,
-          child: const Center(child: CircularProgressIndicator()),
         ),
         errorWidget: (context, url, error) {
           print('❌ Error loading image: $error');
